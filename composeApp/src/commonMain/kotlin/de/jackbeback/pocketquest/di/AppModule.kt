@@ -1,5 +1,7 @@
 package de.jackbeback.pocketquest.di
 
+import de.jackbeback.pocketquest.content.definitions.RelicEffect
+import de.jackbeback.pocketquest.content.definitions.allRelics
 import de.jackbeback.pocketquest.content.definitions.allSkills
 import de.jackbeback.pocketquest.content.definitions.wizardTemplate
 import de.jackbeback.pocketquest.content.dsl.spawnIntoWorld
@@ -58,13 +60,17 @@ val gameModule = module {
         val battleLog      = get<BattleLog>()
         val runStateHolder = get<RunStateHolder>()
         BattleViewModel(
-            world          = world,
-            gameLoop       = get(),
-            skillRegistry  = get(),
-            battleLog      = battleLog,
-            animCollector  = get(),
-            tileCache      = get(),
-            levelUpPreview = { xp -> runStateHolder.previewGainExp(xp) },
+            world                = world,
+            gameLoop             = get(),
+            skillRegistry        = get(),
+            battleLog            = battleLog,
+            animCollector        = get(),
+            tileCache            = get(),
+            levelUpPreview       = { xp -> runStateHolder.previewGainExp(xp) },
+            pickRelicCandidates  = {
+                val heldIds = runStateHolder.run.value?.relics?.toSet() ?: emptySet()
+                allRelics.filter { it.id !in heldIds }.shuffled().take(3)
+            },
         ) { enemies ->
             // Save player HP/Mana before destroying so the run persists damage between encounters
             world.query<FactionComponent>()
@@ -92,15 +98,40 @@ val gameModule = module {
                 }
             }
 
-            // Restore saved HP/Mana (carry damage from previous encounters), capped to new max
-            if (run != null) {
-                run.playerHp?.let { savedHp ->
-                    val comp = world.get<HealthComponent>(playerId) ?: return@let
-                    world.set(playerId, comp.copy(current = savedHp.coerceIn(1, comp.max)))
+            // Apply relic stat bonuses (BonusMaxHp, BonusMana — applied before HP/mana restore)
+            val activeRelics = allRelics.filter { it.id in (run?.relics ?: emptyList()) }
+            activeRelics.forEach { relic ->
+                when (val effect = relic.effect) {
+                    is RelicEffect.BonusMaxHp -> {
+                        val comp = world.get<HealthComponent>(playerId) ?: return@forEach
+                        val newMax = comp.max + effect.amount
+                        world.set(playerId, comp.copy(max = newMax, current = newMax))
+                    }
+                    is RelicEffect.BonusMana -> {
+                        val comp = world.get<ManaComponent>(playerId) ?: return@forEach
+                        val newMax = comp.max + effect.amount
+                        world.set(playerId, comp.copy(max = newMax, current = newMax))
+                    }
+                    else -> Unit
                 }
-                run.playerMana?.let { savedMana ->
-                    val comp = world.get<ManaComponent>(playerId) ?: return@let
-                    world.set(playerId, comp.copy(current = savedMana.coerceIn(0, comp.max)))
+            }
+
+            // Restore saved HP/Mana (carry damage from previous encounters), capped to new max.
+            // FullHpOnBattleStart / FullManaOnBattleStart relics skip the restore so player heals fully.
+            val fullHp   = activeRelics.any { it.effect is RelicEffect.FullHpOnBattleStart }
+            val fullMana = activeRelics.any { it.effect is RelicEffect.FullManaOnBattleStart }
+            if (run != null) {
+                if (!fullHp) {
+                    run.playerHp?.let { savedHp ->
+                        val comp = world.get<HealthComponent>(playerId) ?: return@let
+                        world.set(playerId, comp.copy(current = savedHp.coerceIn(1, comp.max)))
+                    }
+                }
+                if (!fullMana) {
+                    run.playerMana?.let { savedMana ->
+                        val comp = world.get<ManaComponent>(playerId) ?: return@let
+                        world.set(playerId, comp.copy(current = savedMana.coerceIn(0, comp.max)))
+                    }
                 }
             }
 

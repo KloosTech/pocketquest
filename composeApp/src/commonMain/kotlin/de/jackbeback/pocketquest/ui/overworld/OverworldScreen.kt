@@ -1,7 +1,10 @@
 package de.jackbeback.pocketquest.ui.overworld
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -15,8 +18,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.jackbeback.pocketquest.content.definitions.Relic
+import de.jackbeback.pocketquest.content.definitions.allRelics
 import de.jackbeback.pocketquest.content.events.OverworldEvent
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
@@ -111,60 +117,110 @@ private fun OverworldHud(
     val encounterNum  = runState.difficultyCounter + 1
     val hpRatio       = health.current.toFloat() / health.max.toFloat().coerceAtLeast(1f)
     val manaRatio     = if (mana.max > 0) mana.current.toFloat() / mana.max.toFloat() else 0f
+    val heldRelics    = allRelics.filter { it.id in runState.relics }
 
-    Row(
+    Column(
         modifier = modifier
             .padding(horizontal = 10.dp, vertical = 6.dp)
             .background(ColorBg, RoundedCornerShape(8.dp))
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        // Character name + resource bars
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Text(
-                text = characterName,
-                color = ColorText,
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Bold,
-            )
-            // HP bar
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("HP", color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
-                LinearProgressIndicator(
-                    progress = { hpRatio },
-                    modifier = Modifier.weight(1f).height(5.dp),
-                    color = ColorHp, trackColor = ColorHpBg,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            // Character name + resource bars
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = characterName,
+                    color = ColorText,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
                 )
-                Text("${health.current}/${health.max}", color = ColorSubtext, fontSize = 10.sp)
-            }
-            // Mana bar (only if the character has mana)
-            if (mana.max > 0) {
+                // HP bar
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("MP", color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
+                    Text("HP", color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
                     LinearProgressIndicator(
-                        progress = { manaRatio },
+                        progress = { hpRatio },
                         modifier = Modifier.weight(1f).height(5.dp),
-                        color = ColorMana, trackColor = ColorManaBg,
+                        color = ColorHp, trackColor = ColorHpBg,
                     )
-                    Text("${mana.current}/${mana.max}", color = ColorSubtext, fontSize = 10.sp)
+                    Text("${health.current}/${health.max}", color = ColorSubtext, fontSize = 10.sp)
                 }
+                // Mana bar (only if the character has mana)
+                if (mana.max > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("MP", color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
+                        LinearProgressIndicator(
+                            progress = { manaRatio },
+                            modifier = Modifier.weight(1f).height(5.dp),
+                            color = ColorMana, trackColor = ColorManaBg,
+                        )
+                        Text("${mana.current}/${mana.max}", color = ColorSubtext, fontSize = 10.sp)
+                    }
+                }
+            }
+
+            // Encounter counter + events remaining
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "#$encounterNum",
+                    color = ColorGold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                )
+                Text(
+                    text = "$eventsRemaining left",
+                    color = ColorSubtext,
+                    fontSize = 10.sp,
+                )
             }
         }
 
-        // Encounter counter + events remaining
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                text = "#$encounterNum",
-                color = ColorGold,
-                fontSize = 18.sp,
-                fontWeight = FontWeight.ExtraBold,
-            )
-            Text(
-                text = "$eventsRemaining left",
-                color = ColorSubtext,
-                fontSize = 10.sp,
-            )
+        // Relic row — only shown when the player holds at least one relic
+        if (heldRelics.isNotEmpty()) {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                items(heldRelics) { relic ->
+                    RelicChip(relic)
+                }
+            }
         }
     }
+}
+
+@Composable
+private fun RelicChip(relic: Relic) {
+    Row(
+        modifier = Modifier
+            .background(Color(0xFF0d1117), RoundedCornerShape(4.dp))
+            .border(1.dp, Color(0xFF30363d), RoundedCornerShape(4.dp))
+            .padding(horizontal = 6.dp, vertical = 3.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = relicIcon(relic.id),
+            fontSize = 11.sp,
+        )
+        Text(
+            text = relic.name,
+            color = Color(0xFFd29922),
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Medium,
+            textAlign = TextAlign.Start,
+        )
+    }
+}
+
+private fun relicIcon(relicId: String): String = when (relicId) {
+    "ancient_tome"   -> "📖"
+    "iron_will"      -> "🛡"
+    "war_trophy"     -> "⚔"
+    "mage_stone"     -> "💎"
+    "well_of_power"  -> "🌊"
+    "scholars_ring"  -> "💍"
+    "blood_pact"     -> "❤"
+    "arcane_focus"   -> "✨"
+    else             -> "★"
 }

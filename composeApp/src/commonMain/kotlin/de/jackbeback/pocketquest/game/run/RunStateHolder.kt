@@ -16,6 +16,8 @@ data class RunScopedState(
     val playerHp: Int? = null,
     /** Saved player mana between encounters; null = use template default. */
     val playerMana: Int? = null,
+    /** IDs of relics held this run. Applied at the start of every encounter. */
+    val relics: List<String> = emptyList(),
 )
 
 /** Result of a [RunStateHolder.gainExp] call. */
@@ -60,6 +62,11 @@ class RunStateHolder {
     /** Saves current player HP/Mana to be restored at the start of the next encounter. */
     fun savePlayerState(hp: Int, mana: Int) {
         _run.update { it?.copy(playerHp = hp, playerMana = mana) }
+    }
+
+    /** Adds a relic (by id) to the current run's collection. */
+    fun addRelic(relicId: String) {
+        _run.update { it?.copy(relics = it.relics + relicId) }
     }
 
     /**

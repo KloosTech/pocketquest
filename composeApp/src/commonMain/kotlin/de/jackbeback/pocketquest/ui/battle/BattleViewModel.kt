@@ -1,5 +1,6 @@
 package de.jackbeback.pocketquest.ui.battle
 
+import de.jackbeback.pocketquest.content.definitions.Relic
 import de.jackbeback.pocketquest.content.dsl.UnitTemplate
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.core.Faction
@@ -43,6 +44,11 @@ class BattleViewModel(
      * Used to populate [BattleResult.leveledUp] so the result overlay can show "Level Up!".
      */
     private val levelUpPreview: (xpEarned: Int) -> LevelUpResult = { LevelUpResult(false, 1) },
+    /**
+     * Returns 3 relic candidates to offer the player on victory.
+     * Called once when the battle result is computed; should exclude already-held relics.
+     */
+    private val pickRelicCandidates: () -> List<Relic> = { emptyList() },
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var selectedSkill: String? = null
@@ -208,12 +214,14 @@ class BattleViewModel(
         val enemiesDefeated = if (state.isVictory) initialEnemyCount else 0
         val xpEarned = enemiesDefeated * XP_PER_ENEMY
         val levelInfo = if (state.isVictory) levelUpPreview(xpEarned) else LevelUpResult(false, 1)
+        val relicCandidates = if (state.isVictory) pickRelicCandidates() else emptyList()
         _battleResult.value = BattleResult(
-            victory         = state.isVictory,
-            enemiesDefeated = enemiesDefeated,
-            xpEarned        = xpEarned,
-            leveledUp       = levelInfo.didLevelUp,
-            newLevel        = levelInfo.newLevel,
+            victory          = state.isVictory,
+            enemiesDefeated  = enemiesDefeated,
+            xpEarned         = xpEarned,
+            leveledUp        = levelInfo.didLevelUp,
+            newLevel         = levelInfo.newLevel,
+            relicCandidates  = relicCandidates,
         )
     }
 

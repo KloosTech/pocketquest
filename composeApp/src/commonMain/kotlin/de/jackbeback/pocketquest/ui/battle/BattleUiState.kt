@@ -1,5 +1,6 @@
 package de.jackbeback.pocketquest.ui.battle
 
+import de.jackbeback.pocketquest.content.definitions.Relic
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
@@ -70,4 +71,6 @@ data class BattleResult(
     val xpEarned: Int,
     val leveledUp: Boolean = false,
     val newLevel: Int = 1,
+    /** Three randomly chosen relics offered to the player on victory. Empty on defeat. */
+    val relicCandidates: List<Relic> = emptyList(),
 )

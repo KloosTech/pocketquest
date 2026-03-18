@@ -5,6 +5,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import de.jackbeback.pocketquest.content.definitions.RelicEffect
+import de.jackbeback.pocketquest.content.definitions.allRelics
 import de.jackbeback.pocketquest.content.definitions.wizardTemplate
 import de.jackbeback.pocketquest.content.events.allOverworldEvents
 import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
@@ -53,11 +55,18 @@ fun App() {
                 LaunchedEffect(Unit) { battleVm.prepareBattle(params) }
                 BattleScreen(
                     viewModel = battleVm,
+                    onRelicChosen = { relicId ->
+                        runStateHolder.addRelic(relicId)
+                    },
                     onBattleEnd = { result: BattleResult ->
                         if (result.victory) {
-                            val levelUp = runStateHolder.gainExp(result.xpEarned)
-                            // The level-up HP bonus is applied at the start of the next encounter
-                            // in AppModule's resetAndSpawn lambda (reads run.level at spawn time).
+                            // Apply XP multiplier from any Scholar's Ring-type relics
+                            val heldRelicIds = runStateHolder.run.value?.relics ?: emptyList()
+                            val xpMult = allRelics
+                                .filter { it.id in heldRelicIds }
+                                .mapNotNull { (it.effect as? RelicEffect.XpMultiplier)?.multiplier }
+                                .fold(1f) { acc, m -> acc * m }
+                            runStateHolder.gainExp((result.xpEarned * xpMult).toInt())
                             runStateHolder.incrementDifficulty()
                             overworldVm.onBattleCompleted()
                             navigator.returnToOverworld()
