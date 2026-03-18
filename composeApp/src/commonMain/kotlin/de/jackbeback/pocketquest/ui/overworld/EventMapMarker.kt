@@ -20,29 +20,26 @@ import de.jackbeback.pocketquest.content.events.OverworldEvent
 
 private val ColorEncounter    = Color(0xFFf85149)
 private val ColorEncounterBg  = Color(0xFF5a1a1a)
+private val ColorRest         = Color(0xFF3fb950)
+private val ColorRestBg       = Color(0xFF1a3a1f)
 private val ColorLabelBg      = Color(0xCC0d1117)
 
 @Composable
 fun EventMapMarker(event: OverworldEvent) {
+    val (icon, tint, bg) = when (event) {
+        is OverworldEvent.BattleEncounter -> Triple("⚔", ColorEncounter, ColorEncounterBg)
+        is OverworldEvent.RestSite        -> Triple("✦", ColorRest, ColorRestBg)
+    }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        // Icon circle
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
                 .size(32.dp)
-                .background(ColorEncounterBg, CircleShape)
-                .border(2.dp, ColorEncounter, CircleShape),
+                .background(bg, CircleShape)
+                .border(2.dp, tint, CircleShape),
         ) {
-            Text(
-                text = when (event) {
-                    is OverworldEvent.BattleEncounter -> "⚔"
-                },
-                color = ColorEncounter,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
-            )
+            Text(text = icon, color = tint, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
-        // Label below
         Text(
             text = event.label,
             color = Color.White,

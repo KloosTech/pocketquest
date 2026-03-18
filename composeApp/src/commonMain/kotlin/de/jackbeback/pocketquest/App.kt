@@ -11,6 +11,7 @@ import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
 import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.battle.BattleScreen
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
+import de.jackbeback.pocketquest.ui.battle.BattleResult
 import de.jackbeback.pocketquest.ui.characterselect.CharacterSelectScreen
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.navigation.Screen
@@ -52,8 +53,11 @@ fun App() {
                 LaunchedEffect(Unit) { battleVm.prepareBattle(params) }
                 BattleScreen(
                     viewModel = battleVm,
-                    onBattleEnd = { victory ->
-                        if (victory) {
+                    onBattleEnd = { result: BattleResult ->
+                        if (result.victory) {
+                            val levelUp = runStateHolder.gainExp(result.xpEarned)
+                            // The level-up HP bonus is applied at the start of the next encounter
+                            // in AppModule's resetAndSpawn lambda (reads run.level at spawn time).
                             runStateHolder.incrementDifficulty()
                             overworldVm.onBattleCompleted()
                             navigator.returnToOverworld()

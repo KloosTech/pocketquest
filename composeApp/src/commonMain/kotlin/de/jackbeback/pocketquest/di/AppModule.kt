@@ -57,7 +57,15 @@ val gameModule = module {
         val world          = get<World>()
         val battleLog      = get<BattleLog>()
         val runStateHolder = get<RunStateHolder>()
-        BattleViewModel(world, get(), get(), battleLog, get(), get()) { enemies ->
+        BattleViewModel(
+            world          = world,
+            gameLoop       = get(),
+            skillRegistry  = get(),
+            battleLog      = battleLog,
+            animCollector  = get(),
+            tileCache      = get(),
+            levelUpPreview = { xp -> runStateHolder.previewGainExp(xp) },
+        ) { enemies ->
             // Save player HP/Mana before destroying so the run persists damage between encounters
             world.query<FactionComponent>()
                 .filter { (_, f) -> f.faction == Faction.PLAYER }
@@ -72,9 +80,19 @@ val gameModule = module {
             world.allEntities().toList().forEach { world.destroyEntity(it) }
             world.flushDestroys()
             val playerId = wizardTemplate.spawnIntoWorld(world)
-
-            // Restore saved HP/Mana (carry damage from previous encounters)
             val run = runStateHolder.run.value
+
+            // Apply level-up max HP bonus (+5 per level above 1)
+            val level = run?.level ?: 1
+            if (level > 1) {
+                val comp = world.get<HealthComponent>(playerId)
+                if (comp != null) {
+                    val newMax = comp.max + (level - 1) * 5
+                    world.set(playerId, comp.copy(current = newMax, max = newMax))
+                }
+            }
+
+            // Restore saved HP/Mana (carry damage from previous encounters), capped to new max
             if (run != null) {
                 run.playerHp?.let { savedHp ->
                     val comp = world.get<HealthComponent>(playerId) ?: return@let

@@ -32,4 +32,18 @@ sealed class OverworldEvent {
         /** Enemy unit templates to spawn when this encounter starts. */
         val enemies: List<UnitTemplate>,
     ) : OverworldEvent()
+
+    /**
+     * A rest site. Tapping the marker shows a confirmation dialog.
+     * On confirm the player is healed by [healPercent] of their max HP and the marker is removed.
+     */
+    data class RestSite(
+        override val id: String,
+        override val mapId: String,
+        override val x: Double,
+        override val y: Double,
+        override val label: String,
+        /** Fraction of max HP restored (e.g. 0.40 = 40%). */
+        val healPercent: Float = 0.40f,
+    ) : OverworldEvent()
 }

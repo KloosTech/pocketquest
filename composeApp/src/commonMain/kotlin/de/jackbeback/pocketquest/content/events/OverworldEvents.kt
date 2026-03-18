@@ -47,6 +47,20 @@ val kaerMorhenEvents: List<OverworldEvent> = listOf(
         label   = "Elite Squad",
         enemies = listOf(veteranGruntTemplate, gruntTemplate),
     ),
+    OverworldEvent.RestSite(
+        id    = "km_rest_campfire",
+        mapId = "KaerMorhen",
+        x     = 0.35, y = 0.35,
+        label = "Campfire",
+        healPercent = 0.40f,
+    ),
+    OverworldEvent.RestSite(
+        id    = "km_rest_shrine",
+        mapId = "KaerMorhen",
+        x     = 0.50, y = 0.80,
+        label = "Shrine",
+        healPercent = 0.60f,
+    ),
 )
 
 /** Master list consumed by the Koin module. */

@@ -76,12 +76,13 @@ private val ColorLogBg       = Color(0xFF0d1117)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: (victory: Boolean) -> Unit = {}) {
+fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: (result: BattleResult) -> Unit = {}) {
     val state by viewModel.state.collectAsState()
     val animationEvent by viewModel.animationEvent.collectAsState()
     val phaseBanner by viewModel.phaseBanner.collectAsState()
     val isLocked by viewModel.isLocked.collectAsState()
     val tiles by viewModel.tileCache.tiles.collectAsState()
+    val battleResult by viewModel.battleResult.collectAsState()
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSkillSheet by remember { mutableStateOf(false) }
@@ -89,10 +90,6 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: (victory: Boolean) -> 
     val isPlayerPhase = state.turnPhase == TurnPhase.PlayerPhase
     val hasMana = state.playerMana.current > 0
     val canAct = isPlayerPhase && !isLocked && hasMana
-
-    LaunchedEffect(state.isBattleOver) {
-        if (state.isBattleOver) onBattleEnd(state.isVictory)
-    }
 
     // Dismiss sheet when no longer the player's turn or out of mana
     LaunchedEffect(isPlayerPhase, isLocked) {
@@ -160,6 +157,17 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: (victory: Boolean) -> 
                     letterSpacing = 2.sp,
                 )
             }
+        }
+
+        // Post-battle result overlay
+        AnimatedVisibility(
+            visible = battleResult != null,
+            enter = scaleIn(tween(300)) + fadeIn(tween(300)),
+            exit  = scaleOut(tween(200)) + fadeOut(tween(200)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            val result = battleResult ?: return@AnimatedVisibility
+            BattleResultOverlay(result = result, onContinue = { onBattleEnd(result) })
         }
     }
 
@@ -691,6 +699,80 @@ private fun ActionBar(
             colors  = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636), contentColor = Color.White),
         ) {
             Text("End Turn")
+        }
+    }
+}
+
+// ── Post-battle result overlay ────────────────────────────────────────────────
+
+@Composable
+private fun BattleResultOverlay(result: BattleResult, onContinue: () -> Unit) {
+    val accentColor = if (result.victory) ColorHpBar else ColorEnemy
+    val titleText   = if (result.victory) "Victory!" else "Defeated"
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.78f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(280.dp)
+                .background(ColorFieldBg, RoundedCornerShape(12.dp))
+                .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = titleText,
+                color = accentColor,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp,
+            )
+
+            if (result.victory) {
+                // XP row
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Enemies defeated", color = Color(0xFF8b949e), fontSize = 13.sp)
+                    Text("${result.enemiesDefeated}", color = Color(0xFFc9d1d9), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("XP earned", color = Color(0xFF8b949e), fontSize = 13.sp)
+                    Text("+${result.xpEarned}", color = Color(0xFFd29922), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                if (result.leveledUp) {
+                    Text(
+                        text = "Level Up!  →  Lv ${result.newLevel}",
+                        color = Color(0xFFd29922),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier
+                            .background(Color(0xFF2d2a00), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+            }
+
+            Button(
+                onClick = onContinue,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor,
+                    contentColor = Color.White,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(if (result.victory) "Continue" else "Try Again", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
         }
     }
 }

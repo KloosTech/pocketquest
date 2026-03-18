@@ -59,3 +59,15 @@ data class SkillUiState(
     val range: Int,
     val maxTargets: Int = 1,
 )
+
+/**
+ * Emitted once when the battle is over.
+ * Displayed in the post-battle result overlay before routing back to the overworld.
+ */
+data class BattleResult(
+    val victory: Boolean,
+    val enemiesDefeated: Int,
+    val xpEarned: Int,
+    val leveledUp: Boolean = false,
+    val newLevel: Int = 1,
+)

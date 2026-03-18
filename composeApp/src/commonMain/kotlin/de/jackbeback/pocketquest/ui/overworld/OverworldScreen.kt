@@ -3,8 +3,11 @@ package de.jackbeback.pocketquest.ui.overworld
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -14,6 +17,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.jackbeback.pocketquest.content.events.OverworldEvent
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
 import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
@@ -31,9 +35,10 @@ private val ColorGold    = Color(0xFFd29922)
 
 @Composable
 fun OverworldScreen(viewModel: OverworldViewModel) {
-    val state          by viewModel.state.collectAsState()
-    val runState       by viewModel.runState.collectAsState()
+    val state           by viewModel.state.collectAsState()
+    val runState        by viewModel.runState.collectAsState()
     val eventsRemaining by viewModel.eventsRemaining.collectAsState()
+    val pendingRest     by viewModel.pendingRest.collectAsState()
 
     val player = state.units.firstOrNull { it.faction == Faction.PLAYER }
 
@@ -53,7 +58,44 @@ fun OverworldScreen(viewModel: OverworldViewModel) {
                     .systemBarsPadding(),
             )
         }
+
+        // Rest site confirmation dialog
+        pendingRest?.let { rest ->
+            RestSiteDialog(
+                rest = rest,
+                currentHp = player?.health?.current ?: 0,
+                maxHp = player?.health?.max ?: 0,
+                onConfirm = { viewModel.onRestConfirmed() },
+                onDismiss = { viewModel.onRestDismissed() },
+            )
+        }
     }
+}
+
+@Composable
+private fun RestSiteDialog(
+    rest: OverworldEvent.RestSite,
+    currentHp: Int,
+    maxHp: Int,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val healAmount = (maxHp * rest.healPercent).toInt().coerceAtLeast(1)
+    val healedHp   = (currentHp + healAmount).coerceAtMost(maxHp)
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(rest.label) },
+        text  = {
+            Text("Rest here to restore ${(rest.healPercent * 100).toInt()}% HP?\n" +
+                 "($currentHp → $healedHp / $maxHp)")
+        },
+        confirmButton = {
+            Button(onClick = onConfirm) { Text("Rest") }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text("Leave") }
+        },
+    )
 }
 
 @Composable

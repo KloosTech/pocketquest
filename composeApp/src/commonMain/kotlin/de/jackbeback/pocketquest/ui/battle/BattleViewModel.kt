@@ -2,9 +2,11 @@ package de.jackbeback.pocketquest.ui.battle
 
 import de.jackbeback.pocketquest.content.dsl.UnitTemplate
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
+import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.core.EntityId
 import de.jackbeback.pocketquest.ecs.core.World
 import de.jackbeback.pocketquest.game.battle.BattleTileCache
+import de.jackbeback.pocketquest.game.run.LevelUpResult
 import de.jackbeback.pocketquest.ui.navigation.BattleParams
 import de.jackbeback.pocketquest.game.animation.ANIM_DURATION_MS
 import de.jackbeback.pocketquest.game.animation.MOVE_ANIM_MS
@@ -24,6 +26,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
+/** XP awarded per enemy defeated. */
+private const val XP_PER_ENEMY = 50
+
 class BattleViewModel(
     private val world: World,
     private val gameLoop: GameLoop,
@@ -33,10 +38,16 @@ class BattleViewModel(
     val tileCache: BattleTileCache,
     /** Destroys all existing entities, re-spawns the player, then spawns [enemies]. */
     private val resetAndSpawn: (enemies: List<UnitTemplate>) -> Unit = {},
+    /**
+     * Pure preview — returns what [gainExp] would produce for [xpEarned] without modifying state.
+     * Used to populate [BattleResult.leveledUp] so the result overlay can show "Level Up!".
+     */
+    private val levelUpPreview: (xpEarned: Int) -> LevelUpResult = { LevelUpResult(false, 1) },
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var selectedSkill: String? = null
     private val pendingTargets = mutableListOf<EntityId>()
+    private var initialEnemyCount: Int = 0
 
     private val _state = MutableStateFlow(snapshot(TurnPhase.PlayerPhase))
     val state: StateFlow<BattleUiState> = _state
@@ -50,6 +61,13 @@ class BattleViewModel(
     private val _isLocked = MutableStateFlow(false)
     val isLocked: StateFlow<Boolean> = _isLocked
 
+    /**
+     * Emitted once when the battle ends. The UI displays this in a result overlay
+     * and calls [onBattleEnd] only when the player dismisses it.
+     */
+    private val _battleResult = MutableStateFlow<BattleResult?>(null)
+    val battleResult: StateFlow<BattleResult?> = _battleResult
+
     fun prepareBattle(params: BattleParams? = null) {
         resetAndSpawn(params?.enemies ?: emptyList())
         selectedSkill = null
@@ -58,7 +76,9 @@ class BattleViewModel(
         _animationEvent.value = null
         _phaseBanner.value = null
         _isLocked.value = false
+        _battleResult.value = null
         _state.value = snapshot(TurnPhase.PlayerPhase)
+        initialEnemyCount = _state.value.units.count { it.faction == Faction.ENEMY }
     }
 
     /** Called when the player picks a skill from the bottom sheet. */
@@ -144,6 +164,7 @@ class BattleViewModel(
 
             playAnimations(playerAnims)
             _state.value = snapshot(TurnPhase.PlayerPhase)
+            checkAndEmitBattleResult(_state.value)
             _isLocked.value = false
         }
     }
@@ -169,6 +190,7 @@ class BattleViewModel(
             _state.value = snapshot(TurnPhase.PlayerPhase)
 
             if (_state.value.isBattleOver) {
+                checkAndEmitBattleResult(_state.value)
                 _isLocked.value = false
                 return@launch
             }
@@ -179,6 +201,20 @@ class BattleViewModel(
 
             _isLocked.value = false
         }
+    }
+
+    private fun checkAndEmitBattleResult(state: BattleUiState) {
+        if (!state.isBattleOver || _battleResult.value != null) return
+        val enemiesDefeated = if (state.isVictory) initialEnemyCount else 0
+        val xpEarned = enemiesDefeated * XP_PER_ENEMY
+        val levelInfo = if (state.isVictory) levelUpPreview(xpEarned) else LevelUpResult(false, 1)
+        _battleResult.value = BattleResult(
+            victory         = state.isVictory,
+            enemiesDefeated = enemiesDefeated,
+            xpEarned        = xpEarned,
+            leveledUp       = levelInfo.didLevelUp,
+            newLevel        = levelInfo.newLevel,
+        )
     }
 
     private suspend fun playAnimations(events: List<AnimationEvent>) {
