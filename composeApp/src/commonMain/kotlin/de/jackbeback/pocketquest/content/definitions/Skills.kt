@@ -11,6 +11,7 @@ val magicMissileSkill = skill("magic_missile") {
     manaCost = 2
     range = 6
     needsHitRoll = false
+    maxTargets = 3
     spriteKey = "MagicMissile"
     animationType = AnimationType.PROJECTILE
     damage(Dice(1, 4, 1), DamageType.FORCE)
@@ -58,4 +59,14 @@ val basicAttackSkill = skill("basic_attack") {
     damage(Dice(1, 4), DamageType.BLUDGEONING)
 }
 
-val allSkills = listOf(magicMissileSkill, basicHealSkill, thornWhipSkill, fireballSkill, basicAttackSkill)
+val blockSkill = skill("block") {
+    name = "Block"
+    manaCost = 2
+    needsTarget = false
+    needsHitRoll = false
+    spriteKey = ""
+    animationType = AnimationType.INSTANT
+    applyCondition(ConditionType.Block, stacks = 3)
+}
+
+val allSkills = listOf(magicMissileSkill, basicHealSkill, thornWhipSkill, fireballSkill, basicAttackSkill, blockSkill)

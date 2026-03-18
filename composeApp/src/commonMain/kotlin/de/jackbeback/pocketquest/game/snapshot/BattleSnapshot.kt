@@ -1,6 +1,5 @@
 package de.jackbeback.pocketquest.game.snapshot
 
-import de.jackbeback.pocketquest.content.dsl.AnimationType
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionsComponent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillSetComponent
@@ -98,8 +97,8 @@ fun World.snapshotBattle(
             playerMana.current >= skill.manaCost &&
             playerPos != null
         ) {
-            if (skill.animationType == AnimationType.HEAL) {
-                // Heal targets the player themselves
+            if (!skill.needsTarget) {
+                // Self-targeting skills (Heal, Block, etc.) highlight the player's own cell
                 setOf(Pair(playerPos.col, playerPos.row))
             } else {
                 units

@@ -3,6 +3,8 @@ package de.jackbeback.pocketquest.game.systems.combat
 import de.jackbeback.pocketquest.content.dsl.SkillEffect
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionAppliedEvent
+import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
+import de.jackbeback.pocketquest.ecs.components.combat.ConditionsComponent
 import de.jackbeback.pocketquest.ecs.components.combat.DamageEvent
 import de.jackbeback.pocketquest.ecs.components.combat.HealEvent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillUsedEvent
@@ -69,11 +71,16 @@ class SkillResolverSystem(
                 }
             }
 
+            // StrengthUp bonus: +2 damage per stack, applied to every Damage effect this cast
+            val strengthStacks = world.get<ConditionsComponent>(event.user)
+                ?.active?.get(ConditionType.StrengthUp) ?: 0
+            val strengthBonus = strengthStacks * 2
+
             // Resolve each effect
             for (effect in skill.effects) {
                 when (effect) {
                     is SkillEffect.Damage -> {
-                        val amount = effect.dice.roll()
+                        val amount = effect.dice.roll() + strengthBonus
                         onLog("$casterName casts ${skill.name} on $targetName for $amount ${effect.type.name} damage.")
                         world.events().emit(DamageEvent(event.user, event.target, amount, effect.type))
                     }

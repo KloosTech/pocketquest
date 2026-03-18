@@ -19,7 +19,7 @@ val wizardTemplate = unit("wizard") {
     moveRange = 3
     initiative = 14
     spawnCol = 2; spawnRow = 4
-    skills("magic_missile", "basic_heal", "thorn_whip", "fireball")
+    skills("block", "magic_missile", "basic_heal", "thorn_whip", "fireball")
     mapId = "KaerMorhen"; mapX = 0.3; mapY = 0.4
 }
 
