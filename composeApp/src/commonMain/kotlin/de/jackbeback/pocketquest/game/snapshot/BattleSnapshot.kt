@@ -5,6 +5,7 @@ import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionsComponent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillSetComponent
 import de.jackbeback.pocketquest.ecs.components.core.*
+import de.jackbeback.pocketquest.ecs.core.EntityId
 import de.jackbeback.pocketquest.ecs.core.World
 import de.jackbeback.pocketquest.ecs.core.get
 import de.jackbeback.pocketquest.ecs.core.query

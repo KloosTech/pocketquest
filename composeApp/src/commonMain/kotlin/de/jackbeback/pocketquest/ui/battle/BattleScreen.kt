@@ -182,7 +182,7 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
                 color = Color(0xFFc9d1d9),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
-                modifier = Modifier.padding(horizontal = 16.dp, bottom = 8.dp),
+                modifier = Modifier.padding(start = 8.dp,end = 8.dp, bottom = 8.dp),
             )
             SkillPanel(
                 skills = state.availableSkills,
