@@ -17,6 +17,7 @@ class UnitTemplate(val id: String) {
     var sprite: String = ""
     var maxHealth: Int = 10
     var maxMana: Int = 0
+    var manaRegen: Int = 0
     var maxAp: Int = 2
     /** How many separate move hops the unit gets per turn. */
     var movesPerTurn: Int = 2
@@ -44,7 +45,7 @@ class UnitTemplate(val id: String) {
 
     fun stats(block: UnitTemplate.() -> Unit) = this.block()
     fun health(max: Int) { maxHealth = max }
-    fun mana(max: Int) { maxMana = max }
+    fun mana(max: Int, regen: Int = 0) { maxMana = max; manaRegen = regen }
     fun skills(vararg ids: String) { skillIds.addAll(ids) }
     fun resistance(type: DamageType, multiplier: Float) { damageResistances[type] = multiplier }
 }
@@ -59,7 +60,7 @@ fun UnitTemplate.spawnIntoWorld(world: World): EntityId {
     world.set(entity, FactionComponent(faction))
     world.set(entity, PositionComponent(col = spawnCol, row = spawnRow))
     world.set(entity, HealthComponent(current = maxHealth, max = maxHealth))
-    world.set(entity, ManaComponent(current = maxMana, max = maxMana))
+    world.set(entity, ManaComponent(current = maxMana, max = maxMana, regen = manaRegen))
     world.set(entity, ActionPointsComponent(current = maxAp, max = maxAp))
     world.set(entity, MovementPointsComponent(current = movesPerTurn, max = movesPerTurn, range = moveRange))
     world.set(entity, StatsComponent(str = str, dex = dex, con = con, intelligence = intelligence, wis = wis, cha = cha, ac = ac))

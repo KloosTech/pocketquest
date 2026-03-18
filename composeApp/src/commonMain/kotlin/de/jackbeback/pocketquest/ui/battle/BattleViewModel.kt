@@ -100,10 +100,8 @@ class BattleViewModel(
                 // Single-target: fire immediately
                 onPlayerAction(PlayerAction.UseSkill(s.selectedSkill!!, target.entityId))
             } else {
-                // Multi-target: accumulate, execute when full
-                if (target.entityId !in pendingTargets) {
-                    pendingTargets += target.entityId
-                }
+                // Multi-target: accumulate picks — the same target may be selected multiple times
+                pendingTargets += target.entityId
                 if (pendingTargets.size >= maxTargets) {
                     onPlayerAction(PlayerAction.UseSkillOnTargets(s.selectedSkill!!, pendingTargets.toList()))
                 } else {

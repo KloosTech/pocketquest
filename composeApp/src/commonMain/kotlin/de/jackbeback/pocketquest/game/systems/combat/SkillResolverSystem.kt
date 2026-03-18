@@ -3,9 +3,13 @@ package de.jackbeback.pocketquest.game.systems.combat
 import de.jackbeback.pocketquest.content.dsl.SkillEffect
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionAppliedEvent
+import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
+import de.jackbeback.pocketquest.ecs.components.combat.ConditionsComponent
 import de.jackbeback.pocketquest.ecs.components.combat.DamageEvent
 import de.jackbeback.pocketquest.ecs.components.combat.HealEvent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillUsedEvent
+import de.jackbeback.pocketquest.ecs.components.core.Faction
+import de.jackbeback.pocketquest.ecs.components.core.FactionComponent
 import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.ecs.components.core.NameComponent
 import de.jackbeback.pocketquest.ecs.components.core.StatsComponent
@@ -17,7 +21,9 @@ import de.jackbeback.pocketquest.ecs.core.set
 
 /**
  * Resolves [SkillUsedEvent]s end-to-end: mana check, optional hit roll, dice, and event emission.
- * Handlers are registered once in the constructor.
+ *
+ * Player action economy: gated by mana only — unlimited actions per turn as long as mana allows.
+ * Enemy action economy: gated by [TurnStateComponent.hasActed] (one skill per AI turn).
  */
 class SkillResolverSystem(
     world: World,
@@ -32,9 +38,10 @@ class SkillResolverSystem(
 
             val skill = skillRegistry.find(event.skillId) ?: return@on
 
-            // Check action economy
+            // Enemies are limited to one skill per turn; players are mana-gated only
+            val faction = world.get<FactionComponent>(event.user)?.faction
             val turnState = world.get<TurnStateComponent>(event.user)
-            if (turnState?.hasActed == true) return@on
+            if (faction != Faction.PLAYER && turnState?.hasActed == true) return@on
 
             // Check mana
             val mana = world.get<ManaComponent>(event.user) ?: return@on
@@ -46,9 +53,9 @@ class SkillResolverSystem(
             val casterName = world.get<NameComponent>(event.user)?.displayName ?: "?"
             val targetName = world.get<NameComponent>(event.target)?.displayName ?: "?"
 
-            // Deduct mana and mark as acted
+            // Deduct mana; mark enemies as acted (players may act again this turn)
             world.set(event.user, mana.copy(current = mana.current - skill.manaCost))
-            if (turnState != null) {
+            if (faction != Faction.PLAYER && turnState != null) {
                 world.set(event.user, turnState.copy(hasActed = true))
             }
 
@@ -64,11 +71,16 @@ class SkillResolverSystem(
                 }
             }
 
+            // StrengthUp bonus: +2 damage per stack, applied to every Damage effect this cast
+            val strengthStacks = world.get<ConditionsComponent>(event.user)
+                ?.active?.get(ConditionType.StrengthUp) ?: 0
+            val strengthBonus = strengthStacks * 2
+
             // Resolve each effect
             for (effect in skill.effects) {
                 when (effect) {
                     is SkillEffect.Damage -> {
-                        val amount = effect.dice.roll()
+                        val amount = effect.dice.roll() + strengthBonus
                         onLog("$casterName casts ${skill.name} on $targetName for $amount ${effect.type.name} damage.")
                         world.events().emit(DamageEvent(event.user, event.target, amount, effect.type))
                     }

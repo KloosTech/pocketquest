@@ -13,13 +13,13 @@ val wizardTemplate = unit("wizard") {
         str = 8; dex = 14; con = 10; intelligence = 18; wis = 14; cha = 12; ac = 12
     }
     health(max = 25)
-    mana(max = 20)
+    mana(max = 20, regen = 5)
     maxAp = 2
     movesPerTurn = 1
     moveRange = 3
     initiative = 14
     spawnCol = 2; spawnRow = 4
-    skills("magic_missile", "basic_heal", "thorn_whip", "fireball")
+    skills("block", "magic_missile", "basic_heal", "thorn_whip", "fireball")
     mapId = "KaerMorhen"; mapX = 0.3; mapY = 0.4
 }
 

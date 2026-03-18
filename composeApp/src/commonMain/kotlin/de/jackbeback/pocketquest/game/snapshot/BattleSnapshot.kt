@@ -1,6 +1,5 @@
 package de.jackbeback.pocketquest.game.snapshot
 
-import de.jackbeback.pocketquest.content.dsl.AnimationType
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionsComponent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillSetComponent
@@ -49,7 +48,7 @@ fun World.snapshotBattle(
 
     val playerId    = playerEntry?.first
     val playerPos   = playerId?.let { get<PositionComponent>(it) }
-    val playerTurn  = playerId?.let { get<TurnStateComponent>(it) }
+    val playerMana  = playerId?.let { get<ManaComponent>(it) } ?: ManaComponent(0, 0)
     val playerMp    = playerId?.let { get<MovementPointsComponent>(it) }
 
     // Cells occupied by enemies (can't move onto them)
@@ -95,11 +94,11 @@ fun World.snapshotBattle(
         attackableTiles = if (
             phase == TurnPhase.PlayerPhase &&
             skill != null &&
-            playerTurn?.hasActed == false &&
+            playerMana.current >= skill.manaCost &&
             playerPos != null
         ) {
-            if (skill.animationType == AnimationType.HEAL) {
-                // Heal targets the player themselves
+            if (!skill.needsTarget) {
+                // Self-targeting skills (Heal, Block, etc.) highlight the player's own cell
                 setOf(Pair(playerPos.col, playerPos.row))
             } else {
                 units
@@ -132,7 +131,7 @@ fun World.snapshotBattle(
         attackableTiles = attackableTiles,
         playerMovesRemaining = playerMp?.current ?: 0,
         playerMaxMoves = playerMp?.max ?: 0,
-        playerHasActed = playerTurn?.hasActed ?: false,
+        playerMana = playerMana,
         pendingTargetIds = pendingTargets,
         selectedTargetTiles = selectedTargetTiles,
     )

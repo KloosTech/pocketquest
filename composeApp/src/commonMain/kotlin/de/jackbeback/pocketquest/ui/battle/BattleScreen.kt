@@ -36,7 +36,6 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
@@ -87,15 +86,17 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSkillSheet by remember { mutableStateOf(false) }
 
-    val canAct = state.turnPhase == TurnPhase.PlayerPhase && !isLocked && !state.playerHasActed
+    val isPlayerPhase = state.turnPhase == TurnPhase.PlayerPhase
+    val hasMana = state.playerMana.current > 0
+    val canAct = isPlayerPhase && !isLocked && hasMana
 
     LaunchedEffect(state.isBattleOver) {
         if (state.isBattleOver) onBattleEnd()
     }
 
-    // Dismiss sheet when we leave the player phase
-    LaunchedEffect(canAct) {
-        if (!canAct) showSkillSheet = false
+    // Dismiss sheet when no longer the player's turn or out of mana
+    LaunchedEffect(isPlayerPhase, isLocked) {
+        if (!isPlayerPhase || isLocked) showSkillSheet = false
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -133,7 +134,7 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
             ActionBar(
                 phase = state.turnPhase,
                 movesRemaining = state.playerMovesRemaining,
-                hasActed = state.playerHasActed,
+                playerMana = state.playerMana,
                 isLocked = isLocked,
                 onEndTurn = { viewModel.onEndTurn() },
                 onOpenSkillSheet = { showSkillSheet = true },
@@ -192,6 +193,7 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
                     viewModel.onSkillSelected(id)
                 },
                 enabled = canAct,
+                playerMana = state.playerMana.current,
                 modifier = Modifier.navigationBarsPadding(),
             )
         }
@@ -219,7 +221,7 @@ private fun PhaseBar(state: BattleUiState) {
         if (state.turnPhase == TurnPhase.PlayerPhase) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                 MoveDots(remaining = state.playerMovesRemaining, max = state.playerMaxMoves)
-                ActionChip(label = "Act", done = state.playerHasActed, activeColor = Color(0xFFd29922))
+                ManaChip(mana = state.playerMana)
             }
         }
     }
@@ -251,16 +253,15 @@ private fun MoveDots(remaining: Int, max: Int) {
 }
 
 @Composable
-private fun ActionChip(label: String, done: Boolean, activeColor: Color) {
-    val bg    = if (done) Color(0xFF21262d) else activeColor.copy(alpha = 0.15f)
-    val fg    = if (done) Color(0xFF484f58) else activeColor
-    val style = if (done) TextDecoration.LineThrough else TextDecoration.None
+private fun ManaChip(mana: de.jackbeback.pocketquest.ecs.components.core.ManaComponent) {
+    val empty = mana.current == 0
+    val bg = if (empty) Color(0xFF21262d) else Color(0xFF1f2d3d)
+    val fg = if (empty) Color(0xFF484f58) else Color(0xFF388bfd)
     Text(
-        text = label,
+        text = "${mana.current}/${mana.max} MP",
         color = fg,
         fontSize = 11.sp,
         fontWeight = FontWeight.Medium,
-        textDecoration = style,
         modifier = Modifier
             .background(bg, RoundedCornerShape(4.dp))
             .padding(horizontal = 6.dp, vertical = 2.dp),
@@ -646,7 +647,7 @@ private fun TargetingBar(
 private fun ActionBar(
     phase: TurnPhase,
     movesRemaining: Int,
-    hasActed: Boolean,
+    playerMana: de.jackbeback.pocketquest.ecs.components.core.ManaComponent,
     isLocked: Boolean,
     onEndTurn: () -> Unit,
     onOpenSkillSheet: () -> Unit,
@@ -659,11 +660,11 @@ private fun ActionBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val canAct = phase == TurnPhase.PlayerPhase && !isLocked && !hasActed
+        val canCast = phase == TurnPhase.PlayerPhase && !isLocked && playerMana.current > 0
 
         Button(
             onClick = onOpenSkillSheet,
-            enabled = canAct,
+            enabled = canCast,
             colors = ButtonDefaults.buttonColors(
                 containerColor = Color(0xFF1f2d3d),
                 contentColor = ColorPlayer,
@@ -675,12 +676,12 @@ private fun ActionBar(
         }
 
         val hint = when {
-            isLocked                            -> "…"
-            phase != TurnPhase.PlayerPhase      -> ""
-            !hasActed && movesRemaining > 0     -> "Move or Cast a spell"
-            !hasActed                           -> "Cast a spell"
-            movesRemaining > 0                  -> "${movesRemaining} move(s) left"
-            else                                -> "End your turn"
+            isLocked                               -> "…"
+            phase != TurnPhase.PlayerPhase         -> ""
+            playerMana.current > 0 && movesRemaining > 0 -> "Move or cast a spell"
+            playerMana.current > 0                 -> "Cast a spell (${playerMana.current} MP)"
+            movesRemaining > 0                     -> "${movesRemaining} move(s) left — no mana"
+            else                                   -> "End your turn"
         }
         Text(hint, color = Color(0xFF484f58), fontSize = 11.sp, modifier = Modifier.weight(1f))
 

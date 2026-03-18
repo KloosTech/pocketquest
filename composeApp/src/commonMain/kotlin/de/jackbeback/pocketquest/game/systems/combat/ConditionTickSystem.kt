@@ -32,16 +32,24 @@ class ConditionTickSystem(private val onLog: (String) -> Unit = {}) : GameSystem
         val updated = mutableMapOf<ConditionType, Int>()
 
         for ((type, stacks) in conditions.active) {
-            val (damage, damageType) = when (type) {
-                ConditionType.Burn   -> stacks * 2 to DamageType.FIRE
-                ConditionType.Poison -> stacks * 1 to DamageType.POISON
-                ConditionType.Cold   -> stacks * 1 to DamageType.FORCE
+            // Buffs (Block, StrengthUp) do not tick — they are consumed on use, not on the environment phase
+            val tickDamage: Pair<Int, DamageType>? = when (type) {
+                ConditionType.Burn      -> stacks * 2 to DamageType.FIRE
+                ConditionType.Poison    -> stacks * 1 to DamageType.POISON
+                ConditionType.Cold      -> stacks * 1 to DamageType.FORCE
+                ConditionType.Block,
+                ConditionType.StrengthUp -> null
             }
-            onLog("$name suffers ${type.name} ($damage ${damageType.name} damage, $stacks stacks).")
-            world.events().emit(DamageEvent(source = id, target = id, amount = damage, damageType = damageType))
 
-            val remaining = stacks - 1
-            if (remaining > 0) updated[type] = remaining
+            if (tickDamage != null) {
+                val (damage, damageType) = tickDamage
+                onLog("$name suffers ${type.name} ($damage ${damageType.name} damage, $stacks stacks).")
+                world.events().emit(DamageEvent(source = id, target = id, amount = damage, damageType = damageType))
+                val remaining = stacks - 1
+                if (remaining > 0) updated[type] = remaining
+            } else {
+                updated[type] = stacks  // preserve buff stacks unchanged
+            }
         }
 
         world.set(id, conditions.copy(active = updated))
