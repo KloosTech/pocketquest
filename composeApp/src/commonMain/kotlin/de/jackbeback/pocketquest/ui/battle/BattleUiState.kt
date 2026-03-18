@@ -1,5 +1,6 @@
 package de.jackbeback.pocketquest.ui.battle
 
+import de.jackbeback.pocketquest.content.definitions.Relic
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
@@ -15,7 +16,11 @@ data class BattleUiState(
     val log: List<String>,
     val availableSkills: List<SkillUiState> = emptyList(),
     val selectedSkill: String? = null,
-    val isBattleOver: Boolean = false,
+    /** All enemies are dead and the player is still alive. */
+    val isVictory: Boolean = false,
+    /** The player entity has been destroyed. */
+    val isDefeat: Boolean = false,
+    val isBattleOver: Boolean = isVictory || isDefeat,
     /** Tiles the player can move to this turn (col, row pairs). Empty when already moved. */
     val reachableTiles: Set<Pair<Int, Int>> = emptySet(),
     /** Enemy tiles the player can hit with the selected skill. Empty when no skill selected. */
@@ -54,4 +59,18 @@ data class SkillUiState(
     val spriteKey: String,
     val range: Int,
     val maxTargets: Int = 1,
+)
+
+/**
+ * Emitted once when the battle is over.
+ * Displayed in the post-battle result overlay before routing back to the overworld.
+ */
+data class BattleResult(
+    val victory: Boolean,
+    val enemiesDefeated: Int,
+    val xpEarned: Int,
+    val leveledUp: Boolean = false,
+    val newLevel: Int = 1,
+    /** Three randomly chosen relics offered to the player on victory. Empty on defeat. */
+    val relicCandidates: List<Relic> = emptyList(),
 )

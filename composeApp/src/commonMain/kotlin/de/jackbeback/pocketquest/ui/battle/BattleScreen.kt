@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.jackbeback.pocketquest.content.definitions.Relic
 import de.jackbeback.pocketquest.content.map.throneRoomConfig
 import de.jackbeback.pocketquest.ecs.components.combat.DamageType
 import de.jackbeback.pocketquest.ecs.components.core.Faction
@@ -76,12 +77,18 @@ private val ColorLogBg       = Color(0xFF0d1117)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
+fun BattleScreen(
+    viewModel: BattleViewModel,
+    onBattleEnd: (result: BattleResult) -> Unit = {},
+    /** Called with the relic id chosen by the player before Continue is tapped. */
+    onRelicChosen: (relicId: String) -> Unit = {},
+) {
     val state by viewModel.state.collectAsState()
     val animationEvent by viewModel.animationEvent.collectAsState()
     val phaseBanner by viewModel.phaseBanner.collectAsState()
     val isLocked by viewModel.isLocked.collectAsState()
     val tiles by viewModel.tileCache.tiles.collectAsState()
+    val battleResult by viewModel.battleResult.collectAsState()
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSkillSheet by remember { mutableStateOf(false) }
@@ -89,10 +96,6 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
     val isPlayerPhase = state.turnPhase == TurnPhase.PlayerPhase
     val hasMana = state.playerMana.current > 0
     val canAct = isPlayerPhase && !isLocked && hasMana
-
-    LaunchedEffect(state.isBattleOver) {
-        if (state.isBattleOver) onBattleEnd()
-    }
 
     // Dismiss sheet when no longer the player's turn or out of mana
     LaunchedEffect(isPlayerPhase, isLocked) {
@@ -160,6 +163,21 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
                     letterSpacing = 2.sp,
                 )
             }
+        }
+
+        // Post-battle result overlay
+        AnimatedVisibility(
+            visible = battleResult != null,
+            enter = scaleIn(tween(300)) + fadeIn(tween(300)),
+            exit  = scaleOut(tween(200)) + fadeOut(tween(200)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            val result = battleResult ?: return@AnimatedVisibility
+            BattleResultOverlay(
+                result         = result,
+                onRelicChosen  = onRelicChosen,
+                onContinue     = { onBattleEnd(result) },
+            )
         }
     }
 
@@ -693,5 +711,167 @@ private fun ActionBar(
             Text("End Turn")
         }
     }
+}
+
+// ── Post-battle result overlay ────────────────────────────────────────────────
+
+private val ColorRelicBorder   = Color(0xFF30363d)
+private val ColorRelicSelected = Color(0xFFd29922)
+private val ColorRelicBg       = Color(0xFF0d1117)
+
+@Composable
+private fun BattleResultOverlay(
+    result: BattleResult,
+    onRelicChosen: (String) -> Unit,
+    onContinue: () -> Unit,
+) {
+    val accentColor = if (result.victory) ColorHpBar else ColorEnemy
+    val titleText   = if (result.victory) "Victory!" else "Defeated"
+    var selectedRelicId by remember { mutableStateOf<String?>(null) }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.78f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(320.dp)
+                .background(ColorFieldBg, RoundedCornerShape(12.dp))
+                .border(1.dp, accentColor.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = titleText,
+                color = accentColor,
+                fontSize = 28.sp,
+                fontWeight = FontWeight.ExtraBold,
+                letterSpacing = 2.sp,
+            )
+
+            if (result.victory) {
+                // Stats rows
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("Enemies defeated", color = Color(0xFF8b949e), fontSize = 13.sp)
+                    Text("${result.enemiesDefeated}", color = Color(0xFFc9d1d9), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text("XP earned", color = Color(0xFF8b949e), fontSize = 13.sp)
+                    Text("+${result.xpEarned}", color = Color(0xFFd29922), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+                if (result.leveledUp) {
+                    Text(
+                        text = "Level Up!  →  Lv ${result.newLevel}",
+                        color = Color(0xFFd29922),
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        modifier = Modifier
+                            .background(Color(0xFF2d2a00), RoundedCornerShape(6.dp))
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
+                    )
+                }
+
+                // Relic pick section
+                if (result.relicCandidates.isNotEmpty()) {
+                    HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
+                    Text(
+                        "Choose a Relic",
+                        color = Color(0xFFc9d1d9),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        result.relicCandidates.forEach { relic ->
+                            RelicCard(
+                                relic = relic,
+                                selected = selectedRelicId == relic.id,
+                                modifier = Modifier.weight(1f),
+                                onSelect = { selectedRelicId = relic.id },
+                            )
+                        }
+                    }
+                }
+            }
+
+            Button(
+                onClick = {
+                    selectedRelicId?.let { onRelicChosen(it) }
+                    onContinue()
+                },
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = accentColor,
+                    contentColor = Color.White,
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text(if (result.victory) "Continue" else "Try Again", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun RelicCard(
+    relic: Relic,
+    selected: Boolean,
+    modifier: Modifier = Modifier,
+    onSelect: () -> Unit,
+) {
+    val borderColor = if (selected) ColorRelicSelected else ColorRelicBorder
+    val bgColor     = if (selected) Color(0xFF2d2a00) else ColorRelicBg
+    Column(
+        modifier = modifier
+            .background(bgColor, RoundedCornerShape(8.dp))
+            .border(1.5.dp, borderColor, RoundedCornerShape(8.dp))
+            .padding(8.dp)
+            .pointerInput(Unit) { detectTapGestures { onSelect() } },
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = relicIcon(relic.id),
+            fontSize = 22.sp,
+        )
+        Text(
+            text = relic.name,
+            color = if (selected) ColorRelicSelected else Color(0xFFc9d1d9),
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+        Text(
+            text = relic.description,
+            color = Color(0xFF8b949e),
+            fontSize = 9.sp,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+        )
+    }
+}
+
+private fun relicIcon(relicId: String): String = when (relicId) {
+    "ancient_tome"   -> "📖"
+    "iron_will"      -> "🛡"
+    "war_trophy"     -> "⚔"
+    "mage_stone"     -> "💎"
+    "well_of_power"  -> "🌊"
+    "scholars_ring"  -> "💍"
+    "blood_pact"     -> "❤"
+    "arcane_focus"   -> "✨"
+    else             -> "★"
 }
 

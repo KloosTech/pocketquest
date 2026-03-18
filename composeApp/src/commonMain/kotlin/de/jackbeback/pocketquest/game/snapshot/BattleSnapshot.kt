@@ -113,7 +113,10 @@ fun World.snapshotBattle(
         attackableTiles = emptySet()
     }
 
-    val isBattleOver = query<FactionComponent>().none { (_, f) -> f.faction == Faction.ENEMY }
+    val noEnemiesLeft = query<FactionComponent>().none { (_, f) -> f.faction == Faction.ENEMY }
+    val playerAlive   = playerId != null && isAlive(playerId)
+    val isVictory = noEnemiesLeft && playerAlive
+    val isDefeat  = !playerAlive
 
     val selectedTargetTiles = units
         .filter { it.entityId in pendingTargets }
@@ -126,7 +129,8 @@ fun World.snapshotBattle(
         log = log,
         availableSkills = availableSkills,
         selectedSkill = selectedSkill,
-        isBattleOver = isBattleOver,
+        isVictory = isVictory,
+        isDefeat = isDefeat,
         reachableTiles = reachableTiles,
         attackableTiles = attackableTiles,
         playerMovesRemaining = playerMp?.current ?: 0,

@@ -1,6 +1,8 @@
 package de.jackbeback.pocketquest.game.snapshot
 
 import de.jackbeback.pocketquest.ecs.components.core.FactionComponent
+import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
+import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.ecs.components.core.NameComponent
 import de.jackbeback.pocketquest.ecs.components.core.RenderComponent
 import de.jackbeback.pocketquest.ecs.components.map.MapLocationComponent
@@ -21,6 +23,8 @@ fun World.snapshotOverworld(): OverworldUiState {
                 mapX = loc.x,
                 mapY = loc.y,
                 spriteKey = get<RenderComponent>(id)?.spriteKey ?: "",
+                health = get<HealthComponent>(id) ?: HealthComponent(0, 0),
+                mana = get<ManaComponent>(id) ?: ManaComponent(0, 0),
             )
         }
         .toList()

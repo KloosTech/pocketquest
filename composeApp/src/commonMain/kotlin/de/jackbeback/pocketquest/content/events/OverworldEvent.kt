@@ -22,6 +22,9 @@ sealed class OverworldEvent {
     /**
      * A combat encounter. Tapping the marker starts a battle with [enemies].
      * After the last enemy is defeated the event is marked complete.
+     *
+     * Set [isBoss] to true for the final encounter — rendered with a distinct marker
+     * and triggers the area-clear overlay when completed.
      */
     data class BattleEncounter(
         override val id: String,
@@ -31,5 +34,21 @@ sealed class OverworldEvent {
         override val label: String,
         /** Enemy unit templates to spawn when this encounter starts. */
         val enemies: List<UnitTemplate>,
+        /** True for the area boss — shown with a distinct marker style. */
+        val isBoss: Boolean = false,
+    ) : OverworldEvent()
+
+    /**
+     * A rest site. Tapping the marker shows a confirmation dialog.
+     * On confirm the player is healed by [healPercent] of their max HP and the marker is removed.
+     */
+    data class RestSite(
+        override val id: String,
+        override val mapId: String,
+        override val x: Double,
+        override val y: Double,
+        override val label: String,
+        /** Fraction of max HP restored (e.g. 0.40 = 40%). */
+        val healPercent: Float = 0.40f,
     ) : OverworldEvent()
 }

@@ -20,6 +20,13 @@ class OverworldEventRegistry(events: List<OverworldEvent>) {
         _active.value = _active.value - eventId
     }
 
+    /** Resets the registry to [events] — call at the start of each new run. */
+    fun reset(events: List<OverworldEvent>) {
+        _active.value = events.associateBy { it.id }
+    }
+
     fun eventsForMap(mapId: String): List<OverworldEvent> =
         _active.value.values.filter { it.mapId == mapId }
+
+    val activeCount: Int get() = _active.value.size
 }

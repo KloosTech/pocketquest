@@ -43,3 +43,49 @@ val gruntTemplate = unit("grunt") {
     resistance(DamageType.FIRE, 0.5f)
     mapId = "KaerMorhen"; mapX = 0.6; mapY = 0.5
 }
+
+/** Tougher grunt with higher HP and AC — appears in later encounters. */
+val veteranGruntTemplate = unit("veteran_grunt") {
+    name = "Veteran Grunt"
+    faction = Faction.ENEMY
+    sprite = "grunt"
+    stats {
+        str = 14; dex = 10; con = 16; intelligence = 6; wis = 8; cha = 6; ac = 15
+    }
+    health(max = 32)
+    mana(max = 0)
+    maxAp = 1
+    movesPerTurn = 1
+    moveRange = 3
+    initiative = 10
+    aiStrategy = AIStrategy.Aggressive
+    preferredSkillId = "basic_attack"
+    spawnCol = 10; spawnRow = 3
+    skills("basic_attack")
+    resistance(DamageType.FIRE, 0.5f)
+}
+
+/**
+ * Final-area boss — very high HP, slashing resistance, and priority initiative.
+ * Spawns as the centrepiece of the boss encounter.
+ */
+val chieftainTemplate = unit("chieftain") {
+    name = "Chieftain"
+    faction = Faction.ENEMY
+    sprite = "grunt"
+    stats {
+        str = 18; dex = 10; con = 20; intelligence = 8; wis = 10; cha = 10; ac = 17
+    }
+    health(max = 60)
+    mana(max = 0)
+    maxAp = 2
+    movesPerTurn = 1
+    moveRange = 2
+    initiative = 12
+    aiStrategy = AIStrategy.Aggressive
+    preferredSkillId = "basic_attack"
+    spawnCol = 11; spawnRow = 4
+    skills("basic_attack")
+    resistance(DamageType.SLICING, 0.5f)
+    resistance(DamageType.PIERCING, 0.5f)
+}
