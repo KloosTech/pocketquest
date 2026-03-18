@@ -6,6 +6,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import de.jackbeback.pocketquest.content.definitions.wizardTemplate
+import de.jackbeback.pocketquest.content.events.allOverworldEvents
+import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
 import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.battle.BattleScreen
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
@@ -24,11 +26,18 @@ fun App() {
 
         when (screen) {
             Screen.CharacterSelect -> {
-                val runStateHolder = koinInject<RunStateHolder>()
+                val runStateHolder  = koinInject<RunStateHolder>()
+                val eventRegistry   = koinInject<OverworldEventRegistry>()
+                val overworldVm     = koinInject<OverworldViewModel>()
                 CharacterSelectScreen(
                     availableCharacters = listOf(wizardTemplate),
                     runStateHolder = runStateHolder,
-                    onRunStarted = { navigator.goToOverworld() },
+                    onRunStarted = {
+                        // Reset events and re-add their markers for the new run
+                        eventRegistry.reset(allOverworldEvents)
+                        overworldVm.onRunReset(allOverworldEvents)
+                        navigator.goToOverworld()
+                    },
                 )
             }
             Screen.Overworld -> {

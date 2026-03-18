@@ -10,6 +10,8 @@ import de.jackbeback.pocketquest.ecs.core.get
 import de.jackbeback.pocketquest.ecs.core.query
 import de.jackbeback.pocketquest.ecs.core.set
 import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
+import de.jackbeback.pocketquest.game.run.RunStateHolder
+import de.jackbeback.pocketquest.game.run.RunScopedState
 import de.jackbeback.pocketquest.game.snapshot.snapshotOverworld
 import de.jackbeback.pocketquest.ui.navigation.BattleParams
 import de.jackbeback.pocketquest.ui.navigation.Navigator
@@ -32,11 +34,19 @@ class OverworldViewModel(
     private val navigator: Navigator,
     private val eventRegistry: OverworldEventRegistry,
     private val mapConfig: MapConfig,
+    private val runStateHolder: RunStateHolder,
 ) {
     val mapState: MapState = buildMapState(mapConfig)
 
     private val _state = MutableStateFlow(world.snapshotOverworld())
     val state: StateFlow<OverworldUiState> = _state
+
+    /** Current roguelike run state; null between runs. */
+    val runState: StateFlow<RunScopedState?> = runStateHolder.run
+
+    /** Number of uncleared events remaining on this map. */
+    private val _eventsRemaining = MutableStateFlow(eventRegistry.activeCount)
+    val eventsRemaining: StateFlow<Int> = _eventsRemaining
 
     init {
         syncUnitMarkersToMap()
@@ -63,6 +73,22 @@ class OverworldViewModel(
         val eventId = navigator.currentBattle?.eventId ?: return
         eventRegistry.complete(eventId)
         mapState.removeMarker(eventId)
+        _state.value = world.snapshotOverworld()
+        _eventsRemaining.value = eventRegistry.activeCount
+    }
+
+    /**
+     * Called by [App] when a new run starts.
+     * Re-adds all event markers and refreshes the player marker.
+     */
+    fun onRunReset(events: List<OverworldEvent>) {
+        // Remove stale event markers from previous run (best-effort — ignore unknown ids)
+        eventRegistry.active.value.keys.forEach { id -> runCatching { mapState.removeMarker(id) } }
+        events.filter { it.mapId == mapConfig.id }.forEach { event ->
+            mapState.addMarker(event.id, event.x, event.y) { EventMapMarker(event) }
+        }
+        _state.value = world.snapshotOverworld()
+        _eventsRemaining.value = events.count { it.mapId == mapConfig.id }
     }
 
     private fun movePlayer(x: Double, y: Double) {

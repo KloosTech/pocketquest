@@ -8,12 +8,20 @@ import de.jackbeback.pocketquest.content.map.kaerMorhenConfig
 import de.jackbeback.pocketquest.content.map.throneRoomConfig
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.game.battle.BattleTileCache
+import de.jackbeback.pocketquest.ecs.components.core.FactionComponent
+import de.jackbeback.pocketquest.ecs.components.core.Faction
+import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
+import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.ecs.core.SystemRegistry
 import de.jackbeback.pocketquest.ecs.core.World
+import de.jackbeback.pocketquest.ecs.core.get
+import de.jackbeback.pocketquest.ecs.core.query
+import de.jackbeback.pocketquest.ecs.core.set
 import de.jackbeback.pocketquest.game.animation.AnimationEventCollector
 import de.jackbeback.pocketquest.game.loop.GameLoop
 import de.jackbeback.pocketquest.game.loop.TurnPhase
 import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
+import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.game.snapshot.BattleLog
 import de.jackbeback.pocketquest.game.systems.ai.AIDecisionSystem
 import de.jackbeback.pocketquest.game.systems.combat.CombatSystem
@@ -24,7 +32,6 @@ import de.jackbeback.pocketquest.game.systems.combat.SkillResolverSystem
 import de.jackbeback.pocketquest.game.systems.combat.TurnResetSystem
 import de.jackbeback.pocketquest.game.systems.movement.MovementSystem
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
-import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.overworld.OverworldViewModel
 import org.koin.dsl.module
@@ -47,18 +54,51 @@ val gameModule = module {
     single { buildSystemRegistry(get(), get(), get()) }
     single { GameLoop(get()) }
     single {
-        val world    = get<World>()
-        val battleLog = get<BattleLog>()
+        val world          = get<World>()
+        val battleLog      = get<BattleLog>()
+        val runStateHolder = get<RunStateHolder>()
         BattleViewModel(world, get(), get(), battleLog, get(), get()) { enemies ->
-            // Destroy all, re-spawn player, then spawn the encounter's enemies
+            // Save player HP/Mana before destroying so the run persists damage between encounters
+            world.query<FactionComponent>()
+                .filter { (_, f) -> f.faction == Faction.PLAYER }
+                .firstOrNull()
+                ?.let { (id, _) ->
+                    val hp   = world.get<HealthComponent>(id)
+                    val mana = world.get<ManaComponent>(id)
+                    if (hp != null && mana != null) runStateHolder.savePlayerState(hp.current, mana.current)
+                }
+
+            // Destroy all entities and re-spawn the player
             world.allEntities().toList().forEach { world.destroyEntity(it) }
             world.flushDestroys()
-            wizardTemplate.spawnIntoWorld(world)
-            enemies.forEach { template -> template.spawnIntoWorld(world) }
+            val playerId = wizardTemplate.spawnIntoWorld(world)
+
+            // Restore saved HP/Mana (carry damage from previous encounters)
+            val run = runStateHolder.run.value
+            if (run != null) {
+                run.playerHp?.let { savedHp ->
+                    val comp = world.get<HealthComponent>(playerId) ?: return@let
+                    world.set(playerId, comp.copy(current = savedHp.coerceIn(1, comp.max)))
+                }
+                run.playerMana?.let { savedMana ->
+                    val comp = world.get<ManaComponent>(playerId) ?: return@let
+                    world.set(playerId, comp.copy(current = savedMana.coerceIn(0, comp.max)))
+                }
+            }
+
+            // Scale enemy HP by difficulty (30% per completed encounter)
+            val diffMult = 1f + (run?.difficultyCounter ?: 0) * 0.30f
+            enemies.forEach { template ->
+                val enemyId = template.spawnIntoWorld(world)
+                val comp = world.get<HealthComponent>(enemyId) ?: return@forEach
+                val scaledHp = (comp.max * diffMult).toInt()
+                world.set(enemyId, comp.copy(current = scaledHp, max = scaledHp))
+            }
+
             battleLog.clear()
         }
     }
-    single { OverworldViewModel(get(), get(), get(), kaerMorhenConfig) }
+    single { OverworldViewModel(get(), get(), get(), kaerMorhenConfig, get()) }
 }
 
 private fun buildSystemRegistry(

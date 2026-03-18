@@ -11,6 +11,10 @@ data class RunScopedState(
     val exp: Int = 0,
     /** Increments once per won encounter; used to scale enemy difficulty. */
     val difficultyCounter: Int = 0,
+    /** Saved player HP between encounters; null = use template default (full HP). */
+    val playerHp: Int? = null,
+    /** Saved player mana between encounters; null = use template default. */
+    val playerMana: Int? = null,
 )
 
 /** State that persists across runs (survives death). */
@@ -44,5 +48,10 @@ class RunStateHolder {
     /** Called after each won encounter. */
     fun incrementDifficulty() {
         _run.update { it?.copy(difficultyCounter = (it.difficultyCounter + 1)) }
+    }
+
+    /** Saves current player HP/Mana to be restored at the start of the next encounter. */
+    fun savePlayerState(hp: Int, mana: Int) {
+        _run.update { it?.copy(playerHp = hp, playerMana = mana) }
     }
 }
