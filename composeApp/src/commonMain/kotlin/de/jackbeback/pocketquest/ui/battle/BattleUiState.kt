@@ -15,7 +15,11 @@ data class BattleUiState(
     val log: List<String>,
     val availableSkills: List<SkillUiState> = emptyList(),
     val selectedSkill: String? = null,
-    val isBattleOver: Boolean = false,
+    /** All enemies are dead and the player is still alive. */
+    val isVictory: Boolean = false,
+    /** The player entity has been destroyed. */
+    val isDefeat: Boolean = false,
+    val isBattleOver: Boolean = isVictory || isDefeat,
     /** Tiles the player can move to this turn (col, row pairs). Empty when already moved. */
     val reachableTiles: Set<Pair<Int, Int>> = emptySet(),
     /** Enemy tiles the player can hit with the selected skill. Empty when no skill selected. */

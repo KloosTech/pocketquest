@@ -24,6 +24,7 @@ import de.jackbeback.pocketquest.game.systems.combat.SkillResolverSystem
 import de.jackbeback.pocketquest.game.systems.combat.TurnResetSystem
 import de.jackbeback.pocketquest.game.systems.movement.MovementSystem
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
+import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.overworld.OverworldViewModel
 import org.koin.dsl.module
@@ -38,6 +39,7 @@ val gameModule = module {
     single { SkillRegistry(allSkills) }
     single { BattleLog() }
     single { Navigator() }
+    single { RunStateHolder() }
     single { OverworldEventRegistry(allOverworldEvents) }
     // Pre-loads Throneroom tiles in the background; ready before battle starts
     single { BattleTileCache(throneRoomConfig) }

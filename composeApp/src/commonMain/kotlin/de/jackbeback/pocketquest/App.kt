@@ -5,8 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import de.jackbeback.pocketquest.content.definitions.wizardTemplate
+import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.battle.BattleScreen
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
+import de.jackbeback.pocketquest.ui.characterselect.CharacterSelectScreen
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.navigation.Screen
 import de.jackbeback.pocketquest.ui.overworld.OverworldScreen
@@ -20,20 +23,35 @@ fun App() {
         val screen by navigator.screen.collectAsState()
 
         when (screen) {
+            Screen.CharacterSelect -> {
+                val runStateHolder = koinInject<RunStateHolder>()
+                CharacterSelectScreen(
+                    availableCharacters = listOf(wizardTemplate),
+                    runStateHolder = runStateHolder,
+                    onRunStarted = { navigator.goToOverworld() },
+                )
+            }
             Screen.Overworld -> {
                 val vm = koinInject<OverworldViewModel>()
                 OverworldScreen(vm)
             }
             Screen.Battle -> {
-                val battleVm  = koinInject<BattleViewModel>()
+                val battleVm    = koinInject<BattleViewModel>()
                 val overworldVm = koinInject<OverworldViewModel>()
+                val runStateHolder = koinInject<RunStateHolder>()
                 val params = navigator.currentBattle
                 LaunchedEffect(Unit) { battleVm.prepareBattle(params) }
                 BattleScreen(
                     viewModel = battleVm,
-                    onBattleEnd = {
-                        overworldVm.onBattleCompleted()
-                        navigator.returnToOverworld()
+                    onBattleEnd = { victory ->
+                        if (victory) {
+                            runStateHolder.incrementDifficulty()
+                            overworldVm.onBattleCompleted()
+                            navigator.returnToOverworld()
+                        } else {
+                            runStateHolder.resetRun()
+                            navigator.goToCharacterSelect()
+                        }
                     },
                 )
             }

@@ -76,7 +76,7 @@ private val ColorLogBg       = Color(0xFF0d1117)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
+fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: (victory: Boolean) -> Unit = {}) {
     val state by viewModel.state.collectAsState()
     val animationEvent by viewModel.animationEvent.collectAsState()
     val phaseBanner by viewModel.phaseBanner.collectAsState()
@@ -91,7 +91,7 @@ fun BattleScreen(viewModel: BattleViewModel, onBattleEnd: () -> Unit = {}) {
     val canAct = isPlayerPhase && !isLocked && hasMana
 
     LaunchedEffect(state.isBattleOver) {
-        if (state.isBattleOver) onBattleEnd()
+        if (state.isBattleOver) onBattleEnd(state.isVictory)
     }
 
     // Dismiss sheet when no longer the player's turn or out of mana

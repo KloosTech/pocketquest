@@ -13,17 +13,27 @@ data class BattleParams(
 )
 
 sealed class Screen {
+    object CharacterSelect : Screen()
     object Overworld : Screen()
     object Battle : Screen()
 }
 
 class Navigator {
-    private val _screen = MutableStateFlow<Screen>(Screen.Overworld)
+    private val _screen = MutableStateFlow<Screen>(Screen.CharacterSelect)
     val screen: StateFlow<Screen> = _screen
 
-    /** Set while the Battle screen is active; null on the Overworld. */
+    /** Set while the Battle screen is active; null otherwise. */
     var currentBattle: BattleParams? = null
         private set
+
+    fun goToCharacterSelect() {
+        currentBattle = null
+        _screen.value = Screen.CharacterSelect
+    }
+
+    fun goToOverworld() {
+        _screen.value = Screen.Overworld
+    }
 
     fun goToBattle(params: BattleParams) {
         currentBattle = params
