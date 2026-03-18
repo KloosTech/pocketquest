@@ -13,7 +13,7 @@ val wizardTemplate = unit("wizard") {
         str = 8; dex = 14; con = 10; intelligence = 18; wis = 14; cha = 12; ac = 12
     }
     health(max = 25)
-    mana(max = 20)
+    mana(max = 20, regen = 5)
     maxAp = 2
     movesPerTurn = 1
     moveRange = 3

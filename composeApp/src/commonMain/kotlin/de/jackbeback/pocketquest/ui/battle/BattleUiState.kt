@@ -24,8 +24,8 @@ data class BattleUiState(
     val playerMovesRemaining: Int = 0,
     /** Total move actions the player gets per turn. */
     val playerMaxMoves: Int = 0,
-    /** Whether the player has used their action (skill/attack) this turn. */
-    val playerHasActed: Boolean = false,
+    /** Current mana of the player — used to determine which skills are castable. */
+    val playerMana: ManaComponent = ManaComponent(0, 0),
     /** Targets already queued for a multi-target skill (shown with a distinct highlight). */
     val pendingTargetIds: List<EntityId> = emptyList(),
     /** Grid positions of [pendingTargetIds] units — highlighted with a distinct colour. */

@@ -34,6 +34,8 @@ fun SkillPanel(
     onSkillSelected: (String) -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
+    /** Current mana of the player. Skills costing more than this are greyed out. */
+    playerMana: Int = Int.MAX_VALUE,
 ) {
     Column(
         modifier = modifier
@@ -45,11 +47,12 @@ fun SkillPanel(
         skills.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 row.forEach { skill ->
+                    val affordable = skill.manaCost <= playerMana
                     SkillButton(
                         skill = skill,
                         isSelected = skill.id == selectedSkillId,
-                        onClick = { if (enabled) onSkillSelected(skill.id) },
-                        enabled = enabled,
+                        onClick = { if (enabled && affordable) onSkillSelected(skill.id) },
+                        enabled = enabled && affordable,
                         modifier = Modifier.weight(1f),
                     )
                 }
