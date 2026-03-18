@@ -64,3 +64,28 @@ val veteranGruntTemplate = unit("veteran_grunt") {
     skills("basic_attack")
     resistance(DamageType.FIRE, 0.5f)
 }
+
+/**
+ * Final-area boss — very high HP, slashing resistance, and priority initiative.
+ * Spawns as the centrepiece of the boss encounter.
+ */
+val chieftainTemplate = unit("chieftain") {
+    name = "Chieftain"
+    faction = Faction.ENEMY
+    sprite = "grunt"
+    stats {
+        str = 18; dex = 10; con = 20; intelligence = 8; wis = 10; cha = 10; ac = 17
+    }
+    health(max = 60)
+    mana(max = 0)
+    maxAp = 2
+    movesPerTurn = 1
+    moveRange = 2
+    initiative = 12
+    aiStrategy = AIStrategy.Aggressive
+    preferredSkillId = "basic_attack"
+    spawnCol = 11; spawnRow = 4
+    skills("basic_attack")
+    resistance(DamageType.SLICING, 0.5f)
+    resistance(DamageType.PIERCING, 0.5f)
+}

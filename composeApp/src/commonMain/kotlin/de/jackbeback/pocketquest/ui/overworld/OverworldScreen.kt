@@ -1,5 +1,11 @@
 package de.jackbeback.pocketquest.ui.overworld
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -8,6 +14,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -40,11 +48,16 @@ private val ColorSubtext = Color(0xFF8b949e)
 private val ColorGold    = Color(0xFFd29922)
 
 @Composable
-fun OverworldScreen(viewModel: OverworldViewModel) {
+fun OverworldScreen(
+    viewModel: OverworldViewModel,
+    onNextArea: () -> Unit = {},
+    onEndRun: () -> Unit = {},
+) {
     val state           by viewModel.state.collectAsState()
     val runState        by viewModel.runState.collectAsState()
     val eventsRemaining by viewModel.eventsRemaining.collectAsState()
     val pendingRest     by viewModel.pendingRest.collectAsState()
+    val mapCleared      by viewModel.mapCleared.collectAsState()
 
     val player = state.units.firstOrNull { it.faction == Faction.PLAYER }
 
@@ -73,6 +86,23 @@ fun OverworldScreen(viewModel: OverworldViewModel) {
                 maxHp = player?.health?.max ?: 0,
                 onConfirm = { viewModel.onRestConfirmed() },
                 onDismiss = { viewModel.onRestDismissed() },
+            )
+        }
+
+        // Area-clear overlay — shown when all events have been completed
+        AnimatedVisibility(
+            visible = mapCleared,
+            enter = scaleIn(tween(300)) + fadeIn(tween(300)),
+            exit  = scaleOut(tween(200)) + fadeOut(tween(200)),
+            modifier = Modifier.fillMaxSize(),
+        ) {
+            MapClearOverlay(
+                runState = runState,
+                onNextArea = {
+                    viewModel.dismissMapClear()
+                    onNextArea()
+                },
+                onEndRun = onEndRun,
             )
         }
     }
@@ -210,6 +240,88 @@ private fun RelicChip(relic: Relic) {
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Start,
         )
+    }
+}
+
+@Composable
+private fun MapClearOverlay(
+    runState: RunScopedState?,
+    onNextArea: () -> Unit,
+    onEndRun: () -> Unit,
+) {
+    val heldRelics = allRelics.filter { it.id in (runState?.relics ?: emptyList()) }
+    val areaNum    = runState?.areaNumber ?: 1
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.82f)),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(300.dp)
+                .background(Color(0xFF161b22), RoundedCornerShape(12.dp))
+                .border(1.dp, ColorGold.copy(alpha = 0.7f), RoundedCornerShape(12.dp))
+                .padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(14.dp),
+        ) {
+            Text("☠  Area $areaNum Cleared!",
+                color = ColorGold, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+
+            HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
+
+            // Run stats
+            if (runState != null) {
+                StatRow("Level",     "Lv ${runState.level}")
+                StatRow("Encounters", "${runState.difficultyCounter}")
+                if (heldRelics.isNotEmpty()) {
+                    StatRow("Relics", "${heldRelics.size}")
+                }
+            }
+
+            HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
+
+            Text(
+                "The map is clear. Press on.",
+                color = ColorSubtext,
+                fontSize = 11.sp,
+                textAlign = TextAlign.Center,
+            )
+
+            // Next area
+            Button(
+                onClick = onNextArea,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = ColorGold,
+                    contentColor = Color(0xFF0d1117),
+                ),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+            ) {
+                Text("Next Area  →", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            }
+
+            // End run
+            TextButton(
+                onClick = onEndRun,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text("End Run", color = ColorSubtext, fontSize = 12.sp)
+            }
+        }
+    }
+}
+
+@Composable
+private fun StatRow(label: String, value: String) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+    ) {
+        Text(label, color = ColorSubtext, fontSize = 12.sp)
+        Text(value, color = ColorText,    fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
     }
 }
 

@@ -22,6 +22,9 @@ sealed class OverworldEvent {
     /**
      * A combat encounter. Tapping the marker starts a battle with [enemies].
      * After the last enemy is defeated the event is marked complete.
+     *
+     * Set [isBoss] to true for the final encounter — rendered with a distinct marker
+     * and triggers the area-clear overlay when completed.
      */
     data class BattleEncounter(
         override val id: String,
@@ -31,6 +34,8 @@ sealed class OverworldEvent {
         override val label: String,
         /** Enemy unit templates to spawn when this encounter starts. */
         val enemies: List<UnitTemplate>,
+        /** True for the area boss — shown with a distinct marker style. */
+        val isBoss: Boolean = false,
     ) : OverworldEvent()
 
     /**

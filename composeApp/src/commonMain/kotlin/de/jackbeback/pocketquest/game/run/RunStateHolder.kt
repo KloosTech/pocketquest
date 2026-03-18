@@ -18,6 +18,8 @@ data class RunScopedState(
     val playerMana: Int? = null,
     /** IDs of relics held this run. Applied at the start of every encounter. */
     val relics: List<String> = emptyList(),
+    /** How many areas (map resets) the player has completed this run. Starts at 1. */
+    val areaNumber: Int = 1,
 )
 
 /** Result of a [RunStateHolder.gainExp] call. */
@@ -67,6 +69,11 @@ class RunStateHolder {
     /** Adds a relic (by id) to the current run's collection. */
     fun addRelic(relicId: String) {
         _run.update { it?.copy(relics = it.relics + relicId) }
+    }
+
+    /** Called when the player clears all events on the current map and moves to the next area. */
+    fun startNextArea() {
+        _run.update { it?.copy(areaNumber = it.areaNumber + 1) }
     }
 
     /**

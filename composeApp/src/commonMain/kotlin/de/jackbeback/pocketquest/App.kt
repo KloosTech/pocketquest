@@ -44,8 +44,21 @@ fun App() {
                 )
             }
             Screen.Overworld -> {
-                val vm = koinInject<OverworldViewModel>()
-                OverworldScreen(vm)
+                val vm              = koinInject<OverworldViewModel>()
+                val eventRegistry   = koinInject<OverworldEventRegistry>()
+                val runStateHolder  = koinInject<RunStateHolder>()
+                OverworldScreen(
+                    viewModel   = vm,
+                    onNextArea  = {
+                        runStateHolder.startNextArea()
+                        eventRegistry.reset(allOverworldEvents)
+                        vm.onRunReset(allOverworldEvents)
+                    },
+                    onEndRun    = {
+                        runStateHolder.resetRun()
+                        navigator.goToCharacterSelect()
+                    },
+                )
             }
             Screen.Battle -> {
                 val battleVm    = koinInject<BattleViewModel>()

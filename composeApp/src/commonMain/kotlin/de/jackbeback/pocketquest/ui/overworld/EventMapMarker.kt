@@ -14,40 +14,54 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.content.events.OverworldEvent
 
 private val ColorEncounter    = Color(0xFFf85149)
 private val ColorEncounterBg  = Color(0xFF5a1a1a)
+private val ColorBoss         = Color(0xFFd29922)
+private val ColorBossBg       = Color(0xFF2d2a00)
 private val ColorRest         = Color(0xFF3fb950)
 private val ColorRestBg       = Color(0xFF1a3a1f)
 private val ColorLabelBg      = Color(0xCC0d1117)
 
 @Composable
 fun EventMapMarker(event: OverworldEvent) {
-    val (icon, tint, bg) = when (event) {
-        is OverworldEvent.BattleEncounter -> Triple("⚔", ColorEncounter, ColorEncounterBg)
-        is OverworldEvent.RestSite        -> Triple("✦", ColorRest, ColorRestBg)
+    val isBoss = event is OverworldEvent.BattleEncounter && event.isBoss
+    val (icon, tint, bg, size, fontSize) = when {
+        event is OverworldEvent.RestSite -> MarkerStyle("✦", ColorRest,      ColorRestBg,      32.dp, 14.sp)
+        isBoss                           -> MarkerStyle("☠", ColorBoss,      ColorBossBg,      40.dp, 18.sp)
+        else                             -> MarkerStyle("⚔", ColorEncounter, ColorEncounterBg, 32.dp, 14.sp)
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(
             contentAlignment = Alignment.Center,
             modifier = Modifier
-                .size(32.dp)
+                .size(size)
                 .background(bg, CircleShape)
-                .border(2.dp, tint, CircleShape),
+                .border(if (isBoss) 2.5.dp else 2.dp, tint, CircleShape),
         ) {
-            Text(text = icon, color = tint, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+            Text(text = icon, color = tint, fontSize = fontSize, fontWeight = FontWeight.Bold)
         }
         Text(
             text = event.label,
-            color = Color.White,
+            color = if (isBoss) ColorBoss else Color.White,
             fontSize = 9.sp,
-            fontWeight = FontWeight.Medium,
+            fontWeight = if (isBoss) FontWeight.ExtraBold else FontWeight.Medium,
             modifier = Modifier
                 .background(ColorLabelBg, RoundedCornerShape(3.dp))
                 .padding(horizontal = 4.dp, vertical = 1.dp),
         )
     }
 }
+
+private data class MarkerStyle(
+    val icon: String,
+    val tint: Color,
+    val bg: Color,
+    val size: Dp,
+    val fontSize: TextUnit,
+)

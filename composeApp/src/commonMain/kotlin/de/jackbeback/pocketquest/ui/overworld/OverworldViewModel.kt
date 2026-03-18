@@ -54,6 +54,10 @@ class OverworldViewModel(
     private val _pendingRest = MutableStateFlow<OverworldEvent.RestSite?>(null)
     val pendingRest: StateFlow<OverworldEvent.RestSite?> = _pendingRest
 
+    /** True when all events on the current map have been cleared (triggers area-clear overlay). */
+    private val _mapCleared = MutableStateFlow(false)
+    val mapCleared: StateFlow<Boolean> = _mapCleared
+
     init {
         syncUnitMarkersToMap()
         syncEventMarkersToMap()
@@ -84,6 +88,14 @@ class OverworldViewModel(
         mapState.removeMarker(eventId)
         _state.value = world.snapshotOverworld()
         _eventsRemaining.value = eventRegistry.activeCount
+        if (eventRegistry.activeCount == 0) {
+            _mapCleared.value = true
+        }
+    }
+
+    /** Called from the area-clear overlay's "Next Area" button to reset the cleared state. */
+    fun dismissMapClear() {
+        _mapCleared.value = false
     }
 
     /** Player confirmed resting at the pending rest site — apply heal and remove marker. */
@@ -124,6 +136,7 @@ class OverworldViewModel(
         }
         _state.value = world.snapshotOverworld()
         _eventsRemaining.value = events.count { it.mapId == mapConfig.id }
+        _mapCleared.value = false
     }
 
     private fun movePlayer(x: Double, y: Double) {

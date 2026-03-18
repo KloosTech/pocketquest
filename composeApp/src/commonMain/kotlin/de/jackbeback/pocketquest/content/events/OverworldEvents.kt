@@ -1,5 +1,6 @@
 package de.jackbeback.pocketquest.content.events
 
+import de.jackbeback.pocketquest.content.definitions.chieftainTemplate
 import de.jackbeback.pocketquest.content.definitions.gruntTemplate
 import de.jackbeback.pocketquest.content.definitions.veteranGruntTemplate
 
@@ -46,6 +47,14 @@ val kaerMorhenEvents: List<OverworldEvent> = listOf(
         x       = 0.75, y = 0.75,
         label   = "Elite Squad",
         enemies = listOf(veteranGruntTemplate, gruntTemplate),
+    ),
+    OverworldEvent.BattleEncounter(
+        id      = "km_boss",
+        mapId   = "KaerMorhen",
+        x       = 0.50, y = 0.50,
+        label   = "Boss",
+        enemies = listOf(chieftainTemplate, veteranGruntTemplate, gruntTemplate),
+        isBoss  = true,
     ),
     OverworldEvent.RestSite(
         id    = "km_rest_campfire",
