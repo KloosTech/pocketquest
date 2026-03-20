@@ -48,6 +48,8 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FilenameFilter
 import javax.imageio.ImageIO
+import kotlin.math.abs
+import kotlin.math.exp
 import kotlin.math.roundToInt
 
 // ── Terrain colors ────────────────────────────────────────────────────────────
@@ -282,7 +284,7 @@ fun MapEditorPanel(
 
             // ── Viewport controls ─────────────────────────────────────────────
             EditorCard {
-                CardLabel("Viewport  (right-drag = pan,  scroll = zoom)")
+                CardLabel("Viewport  (scroll = pan  •  Ctrl+scroll = zoom  •  right-drag = pan)")
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     ActionChip("Fit") { fitToCanvas() }
                     ActionChip("1:1") {
@@ -395,26 +397,43 @@ fun MapEditorPanel(
                     canvasH = sz.height
                     if (needFit) fitToCanvas()
                 }
-                // Scroll to zoom, centred on cursor
+                // Trackpad swipe = pan; mouse scroll = zoom; Ctrl/Meta+scroll = zoom
                 .onPointerEvent(PointerEventType.Scroll) { event ->
                     val change = event.changes.firstOrNull() ?: return@onPointerEvent
+                    val dx = change.scrollDelta.x
                     val dy = change.scrollDelta.y
-                    if (dy == 0f) return@onPointerEvent
-                    val factor = if (dy < 0) 1.12f else 0.89f
-                    val mx = change.position.x
-                    val my = change.position.y
-                    val imgX = (mx - panX) / zoom
-                    val imgY = (my - panY) / zoom
-                    zoom = (zoom * factor).coerceIn(0.05f, 20f)
-                    panX = mx - imgX * zoom
-                    panY = my - imgY * zoom
+                    if (dx == 0f && dy == 0f) return@onPointerEvent
+
+                    val isTrackpad = maxOf(abs(dx), abs(dy)) < 1.0f
+                    val zoom_ = zoom
+                    if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) {
+                        val mx = change.position.x
+                        val my = change.position.y
+                        val imgX = (mx - panX) / zoom_
+                        val imgY = (my - panY) / zoom_
+                        zoom = (zoom_ * exp(-dy * 0.10f)).coerceIn(0.05f, 20f)
+                        panX = mx - imgX * zoom
+                        panY = my - imgY * zoom
+                    } else if (isTrackpad) {
+                        val mult = 1.5f
+                        panX -= dx * mult
+                        panY -= dy * mult
+                    } else {
+                        val mx = change.position.x
+                        val my = change.position.y
+                        val imgX = (mx - panX) / zoom_
+                        val imgY = (my - panY) / zoom_
+                        zoom = (zoom_ * exp(-dy * 0.12f)).coerceIn(0.05f, 20f)
+                        panX = mx - imgX * zoom
+                        panY = my - imgY * zoom
+                    }
                 }
                 // Left-drag = paint  |  right-drag = pan
-                .pointerInput(zoom, panX, panY, numCols, numRows, tw, th, ox, oy, activePaint) {
+                .pointerInput(numCols, numRows, tw, th, ox, oy, activePaint) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val startEvent = awaitPointerEvent(PointerEventPass.Initial)
-                        val isPan = startEvent.buttons.isSecondaryPressed &&
+                        val isPan = (startEvent.buttons.isSecondaryPressed || startEvent.buttons.isTertiaryPressed) &&
                                 !startEvent.buttons.isPrimaryPressed
 
                         if (!isPan) paintAt(down.position.x, down.position.y)
@@ -482,7 +501,7 @@ fun MapEditorPanel(
                     Text("PNG or JPG — any resolution", color = DC.Overlay0, fontSize = 11.sp)
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        "Left-click/drag  →  paint terrain\nRight-drag  →  pan\nScroll  →  zoom",
+                        "Left-click/drag  →  paint terrain\nRight-drag  →  pan\nScroll  →  pan  •  Ctrl+scroll  →  zoom",
                         color = DC.Overlay0, fontSize = 10.sp,
                         lineHeight = 15.sp,
                     )

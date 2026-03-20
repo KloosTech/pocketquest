@@ -174,6 +174,7 @@ fun EncounterDesignerApp() {
                                         onBeginEdge = { vm.beginEdgePlacement(overworld.id, it) },
                                         onCompleteEdge = { vm.completeEdgePlacement(overworld.id, it) },
                                         onClearSelection = vm::clearGraphSelection,
+                                        onChangeNodeType = { nodeId, type -> vm.changeNodeType(overworld.id, nodeId, type) },
                                         modifier = Modifier.fillMaxSize(),
                                     )
                                 }
@@ -348,24 +349,22 @@ private fun GraphModeToolbar(
         ModeButton("ADD EDGE", mode == GraphInteractionMode.ADD_EDGE, DC.Sapphire) { onSetMode(GraphInteractionMode.ADD_EDGE) }
         ModeButton("DELETE", mode == GraphInteractionMode.DELETE, DC.Red) { onSetMode(GraphInteractionMode.DELETE) }
 
-        if (mode == GraphInteractionMode.ADD_NODE) {
-            Box(Modifier.width(1.dp).height(18.dp).background(DC.Surface1))
-            Text("TYPE:", color = DC.Overlay0, fontSize = 10.sp, letterSpacing = 0.5.sp)
-            de.jackbeback.pocketquest.designer.model.OverworldNodeType.values().forEach { t ->
-                val label = when (t) {
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.START -> "▶ START"
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.BATTLE -> "⚔ BATTLE"
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.REST -> "⛺ REST"
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.BOSS -> "☠ BOSS"
-                }
-                val color = when (t) {
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.START -> DC.Green
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.BATTLE -> DC.Blue
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.REST -> DC.Yellow
-                    de.jackbeback.pocketquest.designer.model.OverworldNodeType.BOSS -> DC.Red
-                }
-                ModeButton(label, nodeType == t, color) { onSetNodeType(t) }
+        Box(Modifier.width(1.dp).height(18.dp).background(DC.Surface1))
+        Text("TYPE:", color = DC.Overlay0, fontSize = 10.sp, letterSpacing = 0.5.sp)
+        de.jackbeback.pocketquest.designer.model.OverworldNodeType.values().forEach { t ->
+            val label = when (t) {
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.START -> "▶ START"
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BATTLE -> "⚔ BATTLE"
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.REST -> "⛺ REST"
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BOSS -> "☠ BOSS"
             }
+            val color = when (t) {
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.START -> DC.Green
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BATTLE -> DC.Blue
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.REST -> DC.Yellow
+                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BOSS -> DC.Red
+            }
+            ModeButton(label, nodeType == t, color) { onSetNodeType(t) }
         }
 
         Spacer(Modifier.weight(1f))

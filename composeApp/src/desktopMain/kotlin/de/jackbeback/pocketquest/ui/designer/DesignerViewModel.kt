@@ -686,6 +686,25 @@ class DesignerViewModel {
         }
     }
 
+    fun changeNodeType(overworldId: String, nodeId: String, newType: OverworldNodeType) {
+        _state.update { s ->
+            val campaign = s.activeCampaign ?: return@update s
+            val updated = campaign.copy(overworlds = campaign.overworlds.map { ow ->
+                if (ow.id != overworldId) return@map ow
+                // If promoting to START, demote any existing START node to BATTLE (keep edges)
+                val nodes = if (newType == OverworldNodeType.START) {
+                    ow.nodes.map { n ->
+                        if (n.type == OverworldNodeType.START && n.id != nodeId)
+                            n.copy(type = OverworldNodeType.BATTLE)
+                        else n
+                    }
+                } else ow.nodes
+                ow.copy(nodes = nodes.map { n -> if (n.id != nodeId) n else n.copy(type = newType) })
+            })
+            s.copy(activeCampaign = updated, campaignDirty = true)
+        }
+    }
+
     // ── Edge CRUD ─────────────────────────────────────────────────────────────
 
     fun addEdge(overworldId: String, fromId: String, toId: String) {

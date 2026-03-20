@@ -65,8 +65,13 @@ import de.jackbeback.pocketquest.ui.relicLocalizedDescription
 import de.jackbeback.pocketquest.ui.relicLocalizedName
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 import pocketquest.composeapp.generated.resources.Res
+import pocketquest.composeapp.generated.resources.arrow_down
+import pocketquest.composeapp.generated.resources.arrow_left
+import pocketquest.composeapp.generated.resources.arrow_right
+import pocketquest.composeapp.generated.resources.arrow_up
 import pocketquest.composeapp.generated.resources.battle_cast
 import pocketquest.composeapp.generated.resources.battle_choose_relic
 import pocketquest.composeapp.generated.resources.battle_defeated
@@ -1151,41 +1156,60 @@ private fun DPad(
         modifier = Modifier
             .fillMaxWidth()
             .background(ColorFieldBg)
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.Center,
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(2.dp),
-        ) {
-            DPadButton("▲", canDir(0, -1))  { onMoveDirection(0, -1) }
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
-                DPadButton("◄", canDir(-1, 0)) { onMoveDirection(-1, 0) }
-                Box(Modifier.size(36.dp))
-                DPadButton("►", canDir(1, 0))  { onMoveDirection(1, 0) }
-            }
-            DPadButton("▼", canDir(0, 1))   { onMoveDirection(0, 1) }
-        }
+        DPadButton(
+            painter = painterResource(Res.drawable.arrow_left),
+            enabled = canDir(-1, 0),
+            modifier = Modifier.weight(1f),
+        ) { onMoveDirection(-1, 0) }
+        DPadButton(
+            painter = painterResource(Res.drawable.arrow_down),
+            enabled = canDir(0, 1),
+            modifier = Modifier.weight(1f),
+        ) { onMoveDirection(0, 1) }
+        DPadButton(
+            painter = painterResource(Res.drawable.arrow_up),
+            enabled = canDir(0, -1),
+            modifier = Modifier.weight(1f),
+        ) { onMoveDirection(0, -1) }
+        DPadButton(
+            painter = painterResource(Res.drawable.arrow_right),
+            enabled = canDir(1, 0),
+            modifier = Modifier.weight(1f),
+        ) { onMoveDirection(1, 0) }
     }
 }
 
 @Composable
-private fun DPadButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+private fun DPadButton(
+    painter: androidx.compose.ui.graphics.painter.Painter,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
+    val iconColor = if (enabled) ColorPlayer else Color(0xFF484f58)
+    val bgColor   = if (enabled) Color(0xFF1f2d3d) else Color(0xFF161b22)
     Button(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(36.dp),
+        modifier = modifier.height(40.dp),
         contentPadding = PaddingValues(0.dp),
-        shape = RoundedCornerShape(6.dp),
+        shape = RoundedCornerShape(8.dp),
         colors = ButtonDefaults.buttonColors(
-            containerColor = Color(0xFF1f2d3d),
-            contentColor = ColorPlayer,
+            containerColor = bgColor,
+            contentColor = iconColor,
             disabledContainerColor = Color(0xFF161b22),
             disabledContentColor = Color(0xFF484f58),
         ),
     ) {
-        Text(label, fontSize = 14.sp)
+        androidx.compose.foundation.Image(
+            painter = painter,
+            contentDescription = null,
+            modifier = Modifier.size(22.dp),
+            colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(iconColor),
+        )
     }
 }
 
