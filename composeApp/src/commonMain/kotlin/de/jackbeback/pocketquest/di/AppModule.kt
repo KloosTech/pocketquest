@@ -6,14 +6,16 @@ import de.jackbeback.pocketquest.content.definitions.allSkills
 import de.jackbeback.pocketquest.content.definitions.wizardTemplate
 import de.jackbeback.pocketquest.content.dsl.spawnIntoWorld
 import de.jackbeback.pocketquest.content.events.allOverworldEvents
-import de.jackbeback.pocketquest.content.map.kaerMorhenConfig
+import de.jackbeback.pocketquest.content.events.kaerMorhenGraph
 import de.jackbeback.pocketquest.content.map.throneRoomConfig
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.game.battle.BattleTileCache
+import de.jackbeback.pocketquest.game.battle.TileMapRepository
 import de.jackbeback.pocketquest.ecs.components.core.FactionComponent
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
 import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
+import de.jackbeback.pocketquest.ecs.components.core.StatsComponent
 import de.jackbeback.pocketquest.ecs.core.World
 import de.jackbeback.pocketquest.ecs.core.get
 import de.jackbeback.pocketquest.ecs.core.query
@@ -25,6 +27,7 @@ import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
 import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.game.snapshot.BattleLog
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
+import de.jackbeback.pocketquest.ui.character.CharacterViewModel
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.overworld.OverworldViewModel
 import org.koin.dsl.module
@@ -43,6 +46,7 @@ val gameModule = module {
     single { OverworldEventRegistry(allOverworldEvents) }
     // Pre-loads Throneroom tiles in the background; ready before battle starts
     single { BattleTileCache(throneRoomConfig) }
+    single { TileMapRepository() }
     single { AnimationEventCollector(get(), get()) }
     single { buildBattleSystemRegistry(get(), get(), get()) }
     single { GameLoop(get()) }
@@ -57,12 +61,13 @@ val gameModule = module {
             battleLog            = battleLog,
             animCollector        = get(),
             tileCache            = get(),
+            tileMapRepository    = get(),
             levelUpPreview       = { xp -> runStateHolder.previewGainExp(xp) },
             pickRelicCandidates  = {
                 val heldIds = runStateHolder.run.value?.relics?.toSet() ?: emptySet()
                 allRelics.filter { it.id !in heldIds }.shuffled().take(3)
             },
-        ) { enemies ->
+            resetAndSpawn        = { enemies ->
             // Save player HP/Mana before destroying so the run persists damage between encounters
             world.query<FactionComponent>()
                 .filter { (_, f) -> f.faction == Faction.PLAYER }
@@ -135,9 +140,36 @@ val gameModule = module {
                 world.set(enemyId, comp.copy(current = scaledHp, max = scaledHp))
             }
 
+            // Apply run-scoped attribute bonuses (spent from Character screen)
+            val bonuses = run?.attributeBonuses ?: emptyMap()
+            if (bonuses.isNotEmpty()) {
+                val stats = world.get<StatsComponent>(playerId)
+                if (stats != null) {
+                    world.set(playerId, stats.copy(
+                        str          = stats.str          + (bonuses["str"]          ?: 0),
+                        dex          = stats.dex          + (bonuses["dex"]          ?: 0),
+                        con          = stats.con          + (bonuses["con"]          ?: 0),
+                        intelligence = stats.intelligence + (bonuses["intelligence"] ?: 0),
+                        wis          = stats.wis          + (bonuses["wis"]          ?: 0),
+                        cha          = stats.cha          + (bonuses["cha"]          ?: 0),
+                    ))
+                }
+            }
+
             battleLog.clear()
-        }
+        },
+        )
     }
-    single { OverworldViewModel(get(), get(), get(), kaerMorhenConfig, get()) }
+    single {
+        OverworldViewModel(
+            world         = get(),
+            navigator     = get(),
+            eventRegistry = get(),
+            runStateHolder = get(),
+            graph         = kaerMorhenGraph,
+            allEvents     = allOverworldEvents.associateBy { it.id },
+        )
+    }
+    single { CharacterViewModel(get(), get(), get(), get()) }
 }
 

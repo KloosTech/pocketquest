@@ -3,28 +3,31 @@ package de.jackbeback.pocketquest.content.events
 import de.jackbeback.pocketquest.content.dsl.UnitTemplate
 
 /**
- * Describes a point-of-interest on the overworld map.
- * Each event has a unique [id], a position on a specific [mapId], and a visual [label].
- * When an event is completed it is removed from the [OverworldEventRegistry] and its marker
- * disappears from the map.
- *
- * Add new event types by adding subclasses here — the rest of the system picks them up automatically.
+ * Describes a point-of-interest on the overworld progression graph.
+ * Every event has a unique [id] matching a [MapNode.id] and a normalised position
+ * used to draw the node on the ProgressionGraph canvas.
  */
 sealed class OverworldEvent {
     abstract val id: String
     abstract val mapId: String
-    /** Normalised x position (0.0–1.0) on the map. */
+    /** Normalised x position (0.0–1.0) used for graph layout. */
     abstract val x: Double
-    /** Normalised y position (0.0–1.0) on the map. */
+    /** Normalised y position (0.0–1.0) used for graph layout (0 = top, 1 = bottom). */
     abstract val y: Double
     abstract val label: String
 
+    /** Invisible entry node — the player starts here; no event fires. */
+    data class StartNode(
+        override val id: String,
+        override val mapId: String,
+        override val x: Double,
+        override val y: Double,
+        override val label: String = "Start",
+    ) : OverworldEvent()
+
     /**
-     * A combat encounter. Tapping the marker starts a battle with [enemies].
-     * After the last enemy is defeated the event is marked complete.
-     *
-     * Set [isBoss] to true for the final encounter — rendered with a distinct marker
-     * and triggers the area-clear overlay when completed.
+     * A combat encounter. Tapping starts a battle.
+     * After winning the event is marked complete, unlocking connected forward nodes.
      */
     data class BattleEncounter(
         override val id: String,
@@ -32,15 +35,13 @@ sealed class OverworldEvent {
         override val x: Double,
         override val y: Double,
         override val label: String,
-        /** Enemy unit templates to spawn when this encounter starts. */
         val enemies: List<UnitTemplate>,
-        /** True for the area boss — shown with a distinct marker style. */
         val isBoss: Boolean = false,
     ) : OverworldEvent()
 
     /**
-     * A rest site. Tapping the marker shows a confirmation dialog.
-     * On confirm the player is healed by [healPercent] of their max HP and the marker is removed.
+     * A rest site. Tapping opens a confirmation dialog.
+     * Completing (confirm or dismiss) marks the node done and unlocks forward nodes.
      */
     data class RestSite(
         override val id: String,
@@ -48,7 +49,6 @@ sealed class OverworldEvent {
         override val x: Double,
         override val y: Double,
         override val label: String,
-        /** Fraction of max HP restored (e.g. 0.40 = 40%). */
         val healPercent: Float = 0.40f,
     ) : OverworldEvent()
 }

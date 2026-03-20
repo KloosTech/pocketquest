@@ -1,104 +1,88 @@
 package de.jackbeback.pocketquest.ui.overworld
 
+import de.jackbeback.pocketquest.content.events.MapGraph
 import de.jackbeback.pocketquest.content.events.OverworldEvent
-import de.jackbeback.pocketquest.content.map.MapConfig
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.FactionComponent
-import de.jackbeback.pocketquest.ecs.components.map.MapLocationComponent
+import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
+import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.ecs.core.World
 import de.jackbeback.pocketquest.ecs.core.get
 import de.jackbeback.pocketquest.ecs.core.query
 import de.jackbeback.pocketquest.ecs.core.set
-import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
-import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
-import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.game.run.RunScopedState
-import de.jackbeback.pocketquest.game.snapshot.snapshotOverworld
+import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.navigation.BattleParams
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.io.Buffer
-import org.jetbrains.compose.resources.ExperimentalResourceApi
-import ovh.plrapps.mapcompose.api.addLayer
-import ovh.plrapps.mapcompose.api.addMarker
-import ovh.plrapps.mapcompose.api.moveMarker
-import ovh.plrapps.mapcompose.api.onMarkerClick
-import ovh.plrapps.mapcompose.api.onTap
-import ovh.plrapps.mapcompose.api.removeMarker
-import ovh.plrapps.mapcompose.core.TileStreamProvider
-import ovh.plrapps.mapcompose.ui.state.MapState
-import pocketquest.composeapp.generated.resources.Res
 
 class OverworldViewModel(
     private val world: World,
     private val navigator: Navigator,
     private val eventRegistry: OverworldEventRegistry,
-    private val mapConfig: MapConfig,
     private val runStateHolder: RunStateHolder,
+    /** The progression graph for this area. */
+    val graph: MapGraph,
+    /** All events keyed by their id — includes the start node and all encounters/rests. */
+    val allEvents: Map<String, OverworldEvent>,
 ) {
-    val mapState: MapState = buildMapState(mapConfig)
-
-    private val _state = MutableStateFlow(world.snapshotOverworld())
-    val state: StateFlow<OverworldUiState> = _state
-
-    /** Current roguelike run state; null between runs. */
     val runState: StateFlow<RunScopedState?> = runStateHolder.run
 
-    /** Number of uncleared events remaining on this map. */
     private val _eventsRemaining = MutableStateFlow(eventRegistry.activeCount)
     val eventsRemaining: StateFlow<Int> = _eventsRemaining
 
-    /** Non-null when the player tapped a RestSite marker and hasn't confirmed/dismissed yet. */
     private val _pendingRest = MutableStateFlow<OverworldEvent.RestSite?>(null)
     val pendingRest: StateFlow<OverworldEvent.RestSite?> = _pendingRest
 
-    /** True when all events on the current map have been cleared (triggers area-clear overlay). */
     private val _mapCleared = MutableStateFlow(false)
     val mapCleared: StateFlow<Boolean> = _mapCleared
 
-    init {
-        syncUnitMarkersToMap()
-        syncEventMarkersToMap()
+    private val _playerHealth = MutableStateFlow(queryPlayerHealth())
+    val playerHealth: StateFlow<HealthComponent> = _playerHealth
 
-        mapState.onMarkerClick { id, _, _ ->
-            val event = eventRegistry.active.value[id]
-            when (event) {
-                is OverworldEvent.BattleEncounter -> {
-                    navigator.goToBattle(BattleParams(eventId = event.id, enemies = event.enemies))
-                }
-                is OverworldEvent.RestSite -> {
-                    _pendingRest.value = event
-                }
-                null -> { /* unit marker or unknown — ignore */ }
-            }
+    private val _playerMana = MutableStateFlow(queryPlayerMana())
+    val playerMana: StateFlow<ManaComponent> = _playerMana
+
+    /**
+     * Called by the UI when the player taps a graph node.
+     * Only fires when the node is reachable (in the forward edges of the current node
+     * AND the current node has been completed).
+     */
+    fun onNodeTap(nodeId: String) {
+        val run = runStateHolder.run.value ?: return
+        val available = if (run.currentNodeId in run.completedNodeIds)
+            graph.nextOf(run.currentNodeId).toSet() else emptySet()
+        if (nodeId !in available) return
+
+        val event = allEvents[nodeId] ?: return
+        runStateHolder.moveToNode(nodeId)
+
+        when (event) {
+            is OverworldEvent.BattleEncounter ->
+                navigator.goToBattle(BattleParams(eventId = event.id, enemies = event.enemies))
+            is OverworldEvent.RestSite ->
+                _pendingRest.value = event
+            is OverworldEvent.StartNode -> Unit
         }
-
-        mapState.onTap { x, y -> movePlayer(x, y) }
     }
 
     /**
-     * Called by [App] after the battle screen reports victory.
-     * Completes the event that triggered the battle and removes its map marker.
+     * Called by [App] after a battle screen reports victory.
+     * Marks the completed event node and checks for map clear.
      */
     fun onBattleCompleted() {
         val eventId = navigator.currentBattle?.eventId ?: return
+        runStateHolder.completeNode(eventId)
         eventRegistry.complete(eventId)
-        mapState.removeMarker(eventId)
-        _state.value = world.snapshotOverworld()
         _eventsRemaining.value = eventRegistry.activeCount
-        if (eventRegistry.activeCount == 0) {
-            _mapCleared.value = true
-        }
+        _playerHealth.value = queryPlayerHealth()
+        _playerMana.value   = queryPlayerMana()
+        checkMapCleared()
     }
 
-    /** Called from the area-clear overlay's "Next Area" button to reset the cleared state. */
-    fun dismissMapClear() {
-        _mapCleared.value = false
-    }
-
-    /** Player confirmed resting at the pending rest site — apply heal and remove marker. */
+    /** Player confirmed resting — apply heal and complete the node. */
     fun onRestConfirmed() {
         val event = _pendingRest.value ?: return
         world.query<FactionComponent>()
@@ -112,79 +96,52 @@ class OverworldViewModel(
                 val mana = world.get<ManaComponent>(id)?.current ?: 0
                 runStateHolder.savePlayerState(newHp, mana)
             }
-        eventRegistry.complete(event.id)
-        mapState.removeMarker(event.id)
-        _pendingRest.value = null
-        _state.value = world.snapshotOverworld()
-        _eventsRemaining.value = eventRegistry.activeCount
+        completeRestNode(event)
     }
 
-    /** Player dismissed the rest dialog without resting. */
+    /** Player dismissed the rest dialog without resting — still completes the node. */
     fun onRestDismissed() {
-        _pendingRest.value = null
+        val event = _pendingRest.value ?: run { _pendingRest.value = null; return }
+        completeRestNode(event)
     }
 
-    /**
-     * Called by [App] when a new run starts.
-     * Re-adds all event markers and refreshes the player marker.
-     */
-    fun onRunReset(events: List<OverworldEvent>) {
-        // Remove stale event markers from previous run (best-effort — ignore unknown ids)
-        eventRegistry.active.value.keys.forEach { id -> runCatching { mapState.removeMarker(id) } }
-        events.filter { it.mapId == mapConfig.id }.forEach { event ->
-            mapState.addMarker(event.id, event.x, event.y) { EventMapMarker(event) }
-        }
-        _state.value = world.snapshotOverworld()
-        _eventsRemaining.value = events.count { it.mapId == mapConfig.id }
+    private fun completeRestNode(event: OverworldEvent.RestSite) {
+        runStateHolder.completeNode(event.id)
+        eventRegistry.complete(event.id)
+        _pendingRest.value = null
+        _eventsRemaining.value = eventRegistry.activeCount
+        _playerHealth.value = queryPlayerHealth()
+        _playerMana.value   = queryPlayerMana()
+        checkMapCleared()
+    }
+
+    fun dismissMapClear() {
         _mapCleared.value = false
     }
 
-    private fun movePlayer(x: Double, y: Double) {
+    /** Called when a new run starts or the next area begins. */
+    fun onRunReset() {
+        _eventsRemaining.value = eventRegistry.activeCount
+        _mapCleared.value = false
+        _playerHealth.value = queryPlayerHealth()
+        _playerMana.value   = queryPlayerMana()
+    }
+
+    private fun checkMapCleared() {
+        if (eventRegistry.activeCount == 0) _mapCleared.value = true
+    }
+
+    private fun queryPlayerHealth(): HealthComponent =
         world.query<FactionComponent>()
             .filter { (_, f) -> f.faction == Faction.PLAYER }
             .firstOrNull()
-            ?.let { (id, _) ->
-                val mapId = world.get<MapLocationComponent>(id)?.mapId ?: mapConfig.id
-                world.set(id, MapLocationComponent(mapId, x, y))
-                mapState.moveMarker(id.id.toString(), x, y)
-            }
-        _state.value = world.snapshotOverworld()
-    }
+            ?.let { (id, _) -> world.get<HealthComponent>(id) }
+            ?: HealthComponent(0, 0)
 
-    private fun syncUnitMarkersToMap() {
-        _state.value.units.forEach { unit ->
-            mapState.addMarker(unit.entityId.id.toString(), unit.mapX, unit.mapY) {
-                UnitMapMarker(unit)
-            }
-        }
-    }
-
-    private fun syncEventMarkersToMap() {
-        eventRegistry.eventsForMap(mapConfig.id).forEach { event ->
-            mapState.addMarker(event.id, event.x, event.y) {
-                EventMapMarker(event)
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalResourceApi::class)
-private fun buildMapState(config: MapConfig): MapState {
-    val tileSize = minOf(config.tileWidth, config.tileHeight)
-    val state = MapState(
-        levelCount  = config.levelCount,
-        fullWidth   = config.fullWidthPx,
-        fullHeight  = config.fullHeightPx,
-        tileSize    = tileSize,
-    )
-    val provider = TileStreamProvider { row, col, _ ->
-        try {
-            val bytes = Res.readBytes("files/tiles/${config.id}/$col-$row.png")
-            Buffer().also { it.write(bytes) }
-        } catch (e: Exception) {
-            null
-        }
-    }
-    state.addLayer(provider)
-    return state
+    private fun queryPlayerMana(): ManaComponent =
+        world.query<FactionComponent>()
+            .filter { (_, f) -> f.faction == Faction.PLAYER }
+            .firstOrNull()
+            ?.let { (id, _) -> world.get<ManaComponent>(id) }
+            ?: ManaComponent(0, 0)
 }

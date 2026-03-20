@@ -13,6 +13,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -32,7 +34,11 @@ import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.rememberTransformableState
+import androidx.compose.foundation.gestures.transformable
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -41,14 +47,16 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.content.definitions.Relic
-import de.jackbeback.pocketquest.content.map.throneRoomConfig
+import de.jackbeback.pocketquest.content.dsl.AnimationType
+import de.jackbeback.pocketquest.content.dsl.attributeModifier
+import de.jackbeback.pocketquest.content.map.TileType
 import de.jackbeback.pocketquest.ecs.components.combat.DamageType
 import de.jackbeback.pocketquest.ecs.components.core.Faction
+import de.jackbeback.pocketquest.ecs.components.core.PositionComponent
 import de.jackbeback.pocketquest.game.animation.ANIM_DURATION_MS
+import de.jackbeback.pocketquest.game.animation.MELEE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.MOVE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.AnimationEvent
-import de.jackbeback.pocketquest.game.battle.BATTLE_COLS
-import de.jackbeback.pocketquest.game.battle.BATTLE_ROWS
 import de.jackbeback.pocketquest.game.loop.TurnPhase
 import de.jackbeback.pocketquest.ui.component.ConditionBadges
 import de.jackbeback.pocketquest.ui.component.SkillPanel
@@ -74,6 +82,30 @@ private val ColorEnemy       = Color(0xFFf85149)
 private val ColorHpBar       = Color(0xFF238636)
 private val ColorHpBarBg     = Color(0xFF3d1f1f)
 private val ColorLogBg       = Color(0xFF0d1117)
+
+// Pre-computed alpha variants — avoids Color.copy() allocations in the hot tile loop
+private val ColorTileSelFill    = ColorTileSel.copy(alpha = 0.65f)
+private val ColorTileAtkFill    = ColorTileAtk.copy(alpha = 0.55f)
+private val ColorTileSelRimFull = ColorTileSelRim.copy(alpha = 0.9f)
+private val ColorTileAtkRimFull = ColorTileAtkRim.copy(alpha = 0.7f)
+private val ColorFowExplored    = Color.Black.copy(alpha = 0.60f)
+
+private fun terrainTileColor(type: TileType): Color? = when (type) {
+    TileType.FLOOR             -> null
+    TileType.WALL              -> Color(0xFF808080)
+    TileType.WATER             -> Color(0xFF4090FF)
+    TileType.COVER_LOW         -> Color(0xFF90FF90)
+    TileType.COVER_HIGH        -> Color(0xFF00C040)
+    TileType.DIFFICULT_TERRAIN -> Color(0xFFFFB020)
+    TileType.HAZARD            -> Color(0xFFFF3030)
+    TileType.VOID              -> Color(0xFF000000)
+}
+
+/** Per-TileType terrain overlay colour (alpha already baked in). Null = no overlay. */
+private val terrainOverlayColors: Map<TileType, Color> =
+    TileType.entries.mapNotNull { type ->
+        terrainTileColor(type)?.let { type to it.copy(alpha = 0.35f) }
+    }.toMap()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -103,45 +135,123 @@ fun BattleScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        Column(
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .background(ColorBg)
                 .systemBarsPadding()
         ) {
-            PhaseBar(state)
+            val isWide = maxWidth >= 600.dp
+            val playerUnit = state.units.find { it.faction == Faction.PLAYER }
 
-            TacticalGrid(
-                state = state,
-                animationEvent = animationEvent,
-                tiles = tiles,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(BATTLE_COLS.toFloat() / BATTLE_ROWS)
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                onCellTap = { col, row -> viewModel.onCellTap(col, row) },
-            )
+            if (isWide) {
+                // ── Desktop / landscape: grid on left, controls in fixed side column ──
+                Column(modifier = Modifier.fillMaxSize()) {
+                    PhaseBar(state)
+                    Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                        TacticalGrid(
+                            state = state,
+                            animationEvent = animationEvent,
+                            tiles = tiles,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .padding(start = 8.dp, top = 6.dp, bottom = 6.dp, end = 4.dp),
+                            onCellTap = { col, row -> viewModel.onCellTap(col, row) },
+                        )
+                        Column(
+                            modifier = Modifier
+                                .width(240.dp)
+                                .fillMaxHeight()
+                                .padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            UnitStatusRow(
+                                state = state,
+                                onUnitTap = { entityId -> viewModel.onUnitCardTap(entityId) },
+                            )
+                            if (state.log.isNotEmpty()) {
+                                BattleLogPanel(
+                                    log = state.log,
+                                    modifier = Modifier.weight(1f),
+                                )
+                            } else {
+                                Spacer(Modifier.weight(1f))
+                            }
+                            TargetingBar(
+                                state = state,
+                                isLocked = isLocked,
+                                onCancel = { viewModel.onCancelSkill() },
+                                onConfirm = { viewModel.onConfirmTargets() },
+                            )
+                            DPad(
+                                phase = state.turnPhase,
+                                movesRemaining = state.playerMovesRemaining,
+                                isLocked = isLocked,
+                                playerPos = playerUnit?.position,
+                                reachableTiles = state.reachableTiles,
+                                onMoveDirection = { dx, dy -> viewModel.onMoveDirection(dx, dy) },
+                            )
+                            ActionBar(
+                                phase = state.turnPhase,
+                                movesRemaining = state.playerMovesRemaining,
+                                playerMana = state.playerMana,
+                                isLocked = isLocked,
+                                onEndTurn = { viewModel.onEndTurn() },
+                                onOpenSkillSheet = { showSkillSheet = true },
+                            )
+                        }
+                    }
+                }
+            } else {
+                // ── Mobile / portrait: existing stacked layout ────────────────────
+                Column(modifier = Modifier.fillMaxSize()) {
+                    PhaseBar(state)
 
-            UnitStatusRow(state.units)
+                    TacticalGrid(
+                        state = state,
+                        animationEvent = animationEvent,
+                        tiles = tiles,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        onCellTap = { col, row -> viewModel.onCellTap(col, row) },
+                    )
 
-            if (state.log.isNotEmpty()) BattleLogPanel(state.log)
+                    UnitStatusRow(
+                        state = state,
+                        onUnitTap = { entityId -> viewModel.onUnitCardTap(entityId) },
+                    )
 
-            // Targeting overlay bar — visible while a skill is armed
-            TargetingBar(
-                state = state,
-                isLocked = isLocked,
-                onCancel = { viewModel.onCancelSkill() },
-                onConfirm = { viewModel.onConfirmTargets() },
-            )
+                    if (state.log.isNotEmpty()) BattleLogPanel(state.log)
 
-            ActionBar(
-                phase = state.turnPhase,
-                movesRemaining = state.playerMovesRemaining,
-                playerMana = state.playerMana,
-                isLocked = isLocked,
-                onEndTurn = { viewModel.onEndTurn() },
-                onOpenSkillSheet = { showSkillSheet = true },
-            )
+                    TargetingBar(
+                        state = state,
+                        isLocked = isLocked,
+                        onCancel = { viewModel.onCancelSkill() },
+                        onConfirm = { viewModel.onConfirmTargets() },
+                    )
+
+                    DPad(
+                        phase = state.turnPhase,
+                        movesRemaining = state.playerMovesRemaining,
+                        isLocked = isLocked,
+                        playerPos = playerUnit?.position,
+                        reachableTiles = state.reachableTiles,
+                        onMoveDirection = { dx, dy -> viewModel.onMoveDirection(dx, dy) },
+                    )
+
+                    ActionBar(
+                        phase = state.turnPhase,
+                        movesRemaining = state.playerMovesRemaining,
+                        playerMana = state.playerMana,
+                        isLocked = isLocked,
+                        onEndTurn = { viewModel.onEndTurn() },
+                        onOpenSkillSheet = { showSkillSheet = true },
+                    )
+                }
+            }
         }
 
         // Phase banner overlay
@@ -288,8 +398,9 @@ private fun ManaChip(mana: de.jackbeback.pocketquest.ecs.components.core.ManaCom
 
 // ── Tactical grid ────────────────────────────────────────────────────────────
 
-private val ThroneCols = throneRoomConfig.colCount
-private val ThroneRows = throneRoomConfig.rowCount
+private const val ZOOM_MIN = 1.0f
+private const val ZOOM_MAX = 6f
+private const val ZOOM_DEFAULT = 1.5f
 
 @Composable
 private fun TacticalGrid(
@@ -299,7 +410,55 @@ private fun TacticalGrid(
     modifier: Modifier,
     onCellTap: (Int, Int) -> Unit,
 ) {
+    val gridCols = state.gridCols
+    val gridRows = state.gridRows
+
     var fieldSize by remember { mutableStateOf(IntSize.Zero) }
+    val scope = rememberCoroutineScope()
+
+    // Pan offsets
+    val panX = remember { Animatable(0f) }
+    val panY = remember { Animatable(0f) }
+
+    // Zoom — starts at 1.5× for a close-up feel; range ZOOM_MIN..ZOOM_MAX
+    val zoomState = remember { mutableStateOf(ZOOM_DEFAULT) }
+    val zoom by zoomState
+
+    // Base cell size fills the full width at zoom=1; multiply by zoom for actual size
+    val baseCellSize = if (fieldSize.width > 0) fieldSize.width / gridCols.toFloat() else 0f
+    val cellSize = baseCellSize * zoom
+    val cellW = cellSize
+    val cellH = cellSize
+    val maxPanX = (gridCols * cellW - fieldSize.width).coerceAtLeast(0f)
+    val maxPanY = (gridRows * cellH - fieldSize.height).coerceAtLeast(0f)
+
+    // Center on player on first layout (battle start / window resize)
+    val playerPos = state.units.find { it.faction == Faction.PLAYER }?.position
+    LaunchedEffect(fieldSize) {
+        val pos = playerPos ?: return@LaunchedEffect
+        if (fieldSize.width == 0) return@LaunchedEffect
+        val targetX = ((pos.col + 0.5f) * cellW - fieldSize.width  / 2f).coerceIn(0f, maxPanX)
+        val targetY = ((pos.row + 0.5f) * cellH - fieldSize.height / 2f).coerceIn(0f, maxPanY)
+        launch { panX.animateTo(targetX, tween(350)) }
+        launch { panY.animateTo(targetY, tween(350)) }
+    }
+
+    // Pinch-to-zoom + two-finger pan (mobile / trackpad)
+    val transformableState = rememberTransformableState { zoomChange, panChange, _ ->
+        val curZoom = zoomState.value
+        val newZoom = (curZoom * zoomChange).coerceIn(ZOOM_MIN, ZOOM_MAX)
+        val bcs = if (fieldSize.width > 0) fieldSize.width / gridCols.toFloat() else return@rememberTransformableState
+        val zf = newZoom / curZoom
+        val cx = fieldSize.width  / 2f
+        val cy = fieldSize.height / 2f
+        val newMaxPanX = (gridCols * bcs * newZoom - fieldSize.width).coerceAtLeast(0f)
+        val newMaxPanY = (gridRows * bcs * newZoom - fieldSize.height).coerceAtLeast(0f)
+        val npx = ((panX.value + cx) * zf - cx - panChange.x).coerceIn(0f, newMaxPanX)
+        val npy = ((panY.value + cy) * zf - cy - panChange.y).coerceIn(0f, newMaxPanY)
+        zoomState.value = newZoom
+        scope.launch { panX.snapTo(npx) }
+        scope.launch { panY.snapTo(npy) }
+    }
 
     // Unit movement animation
     val moveProgress = remember { Animatable(0f) }
@@ -310,12 +469,16 @@ private fun TacticalGrid(
         }
     }
 
-    // Projectile animation
+    // Projectile animation (duration depends on animation type)
     val projectileProgress = remember { Animatable(0f) }
     LaunchedEffect(animationEvent) {
         if (animationEvent is AnimationEvent.ProjectileSkill) {
+            val animDuration = when (animationEvent.animationType) {
+                AnimationType.MELEE -> MELEE_ANIM_MS.toInt()
+                else                -> ANIM_DURATION_MS.toInt()
+            }
             projectileProgress.snapTo(0f)
-            projectileProgress.animateTo(1f, tween(ANIM_DURATION_MS.toInt(), easing = FastOutSlowInEasing))
+            projectileProgress.animateTo(1f, tween(animDuration, easing = FastOutSlowInEasing))
         }
     }
 
@@ -323,7 +486,8 @@ private fun TacticalGrid(
     val floatAlpha   = remember { Animatable(0f) }
     val floatOffsetY = remember { Animatable(0f) }
     LaunchedEffect(animationEvent) {
-        if (animationEvent is AnimationEvent.FloatingDamage || animationEvent is AnimationEvent.FloatingHeal) {
+        if (animationEvent is AnimationEvent.FloatingDamage || animationEvent is AnimationEvent.FloatingHeal
+            || animationEvent is AnimationEvent.FloatingMiss) {
             floatAlpha.snapTo(1f)
             floatOffsetY.snapTo(0f)
             launch { floatOffsetY.animateTo(-60f, tween(ANIM_DURATION_MS.toInt())) }
@@ -334,95 +498,226 @@ private fun TacticalGrid(
         }
     }
 
+    // ── Flat arrays: replace per-frame Pair/HashMap lookups with O(1) array reads ──
+    val cols = gridCols
+    val rows = gridRows
+    val gridSize = cols * rows
+
+    val attackableArr = remember(state.attackableTiles, cols, rows) {
+        BooleanArray(gridSize).also { a ->
+            state.attackableTiles.forEach { (c, r) -> a[r * cols + c] = true }
+        }
+    }
+    val selectedArr = remember(state.selectedTargetTiles, cols, rows) {
+        BooleanArray(gridSize).also { a ->
+            state.selectedTargetTiles.forEach { (c, r) -> a[r * cols + c] = true }
+        }
+    }
+    val visibleArr = remember(state.visibleTiles, cols, rows) {
+        BooleanArray(gridSize).also { a ->
+            state.visibleTiles.forEach { (c, r) -> a[r * cols + c] = true }
+        }
+    }
+    val exploredArr = remember(state.exploredTiles, cols, rows) {
+        BooleanArray(gridSize).also { a ->
+            state.exploredTiles.forEach { (c, r) -> a[r * cols + c] = true }
+        }
+    }
+    val perimeterArr = remember(state.perimeterTiles, cols, rows) {
+        BooleanArray(gridSize).also { a ->
+            state.perimeterTiles.forEach { (c, r) -> a[r * cols + c] = true }
+        }
+    }
+    val tileOverlayArr = remember(state.tileTypes, cols, rows) {
+        arrayOfNulls<Color>(gridSize).also { a ->
+            state.tileTypes.forEach { (pair, type) ->
+                a[pair.second * cols + pair.first] = terrainOverlayColors[type]
+            }
+        }
+    }
+    val tilesArr = remember(tiles, cols, rows) {
+        arrayOfNulls<ImageBitmap>(gridSize).also { a ->
+            tiles.forEach { (pair, bmp) -> a[pair.second * cols + pair.first] = bmp }
+        }
+    }
+
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(ColorFieldBg)
             .onSizeChanged { fieldSize = it }
+            // Pinch-to-zoom + two-finger pan
+            .transformable(state = transformableState)
+            // Scroll-wheel zoom — zooms towards the cursor position
             .pointerInput(Unit) {
-                detectTapGestures { offset ->
-                    if (fieldSize.width > 0 && fieldSize.height > 0) {
-                        val col = (offset.x / (fieldSize.width.toFloat() / BATTLE_COLS))
-                            .toInt().coerceIn(0, BATTLE_COLS - 1)
-                        val row = (offset.y / (fieldSize.height.toFloat() / BATTLE_ROWS))
-                            .toInt().coerceIn(0, BATTLE_ROWS - 1)
-                        onCellTap(col, row)
+                awaitPointerEventScope {
+                    while (true) {
+                        val event = awaitPointerEvent(PointerEventPass.Main)
+                        if (event.type == PointerEventType.Scroll) {
+                            val scrollY = event.changes.firstOrNull()?.scrollDelta?.y ?: 0f
+                            if (scrollY == 0f) continue
+                            val curZoom = zoomState.value
+                            val factor  = if (scrollY < 0) 1.12f else 0.88f
+                            val newZoom = (curZoom * factor).coerceIn(ZOOM_MIN, ZOOM_MAX)
+                            val bcs = if (fieldSize.width > 0) fieldSize.width / gridCols.toFloat() else 0f
+                            val cursor  = event.changes.firstOrNull()?.position
+                            val cx = cursor?.x ?: (fieldSize.width  / 2f)
+                            val cy = cursor?.y ?: (fieldSize.height / 2f)
+                            val zf = newZoom / curZoom
+                            val newMaxPanX = (gridCols * bcs * newZoom - fieldSize.width).coerceAtLeast(0f)
+                            val newMaxPanY = (gridRows * bcs * newZoom - fieldSize.height).coerceAtLeast(0f)
+                            val npx = ((panX.value + cx) * zf - cx).coerceIn(0f, newMaxPanX)
+                            val npy = ((panY.value + cy) * zf - cy).coerceIn(0f, newMaxPanY)
+                            zoomState.value = newZoom
+                            scope.launch { panX.snapTo(npx) }
+                            scope.launch { panY.snapTo(npy) }
+                            event.changes.forEach { it.consume() }
+                        }
+                    }
+                }
+            }
+            // Single-pointer tap + drag-to-pan
+            .pointerInput(Unit) {
+                val touchSlop = viewConfiguration.touchSlop
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var drag = androidx.compose.ui.geometry.Offset.Zero
+                    var isDragging = false
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val change = event.changes.firstOrNull() ?: break
+                        if (!change.pressed) {
+                            // Pointer released — treat as tap if no drag occurred
+                            if (!isDragging && fieldSize.width > 0) {
+                                val cs  = (if (fieldSize.width > 0) fieldSize.width / gridCols.toFloat() else 0f) * zoomState.value
+                                val tapX = down.position.x + panX.value
+                                val tapY = down.position.y + panY.value
+                                val col = (tapX / cs).toInt().coerceIn(0, gridCols - 1)
+                                val row = (tapY / cs).toInt().coerceIn(0, gridRows - 1)
+                                onCellTap(col, row)
+                            }
+                            break
+                        }
+                        val delta = change.position - change.previousPosition
+                        drag += delta
+                        if (!isDragging && drag.getDistance() > touchSlop) isDragging = true
+                        if (isDragging) {
+                            change.consume()
+                            val cs  = (if (fieldSize.width > 0) fieldSize.width / gridCols.toFloat() else 0f) * zoomState.value
+                            val mpx = (gridCols * cs - fieldSize.width).coerceAtLeast(0f)
+                            val mpy = (gridRows * cs - fieldSize.height).coerceAtLeast(0f)
+                            scope.launch {
+                                panX.snapTo((panX.value - delta.x).coerceIn(0f, mpx))
+                                panY.snapTo((panY.value - delta.y).coerceIn(0f, mpy))
+                            }
+                        }
                     }
                 }
             }
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val cellW = size.width  / BATTLE_COLS
-            val cellH = size.height / BATTLE_ROWS
+            val ox = panX.value
+            val oy = panY.value
+            // Square cells — base fills full width, multiplied by zoom
+            val cs = (size.width / gridCols) * zoom
+            val cw = cs
+            val ch = cs
 
             // 1. Draw tile background — Throneroom images with tactical overlays
-            for (r in 0 until BATTLE_ROWS) {
-                for (c in 0 until BATTLE_COLS) {
-                    val cell   = Pair(c, r)
-                    val isMove = cell in state.reachableTiles
-                    val isAtk  = cell in state.attackableTiles
-                    val isSel  = cell in state.selectedTargetTiles
-                    val tileX  = c % ThroneCols
-                    val tileY  = r % ThroneRows
-                    val tileBitmap = tiles[Pair(tileX, tileY)]
-                    val topLeft  = Offset(c * cellW, r * cellH)
-                    val tileSize = Size(cellW, cellH)
+            val startC = (ox / cw).toInt().coerceAtLeast(0)
+            val endC   = ((ox + size.width)  / cw).toInt().coerceAtMost(gridCols - 1)
+            val startR = (oy / ch).toInt().coerceAtLeast(0)
+            val endR   = ((oy + size.height) / ch).toInt().coerceAtMost(gridRows - 1)
+
+            val fowActive = state.exploredTiles.isNotEmpty() || state.visibleTiles.isNotEmpty()
+
+            for (r in startR..endR) {
+                for (c in startC..endC) {
+                    val screenX = c * cw - ox
+                    val screenY = r * ch - oy
+
+                    val tileIdx    = r * cols + c
+                    val isAtk      = attackableArr[tileIdx]
+                    val isSel      = selectedArr[tileIdx]
+                    val tileBitmap = tilesArr[tileIdx]
+                    val topLeft    = Offset(screenX, screenY)
+                    val tileSize   = Size(cw, ch)
 
                     if (tileBitmap != null) {
                         drawImage(
-                            image       = tileBitmap,
-                            dstOffset   = IntOffset(topLeft.x.toInt(), topLeft.y.toInt()),
-                            dstSize     = IntSize(tileSize.width.toInt() + 1, tileSize.height.toInt() + 1),
+                            image         = tileBitmap,
+                            dstOffset     = IntOffset(topLeft.x.toInt(), topLeft.y.toInt()),
+                            dstSize       = IntSize(tileSize.width.toInt() + 1, tileSize.height.toInt() + 1),
                             filterQuality = FilterQuality.Low,
                         )
                     } else {
-                        // Placeholder colour while tiles are still loading
                         val base = if ((c + r) % 2 == 0) ColorTileA else ColorTileB
                         drawRect(color = base, topLeft = topLeft, size = tileSize)
                     }
 
-                    // Semi-transparent tactical overlay (selected > attackable > reachable)
+                    // Terrain type overlay
+                    val terrainOverlay = tileOverlayArr[tileIdx]
+                    if (terrainOverlay != null) drawRect(terrainOverlay, topLeft, tileSize)
+
                     when {
-                        isSel  -> drawRect(ColorTileSel.copy(alpha = 0.65f),  topLeft, tileSize)
-                        isAtk  -> drawRect(ColorTileAtk.copy(alpha = 0.55f),  topLeft, tileSize)
-                        isMove -> drawRect(ColorTileMove.copy(alpha = 0.45f), topLeft, tileSize)
+                        isSel -> drawRect(ColorTileSelFill, topLeft, tileSize)
+                        isAtk -> drawRect(ColorTileAtkFill, topLeft, tileSize)
                     }
-                    // Coloured rim on highlighted tiles
                     when {
-                        isSel  -> drawRect(ColorTileSelRim.copy(alpha = 0.9f),  topLeft, tileSize, style = Stroke(2.5f))
-                        isAtk  -> drawRect(ColorTileAtkRim.copy(alpha = 0.7f),  topLeft, tileSize, style = Stroke(2f))
-                        isMove -> drawRect(ColorTileMoveRim.copy(alpha = 0.7f), topLeft, tileSize, style = Stroke(2f))
+                        isSel -> drawRect(ColorTileSelRimFull, topLeft, tileSize, style = Stroke(2.5f))
+                        isAtk -> drawRect(ColorTileAtkRimFull, topLeft, tileSize, style = Stroke(2f))
+                    }
+
+                    // Fog of War overlay — applied on top of terrain and tactical highlights
+                    if (fowActive) {
+                        when {
+                            !exploredArr[tileIdx] && !perimeterArr[tileIdx] ->
+                                // Never seen and not adjacent to visible — solid black
+                                drawRect(Color.Black, topLeft, tileSize)
+                            !visibleArr[tileIdx] ->
+                                // Explored or perimeter (1 tile beyond visible) — dark veil
+                                drawRect(ColorFowExplored, topLeft, tileSize)
+                        }
                     }
                 }
             }
 
             // 2. Grid lines
-            for (i in 0..BATTLE_COLS) {
-                drawLine(ColorTileGrid, Offset(i * cellW, 0f), Offset(i * cellW, size.height), 0.5f)
+            val gridW = gridCols * cw
+            val gridH = gridRows * ch
+            for (i in 0..gridCols) {
+                val x = i * cw - ox
+                if (x < 0 || x > size.width) continue
+                drawLine(ColorTileGrid, Offset(x, 0f.coerceAtLeast(-oy)), Offset(x, (gridH - oy).coerceAtMost(size.height)), 0.5f)
             }
-            for (j in 0..BATTLE_ROWS) {
-                drawLine(ColorTileGrid, Offset(0f, j * cellH), Offset(size.width, j * cellH), 0.5f)
+            for (j in 0..gridRows) {
+                val y = j * ch - oy
+                if (y < 0 || y > size.height) continue
+                drawLine(ColorTileGrid, Offset(0f.coerceAtLeast(-ox), y), Offset((gridW - ox).coerceAtMost(size.width), y), 0.5f)
             }
 
             // 3. Units (skip the currently-moving unit; draw it separately at lerped position)
             val movingId = (animationEvent as? AnimationEvent.UnitMove)?.entityId
             state.units.forEach { unit ->
-                if (unit.entityId != movingId) drawUnit(unit, cellW, cellH)
+                // Hide enemy units outside current visible set
+                if (unit.faction == Faction.ENEMY &&
+                    Pair(unit.position.col, unit.position.row) !in state.visibleTiles) return@forEach
+                if (unit.entityId != movingId) drawUnit(unit, cw, ch, ox, oy)
             }
 
             // 3b. Moving unit at interpolated position
             if (animationEvent is AnimationEvent.UnitMove) {
                 val mv = animationEvent
                 val t = moveProgress.value
-                val cx = (mv.fromNormX + (mv.toNormX - mv.fromNormX) * t) * size.width
-                val cy = (mv.fromNormY + (mv.toNormY - mv.fromNormY) * t) * size.height
+                val cx = (mv.fromNormX + (mv.toNormX - mv.fromNormX) * t) * gridCols * cw - ox
+                val cy = (mv.fromNormY + (mv.toNormY - mv.fromNormY) * t) * gridRows * ch - oy
                 val movingUnit = state.units.find { it.entityId == mv.entityId }
-                if (movingUnit != null) drawUnitAtCenter(movingUnit, cx, cy, minOf(size.width / BATTLE_COLS, size.height / BATTLE_ROWS))
+                if (movingUnit != null) drawUnitAtCenter(movingUnit, cx, cy, minOf(cw, ch))
             }
 
             // 4. Projectile overlay
             if (animationEvent is AnimationEvent.ProjectileSkill) {
-                drawProjectile(animationEvent, projectileProgress.value, size.width, size.height)
+                drawProjectile(animationEvent, projectileProgress.value, gridCols * cw, gridRows * ch, ox, oy)
             }
         }
 
@@ -431,17 +726,18 @@ private fun TacticalGrid(
             val (nx, ny, text, color) = when (val e = animationEvent) {
                 is AnimationEvent.FloatingDamage -> Quad(e.x, e.y, "-${e.amount}", damageColor(e.damageType))
                 is AnimationEvent.FloatingHeal   -> Quad(e.x, e.y, "+${e.amount}", Color(0xFF3fb950))
+                is AnimationEvent.FloatingMiss   -> Quad(e.x, e.y, "Miss!", Color(0xFFc9d1d9))
                 else                             -> null
             } ?: return@Box
 
-            val xPx = (nx * fieldSize.width).toInt()
-            val yPx = (ny * fieldSize.height - 50 + floatOffsetY.value).toInt()
+            val xPx = (nx * gridCols * cellW - panX.value).toInt()
+            val yPx = (ny * gridRows * cellH - panY.value - 50 + floatOffsetY.value).toInt()
             Text(
-                text     = text,
-                color    = color.copy(alpha = floatAlpha.value),
-                fontSize = 20.sp,
+                text       = text,
+                color      = color.copy(alpha = floatAlpha.value),
+                fontSize   = 20.sp,
                 fontWeight = FontWeight.ExtraBold,
-                modifier = Modifier.absoluteOffset { IntOffset(xPx - 20, yPx) },
+                modifier   = Modifier.absoluteOffset { IntOffset(xPx - 20, yPx) },
             )
         }
     }
@@ -449,9 +745,9 @@ private fun TacticalGrid(
 
 private data class Quad<A, B, C, D>(val a: A, val b: B, val c: C, val d: D)
 
-private fun DrawScope.drawUnit(unit: UnitUiState, cellW: Float, cellH: Float) {
-    val cx = (unit.position.col + 0.5f) * cellW
-    val cy = (unit.position.row + 0.5f) * cellH
+private fun DrawScope.drawUnit(unit: UnitUiState, cellW: Float, cellH: Float, ox: Float, oy: Float) {
+    val cx = (unit.position.col + 0.5f) * cellW - ox
+    val cy = (unit.position.row + 0.5f) * cellH - oy
     drawUnitAtCenter(unit, cx, cy, minOf(cellW, cellH))
 }
 
@@ -479,15 +775,26 @@ private fun DrawScope.drawUnitAtCenter(unit: UnitUiState, cx: Float, cy: Float, 
 private fun DrawScope.drawProjectile(
     event: AnimationEvent.ProjectileSkill,
     progress: Float,
-    canvasW: Float,
-    canvasH: Float,
+    gridW: Float,
+    gridH: Float,
+    ox: Float,
+    oy: Float,
 ) {
-    val px = (event.fromX + (event.toX - event.fromX) * progress) * canvasW
-    val py = (event.fromY + (event.toY - event.fromY) * progress) * canvasH
-    val color = projectileColor(event.skillId)
-    drawCircle(color.copy(alpha = 0.35f), 14.dp.toPx(), Offset(px, py))
-    drawCircle(color,                     7.dp.toPx(),  Offset(px, py))
-    drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(px, py))
+    val px = (event.fromX + (event.toX - event.fromX) * progress) * gridW - ox
+    val py = (event.fromY + (event.toY - event.fromY) * progress) * gridH - oy
+    when (event.animationType) {
+        AnimationType.MELEE -> {
+            val color = meleeColor(event.skillId)
+            drawCircle(color,                          6.dp.toPx(), Offset(px, py))
+            drawCircle(Color.White.copy(alpha = 0.7f), 3.dp.toPx(), Offset(px, py))
+        }
+        else -> {
+            val color = projectileColor(event.skillId)
+            drawCircle(color.copy(alpha = 0.35f), 14.dp.toPx(), Offset(px, py))
+            drawCircle(color,                      7.dp.toPx(),  Offset(px, py))
+            drawCircle(Color.White.copy(alpha = 0.8f), 3.dp.toPx(), Offset(px, py))
+        }
+    }
 }
 
 private fun projectileColor(skillId: String): Color = when (skillId) {
@@ -495,6 +802,11 @@ private fun projectileColor(skillId: String): Color = when (skillId) {
     "magic_missile" -> Color(0xFF58a6ff)
     "thorn_whip"    -> Color(0xFF3fb950)
     else            -> Color.White
+}
+
+private fun meleeColor(skillId: String): Color = when (skillId) {
+    "basic_attack" -> Color(0xFFE3B341)   // amber/gold — fist impact
+    else           -> Color(0xFFc9d1d9)   // light grey fallback
 }
 
 private fun damageColor(type: DamageType): Color = when (type) {
@@ -512,13 +824,13 @@ private fun damageColor(type: DamageType): Color = when (type) {
 // ── Status panels ────────────────────────────────────────────────────────────
 
 @Composable
-private fun BattleLogPanel(log: List<String>) {
+private fun BattleLogPanel(log: List<String>, modifier: Modifier = Modifier) {
     val listState = rememberLazyListState()
     val recent = log.takeLast(8)
     LaunchedEffect(log.size) { if (recent.isNotEmpty()) listState.animateScrollToItem(recent.lastIndex) }
     LazyColumn(
         state = listState,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .heightIn(max = 80.dp)
             .background(ColorLogBg)
@@ -531,24 +843,63 @@ private fun BattleLogPanel(log: List<String>) {
 }
 
 @Composable
-private fun UnitStatusRow(units: List<UnitUiState>) {
+private fun UnitStatusRow(
+    state: BattleUiState,
+    onUnitTap: (de.jackbeback.pocketquest.ecs.core.EntityId) -> Unit,
+) {
+    val skillArmed = state.selectedSkill != null
     LazyRow(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        items(units) { UnitStatusCard(it) }
+        items(state.units) { unit ->
+            val cell = Pair(unit.position.col, unit.position.row)
+            UnitStatusCard(
+                unit = unit,
+                isSkillArmed = skillArmed,
+                isValidTarget = cell in state.attackableTiles,
+                isPendingTarget = unit.entityId in state.pendingTargetIds,
+                onTargetTap = { onUnitTap(unit.entityId) },
+            )
+        }
     }
 }
 
 @Composable
-private fun UnitStatusCard(unit: UnitUiState) {
-    val borderColor = if (unit.faction == Faction.PLAYER) ColorPlayer else ColorEnemy
+private fun UnitStatusCard(
+    unit: UnitUiState,
+    isSkillArmed: Boolean = false,
+    isValidTarget: Boolean = false,
+    isPendingTarget: Boolean = false,
+    onTargetTap: () -> Unit = {},
+) {
+    var expanded by remember { mutableStateOf(false) }
+
+    val borderColor = when {
+        isPendingTarget -> Color(0xFFd29922)          // gold — already queued
+        isSkillArmed && isValidTarget -> ColorTileAtkRim  // red — tappable target
+        unit.faction == Faction.PLAYER -> ColorPlayer
+        else -> ColorEnemy
+    }
+
     Column(
         modifier = Modifier
-            .width(110.dp)
-            .background(ColorFieldBg, RoundedCornerShape(6.dp))
-            .border(1.dp, borderColor, RoundedCornerShape(6.dp))
-            .padding(8.dp),
+            .width(if (expanded && !isSkillArmed) 160.dp else 110.dp)
+            .background(
+                if (isSkillArmed && isValidTarget) Color(0xFF2a1010) else ColorFieldBg,
+                RoundedCornerShape(6.dp),
+            )
+            .border(
+                width = if (isSkillArmed && isValidTarget || isPendingTarget) 2.dp else 1.dp,
+                color = borderColor,
+                shape = RoundedCornerShape(6.dp),
+            )
+            .padding(8.dp)
+            .pointerInput(isSkillArmed) {
+                detectTapGestures {
+                    if (isSkillArmed) onTargetTap() else expanded = !expanded
+                }
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Text(unit.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.SemiBold, maxLines = 1, textAlign = TextAlign.Center)
@@ -567,11 +918,37 @@ private fun UnitStatusCard(unit: UnitUiState) {
             )
             Text("${unit.mana.current}/${unit.mana.max} MP", color = Color(0xFF8b949e), fontSize = 10.sp)
         }
-        // Grid position
-        Text("(${unit.position.col}, ${unit.position.row})", color = Color(0xFF484f58), fontSize = 9.sp)
         if (unit.conditions.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
             ConditionBadges(conditions = unit.conditions)
+        }
+        // Expanded attributes panel (tap card to toggle)
+        if (expanded && unit.stats != null) {
+            Spacer(Modifier.height(6.dp))
+            HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
+            Spacer(Modifier.height(4.dp))
+            val s = unit.stats
+            val attrs = listOf(
+                "STR" to s.str, "DEX" to s.dex, "CON" to s.con,
+                "INT" to s.intelligence, "WIS" to s.wis, "CHA" to s.cha,
+            )
+            attrs.chunked(2).forEach { pair ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    pair.forEach { (abbrev, value) ->
+                        val mod = attributeModifier(value)
+                        val modStr = if (mod >= 0) "+$mod" else "$mod"
+                        Text(
+                            "$abbrev $value ($modStr)",
+                            color = Color(0xFF8b949e),
+                            fontSize = 9.sp,
+                        )
+                    }
+                }
+            }
+            Text("AC ${s.ac}", color = Color(0xFF8b949e), fontSize = 9.sp)
         }
     }
 }
@@ -710,6 +1087,66 @@ private fun ActionBar(
         ) {
             Text("End Turn")
         }
+    }
+}
+
+// ── Directional D-pad ────────────────────────────────────────────────────────
+
+@Composable
+private fun DPad(
+    phase: TurnPhase,
+    movesRemaining: Int,
+    isLocked: Boolean,
+    playerPos: PositionComponent?,
+    reachableTiles: Set<Pair<Int, Int>>,
+    onMoveDirection: (Int, Int) -> Unit,
+) {
+    val canMove = phase == TurnPhase.PlayerPhase && movesRemaining > 0 && !isLocked && playerPos != null
+
+    fun canDir(dx: Int, dy: Int): Boolean {
+        if (!canMove || playerPos == null) return false
+        return Pair(playerPos.col + dx, playerPos.row + dy) in reachableTiles
+    }
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(ColorFieldBg)
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            DPadButton("▲", canDir(0, -1))  { onMoveDirection(0, -1) }
+            Row(horizontalArrangement = Arrangement.spacedBy(2.dp), verticalAlignment = Alignment.CenterVertically) {
+                DPadButton("◄", canDir(-1, 0)) { onMoveDirection(-1, 0) }
+                Box(Modifier.size(36.dp))
+                DPadButton("►", canDir(1, 0))  { onMoveDirection(1, 0) }
+            }
+            DPadButton("▼", canDir(0, 1))   { onMoveDirection(0, 1) }
+        }
+    }
+}
+
+@Composable
+private fun DPadButton(label: String, enabled: Boolean, onClick: () -> Unit) {
+    Button(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(36.dp),
+        contentPadding = PaddingValues(0.dp),
+        shape = RoundedCornerShape(6.dp),
+        colors = ButtonDefaults.buttonColors(
+            containerColor = Color(0xFF1f2d3d),
+            contentColor = ColorPlayer,
+            disabledContainerColor = Color(0xFF161b22),
+            disabledContentColor = Color(0xFF484f58),
+        ),
+    ) {
+        Text(label, fontSize = 14.sp)
     }
 }
 

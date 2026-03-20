@@ -32,7 +32,7 @@ fun main() = application {
         Window(
             onCloseRequest = ::exitApplication,
             title = "PocketQuest",
-            state = rememberWindowState(width = 480.dp, height = 340.dp),
+            state = rememberWindowState(width = 720.dp, height = 900.dp),
             resizable = false,
         ) {
             LauncherScreen(

@@ -17,4 +17,8 @@ data class SkillDefinition(
     val animationType: String = "INSTANT",
     val maxTargets: Int = 1,
     val effects: List<EffectDto> = emptyList(),
+    /** One of: STR, DEX, CON, INT, WIS, CHA — or null for no modifier. */
+    val attributeModifier: String? = null,
+    /** When true, cover damage reduction is applied against this skill. */
+    val isRanged: Boolean = false,
 )

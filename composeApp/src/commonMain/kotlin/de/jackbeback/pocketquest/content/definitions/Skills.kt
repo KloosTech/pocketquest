@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.content.definitions
 
 import de.jackbeback.pocketquest.content.dsl.AnimationType
 import de.jackbeback.pocketquest.content.dsl.Dice
+import de.jackbeback.pocketquest.content.dsl.StatAttribute
 import de.jackbeback.pocketquest.content.dsl.skill
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
 import de.jackbeback.pocketquest.ecs.components.combat.DamageType
@@ -14,6 +15,7 @@ val magicMissileSkill = skill("magic_missile") {
     maxTargets = 3
     spriteKey = "MagicMissile"
     animationType = AnimationType.PROJECTILE
+    attributeModifier = StatAttribute.INT
     damage(Dice(1, 4, 1), DamageType.FORCE)
 }
 
@@ -25,6 +27,7 @@ val basicHealSkill = skill("basic_heal") {
     needsTarget = false
     spriteKey = "BasicHeal"
     animationType = AnimationType.HEAL
+    attributeModifier = StatAttribute.WIS
     heal(Dice(1, 4, 2))
 }
 
@@ -34,6 +37,7 @@ val thornWhipSkill = skill("thorn_whip") {
     range = 2
     spriteKey = "ThornWhip"
     animationType = AnimationType.MELEE
+    attributeModifier = StatAttribute.INT
     damage(Dice(1, 4), DamageType.PIERCING)
     applyCondition(ConditionType.Poison)
 }
@@ -45,8 +49,9 @@ val fireballSkill = skill("fireball") {
     needsHitRoll = false
     spriteKey = "CrimsonArcana"
     animationType = AnimationType.PROJECTILE
+    attributeModifier = StatAttribute.INT
     damage(Dice(1, 6, 2), DamageType.FIRE)
-    applyCondition(ConditionType.Burn, 2)
+    applyCondition(ConditionType.Burn, 4)
 }
 
 val basicAttackSkill = skill("basic_attack") {
@@ -56,6 +61,7 @@ val basicAttackSkill = skill("basic_attack") {
     needsHitRoll = true
     spriteKey = ""
     animationType = AnimationType.MELEE
+    attributeModifier = StatAttribute.STR
     damage(Dice(1, 4), DamageType.BLUDGEONING)
 }
 

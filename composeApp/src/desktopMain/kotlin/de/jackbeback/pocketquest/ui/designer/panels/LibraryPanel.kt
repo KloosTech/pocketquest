@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.ui.designer.DC
 import de.jackbeback.pocketquest.ui.designer.DesignerState
+import de.jackbeback.pocketquest.ui.designer.EditorTab
 
 @Composable
 fun LibraryPanel(
@@ -28,11 +29,15 @@ fun LibraryPanel(
     onNewEnemy: () -> Unit,
     onSelectSkill: (String) -> Unit,
     onNewSkill: () -> Unit,
+    onSelectOverworld: (String) -> Unit,
+    onNewOverworld: () -> Unit,
+    onOpenCampaignBrowser: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var encountersExpanded by remember { mutableStateOf(true) }
     var enemiesExpanded by remember { mutableStateOf(true) }
     var skillsExpanded by remember { mutableStateOf(true) }
+    var overworldsExpanded by remember { mutableStateOf(true) }
 
     Column(
         modifier = modifier
@@ -58,6 +63,78 @@ fun LibraryPanel(
         HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
 
         LazyColumn(modifier = Modifier.weight(1f)) {
+            // ── Campaign section (shown only when CAMPAIGN tab is active) ──
+            if (state.activeTab == EditorTab.CAMPAIGN) {
+                item {
+                    val campaign = state.activeCampaign
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(DC.Mantle)
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = campaign?.name ?: "No Campaign",
+                                color = if (campaign != null) DC.Mauve else DC.Overlay0,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        Box(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(DC.Mauve.copy(alpha = 0.15f))
+                                .clickable { onOpenCampaignBrowser() }
+                                .padding(horizontal = 8.dp, vertical = 3.dp),
+                        ) {
+                            Text("Switch…", color = DC.Mauve, fontSize = 10.sp)
+                        }
+                    }
+                }
+
+                item { HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp) }
+
+                // Overworlds list
+                val campaign = state.activeCampaign
+                if (campaign != null) {
+                    item {
+                        SectionHeader(
+                            label = "OVERWORLDS",
+                            count = campaign.overworlds.size,
+                            expanded = overworldsExpanded,
+                            onToggle = { overworldsExpanded = !overworldsExpanded },
+                            onAdd = onNewOverworld,
+                        )
+                    }
+
+                    if (overworldsExpanded) {
+                        val orderedOverworlds = campaign.overworldSequence.mapNotNull { id ->
+                            campaign.overworlds.find { it.id == id }
+                        }
+                        if (orderedOverworlds.isEmpty()) {
+                            item { EmptyHint("No overworlds yet") }
+                        } else {
+                            items(orderedOverworlds, key = { it.id }) { ow ->
+                                LibraryItem(
+                                    label = ow.name,
+                                    sublabel = "${ow.nodes.size} node${if (ow.nodes.size != 1) "s" else ""}",
+                                    selected = state.activeOverworldId == ow.id,
+                                    indicator = DC.Mauve,
+                                    onClick = { onSelectOverworld(ow.id) },
+                                )
+                            }
+                        }
+                    }
+
+                    item { SectionDivider() }
+                }
+            }
+
             // ── Encounters section ─────────────────────────────────────────
             item {
                 SectionHeader(
@@ -77,7 +154,7 @@ fun LibraryPanel(
                     items(state.encounters, key = { it.id }) { enc ->
                         LibraryItem(
                             label = enc.name,
-                            sublabel = "${enc.enemies.size} enemy${if (enc.enemies.size != 1) "ies" else "y"}",
+                            sublabel = "${enc.enemies.size} enem${if (enc.enemies.size != 1) "ies" else "y"}",
                             selected = state.selectedEncounterId == enc.id,
                             indicator = DC.Blue,
                             onClick = { onSelectEncounter(enc.id) },

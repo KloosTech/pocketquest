@@ -8,39 +8,31 @@ import kotlinx.coroutines.flow.update
 data class RunScopedState(
     val characterTemplateId: String,
     val level: Int = 1,
-    /** XP within the current level. Resets to 0 on each level-up. */
     val exp: Int = 0,
-    /** Increments once per won encounter; used to scale enemy difficulty. */
     val difficultyCounter: Int = 0,
-    /** Saved player HP between encounters; null = use template default (full HP). */
     val playerHp: Int? = null,
-    /** Saved player mana between encounters; null = use template default. */
     val playerMana: Int? = null,
-    /** IDs of relics held this run. Applied at the start of every encounter. */
     val relics: List<String> = emptyList(),
-    /** How many areas (map resets) the player has completed this run. Starts at 1. */
     val areaNumber: Int = 1,
+    val unspentAttributePoints: Int = 0,
+    val attributeBonuses: Map<String, Int> = emptyMap(),
+    /** Graph node the player is currently standing on. */
+    val currentNodeId: String = "start",
+    /** Nodes whose events have been fully resolved (battle won, rest taken/skipped). */
+    val completedNodeIds: Set<String> = setOf("start"),
 )
 
-/** Result of a [RunStateHolder.gainExp] call. */
 data class LevelUpResult(
     val didLevelUp: Boolean,
     val newLevel: Int,
 )
 
-/** State that persists across runs (survives death). */
 data class PersistentState(
     val unlockedCharacterIds: List<String> = listOf("wizard"),
     val inventory: List<String> = emptyList(),
     val globalSkillUnlocks: List<String> = emptyList(),
 )
 
-/**
- * Single source of truth for roguelike progression.
- *
- * [run] is null between runs (on CharacterSelect screen) and non-null during an active run.
- * [persistent] survives across all runs — inventory and unlocked characters live here.
- */
 class RunStateHolder {
     private val _run = MutableStateFlow<RunScopedState?>(null)
     val run: StateFlow<RunScopedState?> = _run
@@ -51,50 +43,62 @@ class RunStateHolder {
         _run.value = RunScopedState(characterTemplateId = characterTemplateId)
     }
 
-    /** Called on player death — wipes all run-scoped progress. */
     fun resetRun() {
         _run.value = null
     }
 
-    /** Called after each won encounter. */
     fun incrementDifficulty() {
         _run.update { it?.copy(difficultyCounter = (it.difficultyCounter + 1)) }
     }
 
-    /** Saves current player HP/Mana to be restored at the start of the next encounter. */
     fun savePlayerState(hp: Int, mana: Int) {
         _run.update { it?.copy(playerHp = hp, playerMana = mana) }
     }
 
-    /** Adds a relic (by id) to the current run's collection. */
     fun addRelic(relicId: String) {
         _run.update { it?.copy(relics = it.relics + relicId) }
     }
 
-    /** Called when the player clears all events on the current map and moves to the next area. */
-    fun startNextArea() {
-        _run.update { it?.copy(areaNumber = it.areaNumber + 1) }
+    /** Move the player to a new graph node (call before triggering the node's event). */
+    fun moveToNode(nodeId: String) {
+        _run.update { it?.copy(currentNodeId = nodeId) }
     }
 
-    /**
-     * Pure preview of what [gainExp] would return without modifying state.
-     * Use this to show level-up info in UI before committing the XP.
-     */
+    /** Mark a graph node as completed, unlocking its outgoing edges. */
+    fun completeNode(nodeId: String) {
+        _run.update { it?.copy(completedNodeIds = it.completedNodeIds + nodeId) }
+    }
+
+    /** Called when the player clears all events and moves to the next area. */
+    fun startNextArea() {
+        _run.update {
+            it?.copy(
+                areaNumber       = it.areaNumber + 1,
+                currentNodeId    = "start",
+                completedNodeIds = setOf("start"),
+            )
+        }
+    }
+
+    fun spendAttributePoint(attr: String) {
+        _run.update { state ->
+            if (state == null || state.unspentAttributePoints <= 0) return@update state
+            val updated = state.attributeBonuses.toMutableMap()
+            updated[attr] = (updated[attr] ?: 0) + 1
+            state.copy(
+                unspentAttributePoints = state.unspentAttributePoints - 1,
+                attributeBonuses = updated,
+            )
+        }
+    }
+
     fun previewGainExp(amount: Int): LevelUpResult {
         val state = _run.value ?: return LevelUpResult(didLevelUp = false, newLevel = 1)
-        val newExp    = state.exp + amount
-        val leveled   = newExp >= state.level * 100
+        val newExp  = state.exp + amount
+        val leveled = newExp >= state.level * 100
         return LevelUpResult(didLevelUp = leveled, newLevel = if (leveled) state.level + 1 else state.level)
     }
 
-    /**
-     * Awards [amount] XP to the current run.
-     *
-     * Level-up threshold: level N requires N×100 XP (level 1→2: 100 XP, 2→3: 200 XP, etc.).
-     * At most one level-up per call.
-     *
-     * @return [LevelUpResult] indicating whether a level-up occurred and the new level.
-     */
     fun gainExp(amount: Int): LevelUpResult {
         val state = _run.value ?: return LevelUpResult(didLevelUp = false, newLevel = 1)
         var newExp   = state.exp + amount
@@ -105,7 +109,11 @@ class RunStateHolder {
             newExp -= threshold
             newLevel++
         }
-        _run.value = state.copy(exp = newExp, level = newLevel)
+        _run.value = state.copy(
+            exp   = newExp,
+            level = newLevel,
+            unspentAttributePoints = state.unspentAttributePoints + if (leveled) 2 else 0,
+        )
         return LevelUpResult(didLevelUp = leveled, newLevel = newLevel)
     }
 }

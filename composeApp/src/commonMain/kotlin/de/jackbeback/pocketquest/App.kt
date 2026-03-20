@@ -14,6 +14,8 @@ import de.jackbeback.pocketquest.game.run.RunStateHolder
 import de.jackbeback.pocketquest.ui.battle.BattleScreen
 import de.jackbeback.pocketquest.ui.battle.BattleViewModel
 import de.jackbeback.pocketquest.ui.battle.BattleResult
+import de.jackbeback.pocketquest.ui.character.CharacterScreen
+import de.jackbeback.pocketquest.ui.character.CharacterViewModel
 import de.jackbeback.pocketquest.ui.characterselect.CharacterSelectScreen
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.navigation.Screen
@@ -38,7 +40,7 @@ fun App() {
                     onRunStarted = {
                         // Reset events and re-add their markers for the new run
                         eventRegistry.reset(allOverworldEvents)
-                        overworldVm.onRunReset(allOverworldEvents)
+                        overworldVm.onRunReset()
                         navigator.goToOverworld()
                     },
                 )
@@ -52,13 +54,18 @@ fun App() {
                     onNextArea  = {
                         runStateHolder.startNextArea()
                         eventRegistry.reset(allOverworldEvents)
-                        vm.onRunReset(allOverworldEvents)
+                        vm.onRunReset()
                     },
                     onEndRun    = {
                         runStateHolder.resetRun()
                         navigator.goToCharacterSelect()
                     },
+                    onViewCharacter = { navigator.goToCharacter() },
                 )
+            }
+            Screen.Character -> {
+                val characterVm = koinInject<CharacterViewModel>()
+                CharacterScreen(viewModel = characterVm)
             }
             Screen.Battle -> {
                 val battleVm    = koinInject<BattleViewModel>()

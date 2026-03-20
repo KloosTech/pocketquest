@@ -2,14 +2,21 @@ package de.jackbeback.pocketquest.ui.battle
 
 import de.jackbeback.pocketquest.content.definitions.Relic
 import de.jackbeback.pocketquest.content.dsl.UnitTemplate
+import de.jackbeback.pocketquest.content.map.TileMap
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.core.Faction
+import de.jackbeback.pocketquest.ecs.components.core.PositionComponent
 import de.jackbeback.pocketquest.ecs.core.EntityId
 import de.jackbeback.pocketquest.ecs.core.World
+import de.jackbeback.pocketquest.game.battle.BATTLE_COLS
+import de.jackbeback.pocketquest.game.battle.BATTLE_ROWS
 import de.jackbeback.pocketquest.game.battle.BattleTileCache
+import de.jackbeback.pocketquest.game.battle.TileMapRepository
 import de.jackbeback.pocketquest.game.run.LevelUpResult
 import de.jackbeback.pocketquest.ui.navigation.BattleParams
+import de.jackbeback.pocketquest.content.dsl.AnimationType
 import de.jackbeback.pocketquest.game.animation.ANIM_DURATION_MS
+import de.jackbeback.pocketquest.game.animation.MELEE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.MOVE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.AnimationEvent
 import de.jackbeback.pocketquest.game.animation.AnimationEventCollector
@@ -37,6 +44,16 @@ class BattleViewModel(
     private val battleLog: BattleLog,
     private val animCollector: AnimationEventCollector,
     val tileCache: BattleTileCache,
+    /**
+     * Optional repository for loading terrain maps from bundled resources.
+     * If null, or if the encounter has no mapId, battles run without terrain effects.
+     */
+    val tileMapRepository: TileMapRepository? = null,
+    /**
+     * Pre-loaded tileMap to use immediately (bypasses repository loading).
+     * Used by the desktop designer where the map is already in memory.
+     */
+    initialTileMap: TileMap? = null,
     /** Destroys all existing entities, re-spawns the player, then spawns [enemies]. */
     private val resetAndSpawn: (enemies: List<UnitTemplate>) -> Unit = {},
     /**
@@ -54,6 +71,14 @@ class BattleViewModel(
     private var selectedSkill: String? = null
     private val pendingTargets = mutableListOf<EntityId>()
     private var initialEnemyCount: Int = 0
+    private val exploredTiles = mutableSetOf<Pair<Int, Int>>()
+
+    /**
+     * Terrain map for the current battle. Pre-set via [initialTileMap] (designer) or loaded
+     * during [prepareBattle] from [tileMapRepository] (main app). Passed to [snapshotBattle]
+     * for reachable-tile filtering and terrain overlays.
+     */
+    private var activeTileMap: TileMap? = initialTileMap
 
     private val _state = MutableStateFlow(snapshot(TurnPhase.PlayerPhase))
     val state: StateFlow<BattleUiState> = _state
@@ -75,16 +100,29 @@ class BattleViewModel(
     val battleResult: StateFlow<BattleResult?> = _battleResult
 
     fun prepareBattle(params: BattleParams? = null) {
-        resetAndSpawn(params?.enemies ?: emptyList())
         selectedSkill = null
         pendingTargets.clear()
+        exploredTiles.clear()
         animCollector.drain()
         _animationEvent.value = null
         _phaseBanner.value = null
         _isLocked.value = false
         _battleResult.value = null
-        _state.value = snapshot(TurnPhase.PlayerPhase)
-        initialEnemyCount = _state.value.units.count { it.faction == Faction.ENEMY }
+
+        scope.launch {
+            // Load terrain map from bundled resources if this encounter specifies one.
+            // Only overwrite activeTileMap when a mapId is explicitly provided — this preserves
+            // any initialTileMap set via the constructor (e.g. the desktop designer).
+            if (params?.mapId != null) {
+                activeTileMap = withContext(Dispatchers.Default) { tileMapRepository?.load(params.mapId) }
+            }
+            // Keep animation normalisation in sync with the active map's grid dimensions
+            animCollector.gridCols = activeTileMap?.cols ?: BATTLE_COLS
+            animCollector.gridRows = activeTileMap?.rows ?: BATTLE_ROWS
+            resetAndSpawn(params?.enemies ?: emptyList())
+            _state.value = snapshot(TurnPhase.PlayerPhase)
+            initialEnemyCount = _state.value.units.count { it.faction == Faction.ENEMY }
+        }
     }
 
     /** Called when the player picks a skill from the bottom sheet. */
@@ -92,6 +130,55 @@ class BattleViewModel(
         pendingTargets.clear()
         selectedSkill = skillId
         _state.value = snapshot(TurnPhase.PlayerPhase)
+    }
+
+    /**
+     * Called when the player taps a unit status card below the grid.
+     * If a skill is armed and the unit is a valid target, behaves identically to tapping
+     * that unit's cell on the grid. If no skill is armed, the card handles expand/collapse itself.
+     */
+    fun onUnitCardTap(entityId: EntityId) {
+        if (_isLocked.value) return
+        val s = _state.value
+        val unit = s.units.find { it.entityId == entityId } ?: return
+        val cell = Pair(unit.position.col, unit.position.row)
+
+        val armed = s.selectedSkill
+        if (armed != null && cell in s.attackableTiles) {
+            val skillInfo  = s.availableSkills.find { it.id == armed }
+            val maxTargets = skillInfo?.maxTargets ?: 1
+            if (maxTargets <= 1) {
+                onPlayerAction(PlayerAction.UseSkill(armed, entityId))
+            } else {
+                pendingTargets += entityId
+                if (pendingTargets.size >= maxTargets) {
+                    onPlayerAction(PlayerAction.UseSkillOnTargets(armed, pendingTargets.toList()))
+                } else {
+                    _state.value = snapshot(TurnPhase.PlayerPhase)
+                }
+            }
+            return
+        }
+
+        if (armed != null) {
+            // Tapped a card that isn't a valid target — cancel the skill
+            onCancelSkill()
+        }
+        // No skill armed → card handles its own expand/collapse
+    }
+
+    /**
+     * Moves the player one tile in the given direction (dx, dy must each be -1, 0, or 1).
+     * Does nothing if the move is out-of-bounds, blocked, or the player has no moves left.
+     */
+    fun onMoveDirection(dx: Int, dy: Int) {
+        if (_isLocked.value) return
+        val s = _state.value
+        val player = s.units.find { it.faction == Faction.PLAYER } ?: return
+        val target = PositionComponent(player.position.col + dx, player.position.row + dy)
+        if (target.col !in 0 until s.gridCols || target.row !in 0 until s.gridRows) return
+        if (Pair(target.col, target.row) !in s.reachableTiles) return
+        onPlayerAction(PlayerAction.MoveTo(target.col, target.row))
     }
 
     /** Cancels the active skill selection and returns to idle. */
@@ -116,20 +203,21 @@ class BattleViewModel(
         val s = _state.value
         val cell = Pair(col, row)
 
-        if (s.selectedSkill != null && cell in s.attackableTiles) {
+        val armedSkill = s.selectedSkill
+        if (armedSkill != null && cell in s.attackableTiles) {
             val target = s.units.find { it.position.col == col && it.position.row == row }
                 ?: return
-            val skillInfo = s.availableSkills.find { it.id == s.selectedSkill }
+            val skillInfo = s.availableSkills.find { it.id == armedSkill }
             val maxTargets = skillInfo?.maxTargets ?: 1
 
             if (maxTargets <= 1) {
                 // Single-target: fire immediately
-                onPlayerAction(PlayerAction.UseSkill(s.selectedSkill!!, target.entityId))
+                onPlayerAction(PlayerAction.UseSkill(armedSkill, target.entityId))
             } else {
                 // Multi-target: accumulate picks — the same target may be selected multiple times
                 pendingTargets += target.entityId
                 if (pendingTargets.size >= maxTargets) {
-                    onPlayerAction(PlayerAction.UseSkillOnTargets(s.selectedSkill!!, pendingTargets.toList()))
+                    onPlayerAction(PlayerAction.UseSkillOnTargets(armedSkill, pendingTargets.toList()))
                 } else {
                     _state.value = snapshot(TurnPhase.PlayerPhase)
                 }
@@ -187,8 +275,8 @@ class BattleViewModel(
             _phaseBanner.value = null
 
             val enemyAnims = withContext(Dispatchers.Default) {
-                gameLoop.runEnemyTurns(world)
                 gameLoop.runEnvironmentTick(world)
+                gameLoop.runEnemyTurns(world)
                 animCollector.drain()
             }
 
@@ -228,12 +316,30 @@ class BattleViewModel(
     private suspend fun playAnimations(events: List<AnimationEvent>) {
         for (event in events) {
             _animationEvent.value = event
-            val durationMs = if (event is AnimationEvent.UnitMove) MOVE_ANIM_MS else ANIM_DURATION_MS
+            val durationMs = when (event) {
+                is AnimationEvent.UnitMove -> MOVE_ANIM_MS
+                is AnimationEvent.ProjectileSkill -> when (event.animationType) {
+                    AnimationType.MELEE -> MELEE_ANIM_MS
+                    else               -> ANIM_DURATION_MS
+                }
+                else -> ANIM_DURATION_MS
+            }
             delay(durationMs)
+            // After each move animation refresh state so the unit sticks at its destination
+            // rather than snapping back to the pre-turn snapshot position between moves.
+            if (event is AnimationEvent.UnitMove) {
+                _state.value = snapshot(TurnPhase.PlayerPhase)
+            }
         }
         _animationEvent.value = null
     }
 
-    private fun snapshot(phase: TurnPhase): BattleUiState =
-        world.snapshotBattle(phase, battleLog.snapshot(), selectedSkill, skillRegistry, pendingTargets.toList())
+    private fun snapshot(phase: TurnPhase): BattleUiState {
+        val state = world.snapshotBattle(
+            phase, battleLog.snapshot(), selectedSkill, skillRegistry,
+            pendingTargets.toList(), activeTileMap, exploredTiles.toSet()
+        )
+        exploredTiles += state.visibleTiles
+        return state
+    }
 }

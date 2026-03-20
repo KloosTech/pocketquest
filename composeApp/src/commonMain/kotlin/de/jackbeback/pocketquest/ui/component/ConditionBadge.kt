@@ -20,14 +20,18 @@ private val ColdColor = Color(0xFF58A6FF)
 @Composable
 fun ConditionBadge(type: ConditionType, stacks: Int, modifier: Modifier = Modifier) {
     val color = when (type) {
-        ConditionType.Burn   -> BurnColor
-        ConditionType.Poison -> PoisonColor
-        ConditionType.Cold   -> ColdColor
+        ConditionType.Burn        -> BurnColor
+        ConditionType.Poison      -> PoisonColor
+        ConditionType.Cold        -> ColdColor
+        ConditionType.Block       -> Color(0xFFAAAAAA)
+        ConditionType.StrengthUp  -> Color(0xFFFFD700)
     }
     val label = when (type) {
-        ConditionType.Burn   -> "🔥"
-        ConditionType.Poison -> "☠"
-        ConditionType.Cold   -> "❄"
+        ConditionType.Burn        -> "🔥"
+        ConditionType.Poison      -> "☠"
+        ConditionType.Cold        -> "❄"
+        ConditionType.Block       -> "🛡"
+        ConditionType.StrengthUp  -> "💪"
     }
     Row(
         modifier = modifier

@@ -12,6 +12,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import androidx.compose.ui.window.Popup
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -24,17 +25,25 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import de.jackbeback.pocketquest.content.map.MapConfig
+import de.jackbeback.pocketquest.content.map.TileMap
 import de.jackbeback.pocketquest.designer.model.EncounterBundle
 import de.jackbeback.pocketquest.designer.model.EnemyDefinition
+import de.jackbeback.pocketquest.game.battle.BATTLE_COLS
+import de.jackbeback.pocketquest.game.battle.BATTLE_ROWS
+import de.jackbeback.pocketquest.game.battle.BattleTileCache
 import de.jackbeback.pocketquest.ui.designer.DC
-
-private const val GRID_COLS = 14
-private const val GRID_ROWS = 9
+import kotlinx.coroutines.flow.MutableStateFlow
 
 @Composable
 fun EncounterEditorPanel(
     encounter: EncounterBundle,
     enemyLibrary: List<EnemyDefinition>,
+    availableMaps: List<TileMap> = emptyList(),
     onUpdate: (EncounterBundle) -> Unit,
     onDelete: () -> Unit,
     onAddEnemy: (EnemyDefinition) -> Unit,
@@ -44,6 +53,25 @@ fun EncounterEditorPanel(
 ) {
     var selectedInstanceId by remember(encounter.id) { mutableStateOf<String?>(null) }
     val selectedInstance = encounter.enemies.find { it.id == selectedInstanceId }
+
+    // Build a tile cache for the currently assigned map so the grid preview shows real tiles
+    val selectedMap = availableMaps.find { it.id == encounter.mapId }
+    val tileCache = remember(encounter.mapId) {
+        selectedMap?.let { map ->
+            BattleTileCache(MapConfig(
+                id         = map.id,
+                levelCount = 1,
+                tileWidth  = map.tileWidthPx,
+                tileHeight = map.tileHeightPx,
+                colCount   = map.cols,
+                rowCount   = map.rows,
+            ))
+        }
+    }
+    @Suppress("UNCHECKED_CAST")
+    val tiles by remember(tileCache) {
+        tileCache?.tiles ?: MutableStateFlow(emptyMap<Pair<Int, Int>, ImageBitmap>())
+    }.collectAsState()
 
     LazyColumn(
         modifier = modifier
@@ -70,19 +98,82 @@ fun EncounterEditorPanel(
             }
         }
 
+        // ── Map ───────────────────────────────────────────────────────────
+        item {
+            EditorCard {
+                CardLabel("Map")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Map:", color = DC.Subtext0, fontSize = 12.sp, modifier = Modifier.width(40.dp))
+                    // "(none)" option + all available maps
+                    val options = listOf("(none)") + availableMaps.map { it.id }
+                    val currentIndex = options.indexOf(encounter.mapId ?: "(none)").coerceAtLeast(0)
+                    var expanded by remember { mutableStateOf(false) }
+                    Box {
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(DC.InputBg)
+                                .border(1.dp, DC.InputBorder, RoundedCornerShape(4.dp))
+                                .clickable { expanded = true }
+                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Text(options[currentIndex], color = DC.Text, fontSize = 12.sp)
+                            Text("▾", color = DC.Overlay0, fontSize = 10.sp)
+                        }
+                        if (expanded) {
+                            Popup(
+                                onDismissRequest = { expanded = false },
+                                alignment = Alignment.TopStart,
+                            ) {
+                                Column(
+                                    modifier = Modifier
+                                        .background(DC.Surface0, RoundedCornerShape(4.dp))
+                                        .border(1.dp, DC.PanelBorder, RoundedCornerShape(4.dp))
+                                        .padding(4.dp),
+                                ) {
+                                    options.forEach { opt ->
+                                        Text(
+                                            opt,
+                                            color = if (opt == (encounter.mapId ?: "(none)")) DC.Blue else DC.Text,
+                                            fontSize = 12.sp,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .clickable {
+                                                    onUpdate(encounter.copy(mapId = if (opt == "(none)") null else opt))
+                                                    expanded = false
+                                                }
+                                                .padding(horizontal = 10.dp, vertical = 5.dp),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Amber warning if no map is selected but enemies have spawn positions
+                    if (encounter.mapId == null && encounter.enemies.isNotEmpty()) {
+                        Text("⚠ No map assigned", color = DC.Warning, fontSize = 10.sp)
+                    }
+                }
+            }
+        }
+
         // ── Player Spawn ──────────────────────────────────────────────────
         item {
+            val maxCol = (selectedMap?.cols ?: BATTLE_COLS) - 1
+            val maxRow = (selectedMap?.rows ?: BATTLE_ROWS) - 1
             EditorCard {
                 CardLabel("Player Spawn")
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     Column(Modifier.weight(1f)) {
-                        FieldRow("Column (0–13)") {
-                            IntField(encounter.playerSpawnCol) { onUpdate(encounter.copy(playerSpawnCol = it.coerceIn(0, 13))) }
+                        FieldRow("Column (0–$maxCol)") {
+                            IntField(encounter.playerSpawnCol) { onUpdate(encounter.copy(playerSpawnCol = it.coerceIn(0, maxCol))) }
                         }
                     }
                     Column(Modifier.weight(1f)) {
-                        FieldRow("Row (0–8)") {
-                            IntField(encounter.playerSpawnRow) { onUpdate(encounter.copy(playerSpawnRow = it.coerceIn(0, 8))) }
+                        FieldRow("Row (0–$maxRow)") {
+                            IntField(encounter.playerSpawnRow) { onUpdate(encounter.copy(playerSpawnRow = it.coerceIn(0, maxRow))) }
                         }
                     }
                 }
@@ -92,10 +183,12 @@ fun EncounterEditorPanel(
         // ── Battle Grid ───────────────────────────────────────────────────
         item {
             EditorCard {
-                CardLabel("Battle Grid Preview  (click enemy to select, drag to move)")
+                CardLabel("Battle Grid Preview  (click enemy → select · click empty → move enemy or set player spawn)")
                 BattleGridPreview(
                     encounter = encounter,
                     selectedInstanceId = selectedInstanceId,
+                    selectedMap = selectedMap,
+                    tiles = tiles,
                     onSelectInstance = { selectedInstanceId = it },
                     onMoveEnemy = { instanceId, col, row ->
                         val updated = encounter.enemies.map { e ->
@@ -103,7 +196,15 @@ fun EncounterEditorPanel(
                         }
                         onUpdate(encounter.copy(enemies = updated))
                     },
-                    modifier = Modifier.fillMaxWidth().height(220.dp),
+                    onMovePlayer = { col, row ->
+                        val maxCol = (selectedMap?.cols ?: BATTLE_COLS) - 1
+                        val maxRow = (selectedMap?.rows ?: BATTLE_ROWS) - 1
+                        onUpdate(encounter.copy(
+                            playerSpawnCol = col.coerceIn(0, maxCol),
+                            playerSpawnRow = row.coerceIn(0, maxRow),
+                        ))
+                    },
+                    modifier = Modifier.fillMaxWidth().height(280.dp),
                 )
             }
         }
@@ -118,9 +219,13 @@ fun EncounterEditorPanel(
             }
         }
         items(encounter.enemies, key = { it.id }) { enemy ->
+            val maxCol = (selectedMap?.cols ?: BATTLE_COLS) - 1
+            val maxRow = (selectedMap?.rows ?: BATTLE_ROWS) - 1
             EnemyInstanceRow(
                 enemy = enemy,
                 isSelected = selectedInstanceId == enemy.id,
+                maxCol = maxCol,
+                maxRow = maxRow,
                 onSelect = { selectedInstanceId = if (selectedInstanceId == enemy.id) null else enemy.id },
                 onUpdate = { updated ->
                     val newEnemies = encounter.enemies.map { if (it.id == enemy.id) updated else it }
@@ -167,6 +272,8 @@ fun EncounterEditorPanel(
 private fun EnemyInstanceRow(
     enemy: EnemyDefinition,
     isSelected: Boolean,
+    maxCol: Int = BATTLE_COLS - 1,
+    maxRow: Int = BATTLE_ROWS - 1,
     onSelect: () -> Unit,
     onUpdate: (EnemyDefinition) -> Unit,
     onRemove: () -> Unit,
@@ -202,11 +309,11 @@ private fun EnemyInstanceRow(
                 Text("Spawn:", color = DC.Subtext0, fontSize = 11.sp)
                 Text("Col", color = DC.Overlay0, fontSize = 11.sp)
                 Box(Modifier.width(50.dp)) {
-                    IntField(enemy.spawnCol) { onUpdate(enemy.copy(spawnCol = it.coerceIn(0, 13))) }
+                    IntField(enemy.spawnCol) { onUpdate(enemy.copy(spawnCol = it.coerceIn(0, maxCol))) }
                 }
                 Text("Row", color = DC.Overlay0, fontSize = 11.sp)
                 Box(Modifier.width(50.dp)) {
-                    IntField(enemy.spawnRow) { onUpdate(enemy.copy(spawnRow = it.coerceIn(0, 8))) }
+                    IntField(enemy.spawnRow) { onUpdate(enemy.copy(spawnRow = it.coerceIn(0, maxRow))) }
                 }
                 Spacer(Modifier.weight(1f))
                 Text("Skills: ${enemy.skillIds.joinToString(", ")}", color = DC.Sapphire, fontSize = 10.sp)
@@ -219,110 +326,111 @@ private fun EnemyInstanceRow(
 private fun BattleGridPreview(
     encounter: EncounterBundle,
     selectedInstanceId: String?,
+    selectedMap: TileMap?,
+    tiles: Map<Pair<Int, Int>, ImageBitmap>,
     onSelectInstance: (String?) -> Unit,
     onMoveEnemy: (String, Int, Int) -> Unit,
+    onMovePlayer: (Int, Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var dragTarget by remember { mutableStateOf<String?>(null) }
+    val cols = selectedMap?.cols ?: BATTLE_COLS
+    val rows = selectedMap?.rows ?: BATTLE_ROWS
 
     Canvas(
         modifier = modifier
             .clip(RoundedCornerShape(6.dp))
             .background(Color(0xFF0D1117))
-            .pointerInput(encounter) {
+            .pointerInput(encounter, selectedMap) {
                 detectTapGestures { offset ->
-                    val cellW = size.width.toFloat() / GRID_COLS
-                    val cellH = size.height.toFloat() / GRID_ROWS
-                    val tapCol = (offset.x / cellW).toInt().coerceIn(0, GRID_COLS - 1)
-                    val tapRow = (offset.y / cellH).toInt().coerceIn(0, GRID_ROWS - 1)
+                    val cellSize = minOf(size.width.toFloat() / cols, size.height.toFloat() / rows)
+                    val originX  = (size.width  - cols * cellSize) / 2f
+                    val originY  = (size.height - rows * cellSize) / 2f
+                    val tapCol = ((offset.x - originX) / cellSize).toInt().coerceIn(0, cols - 1)
+                    val tapRow = ((offset.y - originY) / cellSize).toInt().coerceIn(0, rows - 1)
 
-                    // Check if we tapped an enemy
-                    val tapped = encounter.enemies.firstOrNull { e -> e.spawnCol == tapCol && e.spawnRow == tapRow }
-                    if (tapped != null) {
-                        onSelectInstance(if (selectedInstanceId == tapped.id) null else tapped.id)
-                    } else if (selectedInstanceId != null) {
-                        // Move selected enemy to tapped empty cell
-                        onMoveEnemy(selectedInstanceId, tapCol, tapRow)
-                    } else {
-                        onSelectInstance(null)
+                    val tappedEnemy = encounter.enemies.firstOrNull { e -> e.spawnCol == tapCol && e.spawnRow == tapRow }
+                    val isPlayerTile = tapCol == encounter.playerSpawnCol && tapRow == encounter.playerSpawnRow
+                    when {
+                        // Tap on an enemy → select/deselect it
+                        tappedEnemy != null ->
+                            onSelectInstance(if (selectedInstanceId == tappedEnemy.id) null else tappedEnemy.id)
+                        // Enemy selected + tap empty tile → move enemy there
+                        selectedInstanceId != null ->
+                            onMoveEnemy(selectedInstanceId, tapCol, tapRow)
+                        // Nothing selected + tap non-player tile → set player spawn
+                        !isPlayerTile ->
+                            onMovePlayer(tapCol, tapRow)
+                        // Tap player tile with nothing selected → no-op
+                        else -> {}
                     }
                 }
             }
     ) {
-        val cellW = size.width / GRID_COLS
-        val cellH = size.height / GRID_ROWS
+        // Square cells — fit entire grid into the canvas, centered
+        val cellSize = minOf(size.width / cols, size.height / rows)
+        val originX  = (size.width  - cols * cellSize) / 2f
+        val originY  = (size.height - rows * cellSize) / 2f
 
-        // Draw grid
-        for (col in 0 until GRID_COLS) {
-            for (row in 0 until GRID_ROWS) {
-                val x = col * cellW
-                val y = row * cellH
-                // Alternate subtle tile shade
-                val shade = if ((col + row) % 2 == 0) Color(0xFF161B22) else Color(0xFF0D1117)
-                drawRect(color = shade, topLeft = Offset(x, y), size = Size(cellW, cellH))
-                drawRect(
-                    color = Color(0xFF21262D),
-                    topLeft = Offset(x, y),
-                    size = Size(cellW, cellH),
-                    style = Stroke(width = 0.5f),
-                )
+        // Draw tiles (real images or checkerboard fallback)
+        for (col in 0 until cols) {
+            for (row in 0 until rows) {
+                val x = originX + col * cellSize
+                val y = originY + row * cellSize
+                val bmp = tiles[Pair(col, row)]
+                if (bmp != null) {
+                    drawImage(
+                        image         = bmp,
+                        dstOffset     = IntOffset(x.toInt(), y.toInt()),
+                        dstSize       = IntSize(cellSize.toInt() + 1, cellSize.toInt() + 1),
+                        filterQuality = FilterQuality.Low,
+                    )
+                } else {
+                    val shade = if ((col + row) % 2 == 0) Color(0xFF161B22) else Color(0xFF0D1117)
+                    drawRect(shade, topLeft = Offset(x, y), size = Size(cellSize, cellSize))
+                }
+                drawRect(Color(0xFF21262D), topLeft = Offset(x, y), size = Size(cellSize, cellSize), style = Stroke(0.5f))
             }
         }
 
-        // Draw player spawn
-        drawSpawnCell(encounter.playerSpawnCol, encounter.playerSpawnRow, Color(0xFF89B4FA), cellW, cellH, "P")
+        // Player spawn
+        drawSpawnCell(encounter.playerSpawnCol, encounter.playerSpawnRow, Color(0xFF89B4FA), cellSize, originX, originY)
 
-        // Draw enemies
+        // Enemies
         encounter.enemies.forEach { enemy ->
             val isSelected = enemy.id == selectedInstanceId
             drawEnemyCell(
-                col = enemy.spawnCol,
-                row = enemy.spawnRow,
-                color = if (isSelected) Color(0xFFF38BA8) else Color(0xFFF38BA8).copy(alpha = 0.6f),
+                col     = enemy.spawnCol,
+                row     = enemy.spawnRow,
+                color   = if (isSelected) Color(0xFFF38BA8) else Color(0xFFF38BA8).copy(alpha = 0.6f),
                 outline = if (isSelected) Color(0xFFF38BA8) else Color(0xFFF38BA8).copy(alpha = 0.3f),
-                label = enemy.name.take(1),
-                cellW = cellW,
-                cellH = cellH,
+                cellSize = cellSize,
+                originX  = originX,
+                originY  = originY,
             )
         }
     }
 }
 
-private fun DrawScope.drawSpawnCell(col: Int, row: Int, color: Color, cellW: Float, cellH: Float, label: String) {
-    val x = col * cellW
-    val y = row * cellH
-    val pad = 3f
-    drawRect(
-        color = color.copy(alpha = 0.2f),
-        topLeft = Offset(x + pad, y + pad),
-        size = Size(cellW - pad * 2, cellH - pad * 2),
-    )
-    drawRect(
-        color = color.copy(alpha = 0.5f),
-        topLeft = Offset(x + pad, y + pad),
-        size = Size(cellW - pad * 2, cellH - pad * 2),
-        style = Stroke(width = 1.5f),
-    )
+private fun DrawScope.drawSpawnCell(
+    col: Int, row: Int,
+    color: Color,
+    cellSize: Float, originX: Float, originY: Float,
+) {
+    val x   = originX + col * cellSize
+    val y   = originY + row * cellSize
+    val pad = (cellSize * 0.1f).coerceAtLeast(2f)
+    drawRect(color.copy(alpha = 0.2f), Offset(x + pad, y + pad), Size(cellSize - pad * 2, cellSize - pad * 2))
+    drawRect(color.copy(alpha = 0.6f), Offset(x + pad, y + pad), Size(cellSize - pad * 2, cellSize - pad * 2), style = Stroke(1.5f))
 }
 
 private fun DrawScope.drawEnemyCell(
     col: Int, row: Int,
     color: Color, outline: Color,
-    label: String,
-    cellW: Float, cellH: Float,
+    cellSize: Float, originX: Float, originY: Float,
 ) {
-    val x = col * cellW
-    val y = row * cellH
-    val pad = 3f
-    drawRect(
-        color = color.copy(alpha = 0.3f),
-        topLeft = Offset(x + pad, y + pad),
-        size = Size(cellW - pad * 2, cellH - pad * 2),
-    )
-    drawRect(
-        color = outline,
-        topLeft = Offset(x + pad, y + pad),
-        size = Size(cellW - pad * 2, cellH - pad * 2),
-        style = Stroke(width = 1.5f),
-    )
+    val x   = originX + col * cellSize
+    val y   = originY + row * cellSize
+    val pad = (cellSize * 0.1f).coerceAtLeast(2f)
+    drawRect(color.copy(alpha = 0.3f), Offset(x + pad, y + pad), Size(cellSize - pad * 2, cellSize - pad * 2))
+    drawRect(outline, Offset(x + pad, y + pad), Size(cellSize - pad * 2, cellSize - pad * 2), style = Stroke(1.5f))
 }

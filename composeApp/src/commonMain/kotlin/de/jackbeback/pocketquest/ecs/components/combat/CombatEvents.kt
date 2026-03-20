@@ -36,6 +36,11 @@ data class SkillUsedEvent(
 
 data class TurnEndedEvent(val entity: EntityId) : GameEvent
 
+data class MissEvent(
+    val user: EntityId,
+    val target: EntityId,
+) : GameEvent
+
 data class ConditionAppliedEvent(
     val target: EntityId,
     val type: ConditionType,

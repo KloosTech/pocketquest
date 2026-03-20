@@ -1,5 +1,7 @@
 package de.jackbeback.pocketquest.game.snapshot
 
+import de.jackbeback.pocketquest.content.map.TileMap
+import de.jackbeback.pocketquest.content.map.TileType
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionsComponent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillSetComponent
@@ -11,6 +13,8 @@ import de.jackbeback.pocketquest.ecs.core.query
 import de.jackbeback.pocketquest.game.battle.BATTLE_COLS
 import de.jackbeback.pocketquest.game.battle.BATTLE_ROWS
 import de.jackbeback.pocketquest.game.battle.chebyshevDistance
+import de.jackbeback.pocketquest.game.pathfinding.computeVisibleTiles
+import de.jackbeback.pocketquest.game.pathfinding.hasLineOfSight
 import de.jackbeback.pocketquest.game.loop.TurnPhase
 import de.jackbeback.pocketquest.ui.battle.BattleUiState
 import de.jackbeback.pocketquest.ui.battle.SkillUiState
@@ -26,6 +30,8 @@ fun World.snapshotBattle(
     selectedSkill: String? = null,
     skillRegistry: SkillRegistry? = null,
     pendingTargets: List<EntityId> = emptyList(),
+    tileMap: TileMap? = null,
+    exploredTiles: Set<Pair<Int, Int>> = emptySet(),
 ): BattleUiState {
     val units = query<NameComponent, FactionComponent>()
         .map { (id, name, faction) ->
@@ -37,7 +43,8 @@ fun World.snapshotBattle(
                 health = get<HealthComponent>(id) ?: HealthComponent(0, 0),
                 mana = get<ManaComponent>(id) ?: ManaComponent(0, 0),
                 conditions = get<ConditionsComponent>(id)?.active ?: emptyMap(),
-                spriteKey = get<RenderComponent>(id)?.spriteKey ?: ""
+                spriteKey = get<RenderComponent>(id)?.spriteKey ?: "",
+                stats = get<StatsComponent>(id),
             )
         }.toList()
 
@@ -51,11 +58,32 @@ fun World.snapshotBattle(
     val playerMana  = playerId?.let { get<ManaComponent>(it) } ?: ManaComponent(0, 0)
     val playerMp    = playerId?.let { get<MovementPointsComponent>(it) }
 
+    val visibleTiles: Set<Pair<Int, Int>> = if (playerPos != null) {
+        computeVisibleTiles(playerPos, tileMap, tileMap?.cols ?: BATTLE_COLS, tileMap?.rows ?: BATTLE_ROWS)
+    } else emptySet()
+
     // Cells occupied by enemies (can't move onto them)
     val enemyCells = units
         .filter { it.faction == Faction.ENEMY }
         .map { Pair(it.position.col, it.position.row) }
         .toSet()
+
+    // Use tileMap dimensions when available, fall back to hardcoded battle grid size
+    val gridCols = tileMap?.cols ?: BATTLE_COLS
+    val gridRows = tileMap?.rows ?: BATTLE_ROWS
+
+    // 1-tile ring just outside visibleTiles — rendered dimmed to soften the FOW boundary
+    val perimeterTiles: Set<Pair<Int, Int>> = buildSet {
+        for ((c, r) in visibleTiles) {
+            for (dc in -1..1) for (dr in -1..1) {
+                if (dc == 0 && dr == 0) continue
+                val nc = c + dc; val nr = r + dr
+                if (nc < 0 || nr < 0 || nc >= gridCols || nr >= gridRows) continue
+                val cell = nc to nr
+                if (cell !in visibleTiles) add(cell)
+            }
+        }
+    }
 
     // Reachable tiles for one hop: within mp.range, moves remaining > 0, only on player's turn
     val reachableTiles: Set<Pair<Int, Int>> = if (
@@ -64,11 +92,17 @@ fun World.snapshotBattle(
         (playerMp?.current ?: 0) > 0
     ) {
         val hopRange = playerMp?.range ?: 0
+        val mpLeft = playerMp?.current ?: 0
         buildSet {
-            for (c in 0 until BATTLE_COLS) {
-                for (r in 0 until BATTLE_ROWS) {
+            for (c in 0 until gridCols) {
+                for (r in 0 until gridRows) {
                     val dist = chebyshevDistance(playerPos, PositionComponent(c, r))
-                    if (dist in 1..hopRange && Pair(c, r) !in enemyCells) add(Pair(c, r))
+                    if (dist !in 1..hopRange) continue
+                    if (Pair(c, r) in enemyCells) continue
+                    if (tileMap?.isWalkable(c, r) == false) continue
+                    val cost = tileMap?.typeAt(c, r)?.movementCost ?: 1
+                    if (mpLeft < cost) continue
+                    add(Pair(c, r))
                 }
             }
         }
@@ -104,6 +138,7 @@ fun World.snapshotBattle(
                 units
                     .filter { it.faction == Faction.ENEMY }
                     .filter { chebyshevDistance(playerPos, it.position) <= skill.range }
+                    .filter { hasLineOfSight(playerPos, it.position, tileMap) }
                     .map { Pair(it.position.col, it.position.row) }
                     .toSet()
             }
@@ -123,6 +158,18 @@ fun World.snapshotBattle(
         .map { Pair(it.position.col, it.position.row) }
         .toSet()
 
+    // Build terrain type map for UI rendering
+    val tileTypes: Map<Pair<Int, Int>, TileType> = if (tileMap != null) {
+        buildMap {
+            for (c in 0 until tileMap.cols) {
+                for (r in 0 until tileMap.rows) {
+                    val type = tileMap.typeAt(c, r)
+                    if (type != TileType.FLOOR) put(Pair(c, r), type)
+                }
+            }
+        }
+    } else emptyMap()
+
     return BattleUiState(
         units = units,
         turnPhase = phase,
@@ -138,5 +185,11 @@ fun World.snapshotBattle(
         playerMana = playerMana,
         pendingTargetIds = pendingTargets,
         selectedTargetTiles = selectedTargetTiles,
+        tileTypes      = tileTypes,
+        gridCols       = gridCols,
+        gridRows       = gridRows,
+        visibleTiles   = visibleTiles,
+        exploredTiles  = exploredTiles + visibleTiles,
+        perimeterTiles = perimeterTiles,
     )
 }

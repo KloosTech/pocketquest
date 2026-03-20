@@ -16,4 +16,6 @@ data class EncounterBundle(
     val enemies: List<EnemyDefinition> = emptyList(),
     /** Skills defined specifically for this encounter (referenced by id in enemies). */
     val customSkills: List<SkillDefinition> = emptyList(),
+    /** Optional map to load for this encounter. Null means use the default throneroom. */
+    val mapId: String? = null,
 )

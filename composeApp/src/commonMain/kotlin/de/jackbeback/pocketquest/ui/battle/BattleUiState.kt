@@ -1,12 +1,16 @@
 package de.jackbeback.pocketquest.ui.battle
 
 import de.jackbeback.pocketquest.content.definitions.Relic
+import de.jackbeback.pocketquest.content.map.TileType
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
 import de.jackbeback.pocketquest.ecs.components.core.Faction
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
 import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.ecs.components.core.PositionComponent
+import de.jackbeback.pocketquest.ecs.components.core.StatsComponent
 import de.jackbeback.pocketquest.ecs.core.EntityId
+import de.jackbeback.pocketquest.game.battle.BATTLE_COLS
+import de.jackbeback.pocketquest.game.battle.BATTLE_ROWS
 import de.jackbeback.pocketquest.game.loop.TurnPhase
 
 /** Immutable snapshot of battle state for Compose to observe. Never reads World directly. */
@@ -35,6 +39,18 @@ data class BattleUiState(
     val pendingTargetIds: List<EntityId> = emptyList(),
     /** Grid positions of [pendingTargetIds] units — highlighted with a distinct colour. */
     val selectedTargetTiles: Set<Pair<Int, Int>> = emptySet(),
+    /** Non-FLOOR tile types keyed by (col, row) — used for terrain overlays in BattleScreen. */
+    val tileTypes: Map<Pair<Int, Int>, TileType> = emptyMap(),
+    /** Grid width in tiles — comes from the active TileMap, defaults to BATTLE_COLS. */
+    val gridCols: Int = BATTLE_COLS,
+    /** Grid height in tiles — comes from the active TileMap, defaults to BATTLE_ROWS. */
+    val gridRows: Int = BATTLE_ROWS,
+    /** Tiles currently visible to the player via LOS raycasting. */
+    val visibleTiles: Set<Pair<Int, Int>> = emptySet(),
+    /** All tiles ever seen (visible ∪ previously visible). Used for the "explored" dim tier. */
+    val exploredTiles: Set<Pair<Int, Int>> = emptySet(),
+    /** 1-tile ring just outside visibleTiles — rendered as explored to soften the FOW edge. */
+    val perimeterTiles: Set<Pair<Int, Int>> = emptySet(),
 ) {
     companion object {
         val EMPTY = BattleUiState(emptyList(), TurnPhase.PlayerPhase, emptyList())
@@ -50,6 +66,7 @@ data class UnitUiState(
     val mana: ManaComponent,
     val conditions: Map<ConditionType, Int>,
     val spriteKey: String,
+    val stats: StatsComponent? = null,
 )
 
 data class SkillUiState(

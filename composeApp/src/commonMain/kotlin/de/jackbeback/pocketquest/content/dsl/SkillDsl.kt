@@ -28,6 +28,14 @@ class SkillTemplate(val id: String) {
     var animationType: AnimationType = AnimationType.INSTANT
     /** How many separate targets this skill can be applied to in one action (default 1). */
     var maxTargets: Int = 1
+    /**
+     * The attribute whose modifier is added to damage/heal rolls.
+     * Uses the D&D formula: floor((stat - 10) / 2), so 18 INT = +4, 8 STR = -1.
+     * Null means no attribute modifier is applied.
+     */
+    var attributeModifier: StatAttribute? = null
+    /** When true, cover damage reduction from terrain is applied to damage effects. */
+    var isRanged: Boolean = false
     val effects = mutableListOf<SkillEffect>()
 
     fun damage(dice: Dice, type: DamageType) { effects += SkillEffect.Damage(dice, type) }

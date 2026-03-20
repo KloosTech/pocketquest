@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.ecs.core.EntityId
 
 const val ANIM_DURATION_MS = 500L
 const val MOVE_ANIM_MS = 280L
+const val MELEE_ANIM_MS = 250L
 
 /**
  * A single visual event to be played by the battle UI.
@@ -45,5 +46,11 @@ sealed class AnimationEvent {
         val fromNormY: Float,
         val toNormX: Float,
         val toNormY: Float,
+    ) : AnimationEvent()
+
+    /** "Miss!" text floating up at the target's position when a hit roll fails. */
+    data class FloatingMiss(
+        val x: Float,
+        val y: Float,
     ) : AnimationEvent()
 }

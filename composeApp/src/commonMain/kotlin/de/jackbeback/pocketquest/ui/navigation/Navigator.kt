@@ -10,12 +10,15 @@ data class BattleParams(
     val eventId: String,
     /** Enemy templates to spawn in the battle arena. */
     val enemies: List<UnitTemplate>,
+    /** Optional map id to load terrain data from. Null means no terrain effects. */
+    val mapId: String? = null,
 )
 
 sealed class Screen {
     object CharacterSelect : Screen()
     object Overworld : Screen()
     object Battle : Screen()
+    object Character : Screen()
 }
 
 class Navigator {
@@ -43,5 +46,9 @@ class Navigator {
     fun returnToOverworld() {
         currentBattle = null
         _screen.value = Screen.Overworld
+    }
+
+    fun goToCharacter() {
+        _screen.value = Screen.Character
     }
 }

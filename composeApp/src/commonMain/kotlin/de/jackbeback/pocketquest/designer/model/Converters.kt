@@ -5,6 +5,7 @@ import de.jackbeback.pocketquest.content.dsl.AnimationType
 import de.jackbeback.pocketquest.content.dsl.Dice
 import de.jackbeback.pocketquest.content.dsl.SkillEffect
 import de.jackbeback.pocketquest.content.dsl.SkillTemplate
+import de.jackbeback.pocketquest.content.dsl.StatAttribute
 import de.jackbeback.pocketquest.content.dsl.UnitTemplate
 import de.jackbeback.pocketquest.ecs.components.combat.ConditionType
 import de.jackbeback.pocketquest.ecs.components.combat.DamageType
@@ -14,15 +15,17 @@ import de.jackbeback.pocketquest.ecs.components.core.Faction
 // ── SkillDefinition ↔ SkillTemplate ──────────────────────────────────────────
 
 fun SkillDefinition.toSkillTemplate(): SkillTemplate = SkillTemplate(id).also { t ->
-    t.name          = name
-    t.description   = description
-    t.manaCost      = manaCost
-    t.range         = range
-    t.needsTarget   = needsTarget
-    t.needsHitRoll  = needsHitRoll
-    t.spriteKey     = spriteKey
-    t.animationType = runCatching { AnimationType.valueOf(animationType) }.getOrDefault(AnimationType.INSTANT)
-    t.maxTargets    = maxTargets
+    t.name             = name
+    t.description      = description
+    t.manaCost         = manaCost
+    t.range            = range
+    t.needsTarget      = needsTarget
+    t.needsHitRoll     = needsHitRoll
+    t.spriteKey        = spriteKey
+    t.animationType    = runCatching { AnimationType.valueOf(animationType) }.getOrDefault(AnimationType.INSTANT)
+    t.maxTargets       = maxTargets
+    t.attributeModifier = runCatching { attributeModifier?.let { StatAttribute.valueOf(it) } }.getOrNull()
+    t.isRanged         = isRanged
     effects.forEach { dto ->
         when (dto.type) {
             "damage" -> {
@@ -39,17 +42,19 @@ fun SkillDefinition.toSkillTemplate(): SkillTemplate = SkillTemplate(id).also { 
 }
 
 fun SkillTemplate.toSkillDefinition(): SkillDefinition = SkillDefinition(
-    id           = id,
-    name         = name,
-    description  = description,
-    manaCost     = manaCost,
-    range        = range,
-    needsTarget  = needsTarget,
-    needsHitRoll = needsHitRoll,
-    spriteKey    = spriteKey,
-    animationType = animationType.name,
-    maxTargets   = maxTargets,
-    effects      = effects.map { effect ->
+    id                = id,
+    name              = name,
+    description       = description,
+    manaCost          = manaCost,
+    range             = range,
+    needsTarget       = needsTarget,
+    needsHitRoll      = needsHitRoll,
+    spriteKey         = spriteKey,
+    animationType     = animationType.name,
+    maxTargets        = maxTargets,
+    attributeModifier = attributeModifier?.name,
+    isRanged          = isRanged,
+    effects           = effects.map { effect ->
         when (effect) {
             is SkillEffect.Damage ->
                 EffectDto("damage", effect.dice.count, effect.dice.sides, effect.dice.bonus, effect.type.name)

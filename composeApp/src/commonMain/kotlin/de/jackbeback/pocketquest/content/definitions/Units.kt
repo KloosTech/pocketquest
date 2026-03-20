@@ -15,10 +15,10 @@ val wizardTemplate = unit("wizard") {
     health(max = 25)
     mana(max = 20, regen = 5)
     maxAp = 2
-    movesPerTurn = 1
-    moveRange = 3
+    movesPerTurn = 4
+    moveRange = 1
     initiative = 14
-    spawnCol = 2; spawnRow = 4
+    spawnCol = 1; spawnRow = 6
     skills("block", "magic_missile", "basic_heal", "thorn_whip", "fireball")
     mapId = "KaerMorhen"; mapX = 0.3; mapY = 0.4
 }
@@ -38,7 +38,7 @@ val gruntTemplate = unit("grunt") {
     initiative = 8
     aiStrategy = AIStrategy.Aggressive
     preferredSkillId = "basic_attack"
-    spawnCol = 11; spawnRow = 4
+    spawnCol = 7; spawnRow = 6
     skills("basic_attack")
     resistance(DamageType.FIRE, 0.5f)
     mapId = "KaerMorhen"; mapX = 0.6; mapY = 0.5
@@ -60,7 +60,7 @@ val veteranGruntTemplate = unit("veteran_grunt") {
     initiative = 10
     aiStrategy = AIStrategy.Aggressive
     preferredSkillId = "basic_attack"
-    spawnCol = 10; spawnRow = 3
+    spawnCol = 7; spawnRow = 4
     skills("basic_attack")
     resistance(DamageType.FIRE, 0.5f)
 }
@@ -84,7 +84,7 @@ val chieftainTemplate = unit("chieftain") {
     initiative = 12
     aiStrategy = AIStrategy.Aggressive
     preferredSkillId = "basic_attack"
-    spawnCol = 11; spawnRow = 4
+    spawnCol = 7; spawnRow = 6
     skills("basic_attack")
     resistance(DamageType.SLICING, 0.5f)
     resistance(DamageType.PIERCING, 0.5f)

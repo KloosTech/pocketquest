@@ -4,6 +4,7 @@ import de.jackbeback.pocketquest.content.dsl.AnimationType
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
 import de.jackbeback.pocketquest.ecs.components.combat.DamageEvent
 import de.jackbeback.pocketquest.ecs.components.combat.HealEvent
+import de.jackbeback.pocketquest.ecs.components.combat.MissEvent
 import de.jackbeback.pocketquest.ecs.components.combat.MoveEvent
 import de.jackbeback.pocketquest.ecs.components.combat.SkillUsedEvent
 import de.jackbeback.pocketquest.ecs.components.core.PositionComponent
@@ -22,7 +23,15 @@ class AnimationEventCollector(
     world: World,
     skillRegistry: SkillRegistry,
 ) {
+    /** Updated by BattleViewModel when the active TileMap changes. */
+    var gridCols: Int = BATTLE_COLS
+    var gridRows: Int = BATTLE_ROWS
+
     private val _events = mutableListOf<AnimationEvent>()
+
+    // Held until we know the attack hits (DamageEvent/HealEvent) or misses (MissEvent).
+    // This prevents the travel animation from playing when the hit roll fails.
+    private var pendingProjectile: AnimationEvent.ProjectileSkill? = null
 
     init {
         // Unit movement: registered BEFORE MovementSystem so pre-move position is still in world
@@ -37,13 +46,15 @@ class AnimationEventCollector(
             )
         }
 
-        // Projectile travel: only for skills that visually fly to the target
+        // Projectile travel: stored as pending — only committed to _events on a confirmed hit.
+        // If the hit roll fails, MissEvent discards the pending animation instead.
         world.events().on<SkillUsedEvent> { event ->
             val skill = skillRegistry.find(event.skillId) ?: return@on
-            if (skill.animationType != AnimationType.PROJECTILE) return@on
+            if (skill.animationType != AnimationType.PROJECTILE &&
+                skill.animationType != AnimationType.MELEE) return@on
             val fromPos = world.get<PositionComponent>(event.user) ?: return@on
             val toPos = world.get<PositionComponent>(event.target) ?: return@on
-            _events += AnimationEvent.ProjectileSkill(
+            pendingProjectile = AnimationEvent.ProjectileSkill(
                 fromX = gridToNormX(fromPos.col),
                 fromY = gridToNormY(fromPos.row),
                 toX = gridToNormX(toPos.col),
@@ -53,8 +64,10 @@ class AnimationEventCollector(
             )
         }
 
-        // Floating damage number at target position
+        // Floating damage number — flush the pending projectile first, then show the number
         world.events().on<DamageEvent> { event ->
+            pendingProjectile?.let { _events += it }
+            pendingProjectile = null
             val pos = world.get<PositionComponent>(event.target) ?: return@on
             _events += AnimationEvent.FloatingDamage(
                 x = gridToNormX(pos.col),
@@ -64,8 +77,10 @@ class AnimationEventCollector(
             )
         }
 
-        // Floating heal number at target position
+        // Floating heal number — flush the pending projectile first, then show the number
         world.events().on<HealEvent> { event ->
+            pendingProjectile?.let { _events += it }
+            pendingProjectile = null
             val pos = world.get<PositionComponent>(event.target) ?: return@on
             _events += AnimationEvent.FloatingHeal(
                 x = gridToNormX(pos.col),
@@ -73,11 +88,24 @@ class AnimationEventCollector(
                 amount = event.amount,
             )
         }
+
+        // Attack missed: discard the pending projectile and show "Miss!" at the target
+        world.events().on<MissEvent> { event ->
+            pendingProjectile = null
+            val pos = world.get<PositionComponent>(event.target) ?: return@on
+            _events += AnimationEvent.FloatingMiss(
+                x = gridToNormX(pos.col),
+                y = gridToNormY(pos.row),
+            )
+        }
     }
 
     /** Returns all collected events and clears the internal list. */
-    fun drain(): List<AnimationEvent> = _events.toList().also { _events.clear() }
+    fun drain(): List<AnimationEvent> {
+        pendingProjectile = null
+        return _events.toList().also { _events.clear() }
+    }
 
-    private fun gridToNormX(col: Int): Float = (col + 0.5f) / BATTLE_COLS
-    private fun gridToNormY(row: Int): Float = (row + 0.5f) / BATTLE_ROWS
+    private fun gridToNormX(col: Int): Float = (col + 0.5f) / gridCols
+    private fun gridToNormY(row: Int): Float = (row + 0.5f) / gridRows
 }

@@ -3,6 +3,8 @@ package de.jackbeback.pocketquest.game.battle
 import androidx.compose.ui.graphics.ImageBitmap
 import de.jackbeback.pocketquest.content.map.MapConfig
 import de.jackbeback.pocketquest.util.toImageBitmap
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -33,15 +35,18 @@ class BattleTileCache(private val config: MapConfig) {
     @OptIn(ExperimentalResourceApi::class)
     private fun loadAll() {
         scope.launch {
-            val result = HashMap<Pair<Int, Int>, ImageBitmap>(config.colCount * config.rowCount)
-            for (r in 0 until config.rowCount) {
-                for (c in 0 until config.colCount) {
-                    runCatching {
-                        val bytes = Res.readBytes("files/tiles/${config.id}/$c-$r.png")
-                        result[Pair(c, r)] = bytes.toImageBitmap()
+            val result = (0 until config.rowCount).flatMap { r ->
+                (0 until config.colCount).map { c ->
+                    async {
+                        runCatching {
+                            val bytes = Res.readBytes("files/tiles/${config.id}/$c-$r.png")
+                            Pair(c, r) to bytes.toImageBitmap()
+                        }.getOrNull()
                     }
                 }
-            }
+            }.awaitAll()
+                .filterNotNull()
+                .toMap()
             _tiles.value = result
         }
     }
