@@ -18,6 +18,27 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.content.definitions.allRelics
+import de.jackbeback.pocketquest.ui.relicLocalizedDescription
+import de.jackbeback.pocketquest.ui.relicLocalizedName
+import de.jackbeback.pocketquest.ui.skillLocalizedDescription
+import de.jackbeback.pocketquest.ui.skillLocalizedName
+import org.jetbrains.compose.resources.stringResource
+import pocketquest.composeapp.generated.resources.Res
+import pocketquest.composeapp.generated.resources.btn_back
+import pocketquest.composeapp.generated.resources.character_ac_label
+import pocketquest.composeapp.generated.resources.character_level
+import pocketquest.composeapp.generated.resources.character_mp_cost
+import pocketquest.composeapp.generated.resources.character_no_active_run
+import pocketquest.composeapp.generated.resources.character_points_to_spend_one
+import pocketquest.composeapp.generated.resources.character_points_to_spend_other
+import pocketquest.composeapp.generated.resources.character_screen_title
+import pocketquest.composeapp.generated.resources.character_stat_fraction
+import pocketquest.composeapp.generated.resources.label_attributes
+import pocketquest.composeapp.generated.resources.label_hp
+import pocketquest.composeapp.generated.resources.label_mp
+import pocketquest.composeapp.generated.resources.label_relics
+import pocketquest.composeapp.generated.resources.label_skills
+import pocketquest.composeapp.generated.resources.label_xp
 
 // ── Colour palette ────────────────────────────────────────────────────────────
 private val ColorBg      = Color(0xFF0d1117)
@@ -52,10 +73,10 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
             TextButton(onClick = { viewModel.goBack() }) {
-                Text("← Back", color = ColorBlue, fontSize = 14.sp)
+                Text(stringResource(Res.string.btn_back), color = ColorBlue, fontSize = 14.sp)
             }
             Text(
-                text = "Character",
+                text = stringResource(Res.string.character_screen_title),
                 color = ColorText,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold,
@@ -65,7 +86,7 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
 
         if (state == null) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No active run.", color = ColorSubtext)
+                Text(stringResource(Res.string.character_no_active_run), color = ColorSubtext)
             }
             return@Column
         }
@@ -86,11 +107,15 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
                 ) {
                     Column {
                         Text(state.name, color = ColorText, fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
-                        Text("Level ${state.level}", color = ColorGold, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        Text(stringResource(Res.string.character_level, state.level), color = ColorGold, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                     }
                     if (state.unspentPoints > 0) {
+                        val pointsText = if (state.unspentPoints == 1)
+                            stringResource(Res.string.character_points_to_spend_one, state.unspentPoints)
+                        else
+                            stringResource(Res.string.character_points_to_spend_other, state.unspentPoints)
                         Text(
-                            text = "${state.unspentPoints} point${if (state.unspentPoints > 1) "s" else ""} to spend",
+                            text = pointsText,
                             color = ColorGold,
                             fontSize = 11.sp,
                             fontWeight = FontWeight.SemiBold,
@@ -105,28 +130,28 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
                 // XP bar
                 val xpRatio = state.exp.toFloat() / state.expToNextLevel.toFloat().coerceAtLeast(1f)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("XP", color = ColorSubtext, fontSize = 11.sp, modifier = Modifier.width(24.dp))
+                    Text(stringResource(Res.string.label_xp), color = ColorSubtext, fontSize = 11.sp, modifier = Modifier.width(24.dp))
                     LinearProgressIndicator(
                         progress = { xpRatio },
                         modifier = Modifier.weight(1f).height(6.dp),
                         color = ColorGold,
                         trackColor = Color(0xFF21262d),
                     )
-                    Text("${state.exp}/${state.expToNextLevel}", color = ColorSubtext, fontSize = 11.sp)
+                    Text(stringResource(Res.string.character_stat_fraction, state.exp, state.expToNextLevel), color = ColorSubtext, fontSize = 11.sp)
                 }
                 Spacer(Modifier.height(4.dp))
 
                 // HP bar
                 val hpRatio = state.hp.current.toFloat() / state.hp.max.toFloat().coerceAtLeast(1f)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("HP", color = ColorSubtext, fontSize = 11.sp, modifier = Modifier.width(24.dp))
+                    Text(stringResource(Res.string.label_hp), color = ColorSubtext, fontSize = 11.sp, modifier = Modifier.width(24.dp))
                     LinearProgressIndicator(
                         progress = { hpRatio },
                         modifier = Modifier.weight(1f).height(6.dp),
                         color = ColorGreen,
                         trackColor = ColorHpBg,
                     )
-                    Text("${state.hp.current}/${state.hp.max}", color = ColorSubtext, fontSize = 11.sp)
+                    Text(stringResource(Res.string.character_stat_fraction, state.hp.current, state.hp.max), color = ColorSubtext, fontSize = 11.sp)
                 }
 
                 // Mana bar
@@ -134,24 +159,24 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
                     Spacer(Modifier.height(4.dp))
                     val manaRatio = state.mana.current.toFloat() / state.mana.max.toFloat().coerceAtLeast(1f)
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("MP", color = ColorSubtext, fontSize = 11.sp, modifier = Modifier.width(24.dp))
+                        Text(stringResource(Res.string.label_mp), color = ColorSubtext, fontSize = 11.sp, modifier = Modifier.width(24.dp))
                         LinearProgressIndicator(
                             progress = { manaRatio },
                             modifier = Modifier.weight(1f).height(6.dp),
                             color = ColorBlue,
                             trackColor = ColorManaBg,
                         )
-                        Text("${state.mana.current}/${state.mana.max}", color = ColorSubtext, fontSize = 11.sp)
+                        Text(stringResource(Res.string.character_stat_fraction, state.mana.current, state.mana.max), color = ColorSubtext, fontSize = 11.sp)
                     }
                 }
 
                 Spacer(Modifier.height(4.dp))
-                Text("AC  ${state.ac}", color = ColorSubtext, fontSize = 11.sp)
+                Text(stringResource(Res.string.character_ac_label, state.ac), color = ColorSubtext, fontSize = 11.sp)
             }
 
             // ── Attributes ────────────────────────────────────────────────
             SectionCard {
-                SectionTitle("Attributes")
+                SectionTitle(stringResource(Res.string.label_attributes))
                 Spacer(Modifier.height(8.dp))
                 state.attributes.forEach { attr ->
                     AttributeRow(
@@ -165,7 +190,7 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
             // ── Skills ────────────────────────────────────────────────────
             if (state.skills.isNotEmpty()) {
                 SectionCard {
-                    SectionTitle("Skills")
+                    SectionTitle(stringResource(Res.string.label_skills))
                     Spacer(Modifier.height(8.dp))
                     state.skills.forEach { skill ->
                         SkillRow(skill)
@@ -184,7 +209,7 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
             val heldRelics = allRelics.filter { it.id in state.relics }
             if (heldRelics.isNotEmpty()) {
                 SectionCard {
-                    SectionTitle("Relics")
+                    SectionTitle(stringResource(Res.string.label_relics))
                     Spacer(Modifier.height(8.dp))
                     heldRelics.forEach { relic ->
                         Row(
@@ -196,8 +221,8 @@ fun CharacterScreen(viewModel: CharacterViewModel) {
                         ) {
                             Text(relicIcon(relic.id), fontSize = 18.sp)
                             Column {
-                                Text(relic.name, color = ColorGold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
-                                Text(relic.description, color = ColorSubtext, fontSize = 11.sp)
+                                Text(relicLocalizedName(relic.id), color = ColorGold, fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+                                Text(relicLocalizedDescription(relic.id), color = ColorSubtext, fontSize = 11.sp)
                             }
                         }
                     }
@@ -282,10 +307,10 @@ private fun SkillRow(skill: SkillCharacterUiState) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                Text(skill.name, color = ColorText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                Text(skillLocalizedName(skill.id), color = ColorText, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 if (skill.manaCost > 0) {
                     Text(
-                        "${skill.manaCost} MP",
+                        stringResource(Res.string.character_mp_cost, skill.manaCost),
                         color = ColorBlue,
                         fontSize = 10.sp,
                         modifier = Modifier
@@ -294,8 +319,9 @@ private fun SkillRow(skill: SkillCharacterUiState) {
                     )
                 }
             }
-            if (skill.description.isNotBlank()) {
-                Text(skill.description, color = ColorSubtext, fontSize = 11.sp)
+            val localizedDesc = skillLocalizedDescription(skill.id)
+            if (localizedDesc.isNotBlank()) {
+                Text(localizedDesc, color = ColorSubtext, fontSize = 11.sp)
             }
             if (skill.diceDescription.isNotBlank()) {
                 Text(skill.diceDescription, color = Color(0xFF8b949e), fontSize = 10.sp)

@@ -61,8 +61,35 @@ import de.jackbeback.pocketquest.game.loop.TurnPhase
 import de.jackbeback.pocketquest.ui.component.ConditionBadges
 import de.jackbeback.pocketquest.ui.component.HintOverlay
 import de.jackbeback.pocketquest.ui.component.SkillPanel
+import de.jackbeback.pocketquest.ui.relicLocalizedDescription
+import de.jackbeback.pocketquest.ui.relicLocalizedName
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.stringResource
+import pocketquest.composeapp.generated.resources.Res
+import pocketquest.composeapp.generated.resources.battle_cast
+import pocketquest.composeapp.generated.resources.battle_choose_relic
+import pocketquest.composeapp.generated.resources.battle_defeated
+import pocketquest.composeapp.generated.resources.battle_enemies_defeated
+import pocketquest.composeapp.generated.resources.battle_enemy_turn
+import pocketquest.composeapp.generated.resources.battle_environment
+import pocketquest.composeapp.generated.resources.battle_hint_cast_spell
+import pocketquest.composeapp.generated.resources.battle_hint_end_turn
+import pocketquest.composeapp.generated.resources.battle_hint_move_or_cast
+import pocketquest.composeapp.generated.resources.battle_hint_moves_left
+import pocketquest.composeapp.generated.resources.battle_level_up
+import pocketquest.composeapp.generated.resources.battle_mana_status
+import pocketquest.composeapp.generated.resources.battle_select_skill
+import pocketquest.composeapp.generated.resources.battle_tap_target
+import pocketquest.composeapp.generated.resources.battle_victory
+import pocketquest.composeapp.generated.resources.battle_xp_earned
+import pocketquest.composeapp.generated.resources.battle_your_turn
+import pocketquest.composeapp.generated.resources.btn_cancel
+import pocketquest.composeapp.generated.resources.btn_continue
+import pocketquest.composeapp.generated.resources.btn_end_turn
+import pocketquest.composeapp.generated.resources.btn_execute
+import pocketquest.composeapp.generated.resources.btn_move
+import pocketquest.composeapp.generated.resources.btn_try_again
 
 // ── Colour palette ───────────────────────────────────────────────────────────
 private val ColorBg          = Color(0xFF0d1117)
@@ -267,9 +294,14 @@ fun BattleScreen(
                 Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.65f)),
                 contentAlignment = Alignment.Center,
             ) {
+                val bannerText = when (phaseBanner) {
+                    TurnPhase.EnemyPhase  -> stringResource(Res.string.battle_enemy_turn)
+                    TurnPhase.PlayerPhase -> stringResource(Res.string.battle_your_turn)
+                    else                  -> ""
+                }
                 Text(
-                    text = phaseBanner ?: "",
-                    color = if (phaseBanner == "Enemy Turn") ColorEnemy else ColorPlayer,
+                    text = bannerText,
+                    color = if (phaseBanner == TurnPhase.EnemyPhase) ColorEnemy else ColorPlayer,
                     fontSize = 36.sp,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 2.sp,
@@ -314,7 +346,7 @@ fun BattleScreen(
             },
         ) {
             Text(
-                text = "Select a Skill",
+                text = stringResource(Res.string.battle_select_skill),
                 color = Color(0xFFc9d1d9),
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -340,9 +372,9 @@ fun BattleScreen(
 @Composable
 private fun PhaseBar(state: BattleUiState) {
     val (label, color) = when (state.turnPhase) {
-        TurnPhase.PlayerPhase    -> "Your Turn" to ColorPlayer
-        TurnPhase.EnemyPhase     -> "Enemy Turn" to ColorEnemy
-        TurnPhase.EnvironmentPhase -> "Environment" to Color(0xFF8b949e)
+        TurnPhase.PlayerPhase      -> stringResource(Res.string.battle_your_turn) to ColorPlayer
+        TurnPhase.EnemyPhase       -> stringResource(Res.string.battle_enemy_turn) to ColorEnemy
+        TurnPhase.EnvironmentPhase -> stringResource(Res.string.battle_environment) to Color(0xFF8b949e)
     }
     Row(
         modifier = Modifier
@@ -370,7 +402,7 @@ private fun MoveDots(remaining: Int, max: Int) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Move", color = if (remaining > 0) ColorPlayer else Color(0xFF484f58), fontSize = 11.sp, fontWeight = FontWeight.Medium)
+        Text(stringResource(Res.string.btn_move), color = if (remaining > 0) ColorPlayer else Color(0xFF484f58), fontSize = 11.sp, fontWeight = FontWeight.Medium)
         Spacer(Modifier.width(2.dp))
         for (i in 0 until max) {
             val filled = i < remaining
@@ -393,7 +425,7 @@ private fun ManaChip(mana: de.jackbeback.pocketquest.ecs.components.core.ManaCom
     val bg = if (empty) Color(0xFF21262d) else Color(0xFF1f2d3d)
     val fg = if (empty) Color(0xFF484f58) else Color(0xFF388bfd)
     Text(
-        text = "${mana.current}/${mana.max} MP",
+        text = stringResource(Res.string.battle_mana_status, mana.current, mana.max),
         color = fg,
         fontSize = 11.sp,
         fontWeight = FontWeight.Medium,
@@ -923,7 +955,7 @@ private fun UnitStatusCard(
                 modifier = Modifier.fillMaxWidth().height(4.dp),
                 color = Color(0xFF388bfd), trackColor = Color(0xFF1f2d3d),
             )
-            Text("${unit.mana.current}/${unit.mana.max} MP", color = Color(0xFF8b949e), fontSize = 10.sp)
+            Text(stringResource(Res.string.battle_mana_status, unit.mana.current, unit.mana.max), color = Color(0xFF8b949e), fontSize = 10.sp)
         }
         if (unit.conditions.isNotEmpty()) {
             Spacer(Modifier.height(4.dp))
@@ -1023,11 +1055,11 @@ private fun TargetingBar(
                     ),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
                 ) {
-                    Text("Execute", fontSize = 12.sp)
+                    Text(stringResource(Res.string.btn_execute), fontSize = 12.sp)
                 }
             } else if (!isMulti) {
                 Text(
-                    text = "Tap a target",
+                    text = stringResource(Res.string.battle_tap_target),
                     color = Color(0xFF8b949e),
                     fontSize = 11.sp,
                 )
@@ -1039,7 +1071,7 @@ private fun TargetingBar(
                 colors = ButtonDefaults.textButtonColors(contentColor = Color(0xFFf85149)),
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
             ) {
-                Text("Cancel", fontSize = 12.sp)
+                Text(stringResource(Res.string.btn_cancel), fontSize = 12.sp)
             }
         }
     }
@@ -1074,16 +1106,16 @@ private fun ActionBar(
                 disabledContentColor = Color(0xFF484f58),
             ),
         ) {
-            Text("Cast")
+            Text(stringResource(Res.string.battle_cast))
         }
 
         val hint = when {
-            isLocked                               -> "…"
-            phase != TurnPhase.PlayerPhase         -> ""
-            playerMana.current > 0 && movesRemaining > 0 -> "Move or cast a spell"
-            playerMana.current > 0                 -> "Cast a spell (${playerMana.current} MP)"
-            movesRemaining > 0                     -> "${movesRemaining} move(s) left — no mana"
-            else                                   -> "End your turn"
+            isLocked                                      -> "…"
+            phase != TurnPhase.PlayerPhase                -> ""
+            playerMana.current > 0 && movesRemaining > 0 -> stringResource(Res.string.battle_hint_move_or_cast)
+            playerMana.current > 0                        -> stringResource(Res.string.battle_hint_cast_spell, playerMana.current)
+            movesRemaining > 0                            -> stringResource(Res.string.battle_hint_moves_left, movesRemaining)
+            else                                          -> stringResource(Res.string.battle_hint_end_turn)
         }
         Text(hint, color = Color(0xFF484f58), fontSize = 11.sp, modifier = Modifier.weight(1f))
 
@@ -1092,7 +1124,7 @@ private fun ActionBar(
             enabled = phase == TurnPhase.PlayerPhase && !isLocked,
             colors  = ButtonDefaults.buttonColors(containerColor = Color(0xFF238636), contentColor = Color.White),
         ) {
-            Text("End Turn")
+            Text(stringResource(Res.string.btn_end_turn))
         }
     }
 }
@@ -1170,7 +1202,7 @@ private fun BattleResultOverlay(
     onContinue: () -> Unit,
 ) {
     val accentColor = if (result.victory) ColorHpBar else ColorEnemy
-    val titleText   = if (result.victory) "Victory!" else "Defeated"
+    val titleText   = if (result.victory) stringResource(Res.string.battle_victory) else stringResource(Res.string.battle_defeated)
     var selectedRelicId by remember { mutableStateOf<String?>(null) }
 
     Box(
@@ -1202,19 +1234,19 @@ private fun BattleResultOverlay(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("Enemies defeated", color = Color(0xFF8b949e), fontSize = 13.sp)
+                    Text(stringResource(Res.string.battle_enemies_defeated), color = Color(0xFF8b949e), fontSize = 13.sp)
                     Text("${result.enemiesDefeated}", color = Color(0xFFc9d1d9), fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
                 ) {
-                    Text("XP earned", color = Color(0xFF8b949e), fontSize = 13.sp)
+                    Text(stringResource(Res.string.battle_xp_earned), color = Color(0xFF8b949e), fontSize = 13.sp)
                     Text("+${result.xpEarned}", color = Color(0xFFd29922), fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 }
                 if (result.leveledUp) {
                     Text(
-                        text = "Level Up!  →  Lv ${result.newLevel}",
+                        text = stringResource(Res.string.battle_level_up, result.newLevel),
                         color = Color(0xFFd29922),
                         fontSize = 15.sp,
                         fontWeight = FontWeight.ExtraBold,
@@ -1228,7 +1260,7 @@ private fun BattleResultOverlay(
                 if (result.relicCandidates.isNotEmpty()) {
                     HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
                     Text(
-                        "Choose a Relic",
+                        stringResource(Res.string.battle_choose_relic),
                         color = Color(0xFFc9d1d9),
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold,
@@ -1261,7 +1293,11 @@ private fun BattleResultOverlay(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(8.dp),
             ) {
-                Text(if (result.victory) "Continue" else "Try Again", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                Text(
+                    if (result.victory) stringResource(Res.string.btn_continue) else stringResource(Res.string.btn_try_again),
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
         }
     }
@@ -1290,7 +1326,7 @@ private fun RelicCard(
             fontSize = 22.sp,
         )
         Text(
-            text = relic.name,
+            text = relicLocalizedName(relic.id),
             color = if (selected) ColorRelicSelected else Color(0xFFc9d1d9),
             fontSize = 10.sp,
             fontWeight = FontWeight.SemiBold,
@@ -1298,7 +1334,7 @@ private fun RelicCard(
             maxLines = 2,
         )
         Text(
-            text = relic.description,
+            text = relicLocalizedDescription(relic.id),
             color = Color(0xFF8b949e),
             fontSize = 9.sp,
             textAlign = TextAlign.Center,

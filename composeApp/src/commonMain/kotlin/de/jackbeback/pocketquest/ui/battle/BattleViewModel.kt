@@ -108,8 +108,8 @@ class BattleViewModel(
     private val _animationEvent = MutableStateFlow<AnimationEvent?>(null)
     val animationEvent: StateFlow<AnimationEvent?> = _animationEvent
 
-    private val _phaseBanner = MutableStateFlow<String?>(null)
-    val phaseBanner: StateFlow<String?> = _phaseBanner
+    private val _phaseBanner = MutableStateFlow<TurnPhase?>(null)
+    val phaseBanner: StateFlow<TurnPhase?> = _phaseBanner
 
     private val _isLocked = MutableStateFlow(false)
     val isLocked: StateFlow<Boolean> = _isLocked
@@ -294,7 +294,7 @@ class BattleViewModel(
         _isLocked.value = true
 
         scope.launch {
-            _phaseBanner.value = "Enemy Turn"
+            _phaseBanner.value = TurnPhase.EnemyPhase
             delay(700L)
             _phaseBanner.value = null
 
@@ -313,7 +313,7 @@ class BattleViewModel(
                 return@launch
             }
 
-            _phaseBanner.value = "Your Turn"
+            _phaseBanner.value = TurnPhase.PlayerPhase
             delay(500L)
             _phaseBanner.value = null
 

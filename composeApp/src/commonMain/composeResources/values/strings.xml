@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ── App ──────────────────────────────────────────────────────────── -->
+    <string name="app_name">PocketQuest</string>
+
+    <!-- ── Common labels ────────────────────────────────────────────────── -->
+    <string name="label_hp">HP</string>
+    <string name="label_mp">MP</string>
+    <string name="label_ac">AC</string>
+    <string name="label_xp">XP</string>
+    <string name="label_str">STR</string>
+    <string name="label_dex">DEX</string>
+    <string name="label_con">CON</string>
+    <string name="label_int">INT</string>
+    <string name="label_wis">WIS</string>
+    <string name="label_cha">CHA</string>
+    <string name="label_level">Level</string>
+    <string name="label_encounters">Encounters</string>
+    <string name="label_relics">Relics</string>
+    <string name="label_skills">Skills</string>
+    <string name="label_attributes">Attributes</string>
+
+    <!-- ── Buttons ───────────────────────────────────────────────────────── -->
+    <string name="btn_back">← Back</string>
+    <string name="btn_rest">Rest</string>
+    <string name="btn_leave">Leave</string>
+    <string name="btn_continue">Continue</string>
+    <string name="btn_try_again">Try Again</string>
+    <string name="btn_end_turn">End Turn</string>
+    <string name="btn_cancel">Cancel</string>
+    <string name="btn_begin_run">Begin Run</string>
+    <string name="btn_next_area">Next Area  →</string>
+    <string name="btn_end_run">End Run</string>
+    <string name="btn_understood">Got it!</string>
+    <string name="btn_execute">Execute</string>
+    <string name="btn_move">Move</string>
+
+    <!-- ── CharacterSelectScreen ─────────────────────────────────────────── -->
+    <string name="character_select_title">Select Your Character</string>
+
+    <!-- ── CharacterScreen ───────────────────────────────────────────────── -->
+    <string name="character_screen_title">Character</string>
+    <string name="character_no_active_run">No active run.</string>
+    <string name="character_level">Level %1$d</string>
+    <string name="character_points_to_spend_one">%1$d point to spend</string>
+    <string name="character_points_to_spend_other">%1$d points to spend</string>
+    <string name="character_ac_label">AC  %1$d</string>
+    <string name="character_stat_fraction">%1$d/%2$d</string>
+    <string name="character_mp_cost">%1$d MP</string>
+
+    <!-- ── BattleScreen ──────────────────────────────────────────────────── -->
+    <string name="battle_select_skill">Select a Skill</string>
+    <string name="battle_your_turn">Your Turn</string>
+    <string name="battle_enemy_turn">Enemy Turn</string>
+    <string name="battle_environment">Environment</string>
+    <string name="battle_tap_target">Tap a target</string>
+    <string name="battle_cast">Cast</string>
+    <string name="battle_enemies_defeated">Enemies defeated</string>
+    <string name="battle_xp_earned">XP earned</string>
+    <string name="battle_level_up">Level Up!  →  Lv %1$d</string>
+    <string name="battle_choose_relic">Choose a Relic</string>
+    <string name="battle_victory">Victory!</string>
+    <string name="battle_defeated">Defeated</string>
+    <string name="battle_mana_status">%1$d/%2$d MP</string>
+    <string name="battle_hint_move_or_cast">Move or cast a spell</string>
+    <string name="battle_hint_cast_spell">Cast a spell (%1$d MP)</string>
+    <string name="battle_hint_moves_left">%1$d move(s) left — no mana</string>
+    <string name="battle_hint_end_turn">End your turn</string>
+
+    <!-- ── SkillPanel ────────────────────────────────────────────────────── -->
+    <string name="skill_mana_cost">%1$dMP</string>
+    <string name="skill_mana_free">Free</string>
+    <string name="skill_range">R:%1$d</string>
+
+    <!-- ── OverworldScreen ───────────────────────────────────────────────── -->
+    <string name="overworld_stats_button">👤 Stats</string>
+    <string name="overworld_rest_prompt">Rest here to restore %1$d%% HP?\n(%2$d → %3$d / %4$d)</string>
+    <string name="overworld_encounter_label">#%1$d</string>
+    <string name="overworld_events_remaining">%1$d left</string>
+    <string name="overworld_area_cleared">☠  Area %1$d Cleared!</string>
+    <string name="overworld_map_clear">The map is clear. Press on.</string>
+    <string name="overworld_level_label">Lv %1$d</string>
+
+    <!-- ── Skill names ───────────────────────────────────────────────────── -->
+    <string name="skill_name_magic_missile">Magic Missile</string>
+    <string name="skill_name_basic_heal">Basic Heal</string>
+    <string name="skill_name_thorn_whip">Thorn Whip</string>
+    <string name="skill_name_fireball">Fireball</string>
+    <string name="skill_name_basic_attack">Attack</string>
+    <string name="skill_name_block">Block</string>
+
+    <!-- ── Skill descriptions ────────────────────────────────────────────── -->
+    <string name="skill_desc_magic_missile">Three magic bolts hit up to 3 targets. INT bonus. Always hits.</string>
+    <string name="skill_desc_basic_heal">Heal yourself with WIS bonus. Costs 2 mana.</string>
+    <string name="skill_desc_thorn_whip">Melee attack that applies Poison. INT bonus.</string>
+    <string name="skill_desc_fireball">Fire strike with INT bonus. Sets target on fire (×4 stacks).</string>
+    <string name="skill_desc_basic_attack">Simple melee attack with hit check. STR bonus.</string>
+    <string name="skill_desc_block">Gain 3 Block stacks. Each stack absorbs 1 damage.</string>
+
+    <!-- ── Relic names ───────────────────────────────────────────────────── -->
+    <string name="relic_name_ancient_tome">Ancient Tome</string>
+    <string name="relic_name_iron_will">Iron Will</string>
+    <string name="relic_name_war_trophy">War Trophy</string>
+    <string name="relic_name_mage_stone">Mage Stone</string>
+    <string name="relic_name_well_of_power">Well of Power</string>
+    <string name="relic_name_scholars_ring">Scholar\'s Ring</string>
+    <string name="relic_name_blood_pact">Blood Pact</string>
+    <string name="relic_name_arcane_focus">Arcane Focus</string>
+
+    <!-- ── Relic descriptions ────────────────────────────────────────────── -->
+    <string name="relic_desc_ancient_tome">+20 max HP</string>
+    <string name="relic_desc_iron_will">+40 max HP</string>
+    <string name="relic_desc_war_trophy">+30 max HP</string>
+    <string name="relic_desc_mage_stone">+2 max mana</string>
+    <string name="relic_desc_well_of_power">+4 max mana</string>
+    <string name="relic_desc_scholars_ring">Earn 1.5× XP</string>
+    <string name="relic_desc_blood_pact">Start each battle at full HP</string>
+    <string name="relic_desc_arcane_focus">Start each battle with full mana</string>
+
+    <!-- ── Unit names ────────────────────────────────────────────────────── -->
+    <string name="unit_name_wizard">Wizard</string>
+    <string name="unit_name_grunt">Grunt</string>
+    <string name="unit_name_veteran_grunt">Veteran Grunt</string>
+    <string name="unit_name_chieftain">Chieftain</string>
+
+    <!-- ── Hint titles ───────────────────────────────────────────────────── -->
+    <string name="hint_title_battle_intro">Battle Basics</string>
+    <string name="hint_title_skills">Skills &amp; Mana</string>
+    <string name="hint_title_conditions">Status Effects</string>
+    <string name="hint_title_overworld">The Map</string>
+    <string name="hint_title_rest">Rest Site</string>
+    <string name="hint_title_level_up">Level Up!</string>
+    <string name="hint_title_relic">Relic Found!</string>
+    <string name="hint_title_boss">Boss Enemy!</string>
+
+    <!-- ── Hint bodies ───────────────────────────────────────────────────── -->
+    <string name="hint_body_battle_intro">Blue tiles show your movement range. Choose a skill to mark targets. Tap \'End Turn\' when you\'re done.</string>
+    <string name="hint_body_skills">Skills cost mana. You regenerate 5 mana automatically each round. Greyed-out skills are too expensive right now.</string>
+    <string name="hint_body_conditions">🔥 Burn, ☠ Poison, and ❄ Chill deal damage each turn. 🛡 Block absorbs incoming hits. Multiple stacks amplify the effect.</string>
+    <string name="hint_body_overworld">Choose your path through the map. Reachable nodes light up. Rest sites let you recover HP between fights.</string>
+    <string name="hint_body_rest">You can rest here to recover some HP. You can also move on without resting — save your strength for later!</string>
+    <string name="hint_body_level_up">You gained a level and receive 2 attribute points. Visit the Character screen to increase STR, DEX, CON, INT, WIS, or CHA.</string>
+    <string name="hint_body_relic">Relics grant permanent bonuses for the rest of this run — from more HP to mana or XP bonuses. Each relic can only be held once.</string>
+    <string name="hint_body_boss">A powerful enemy awaits. Bosses have high HP, strong attacks, and scale with your progress. Go in well prepared!</string>
+</resources>

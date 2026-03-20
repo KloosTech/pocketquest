@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ── App ──────────────────────────────────────────────────────────── -->
+    <string name="app_name">PocketQuest</string>
+
+    <!-- ── Common labels ────────────────────────────────────────────────── -->
+    <string name="label_hp">LP</string>
+    <string name="label_mp">MP</string>
+    <string name="label_ac">RK</string>
+    <string name="label_xp">EP</string>
+    <string name="label_str">STR</string>
+    <string name="label_dex">GES</string>
+    <string name="label_con">KON</string>
+    <string name="label_int">INT</string>
+    <string name="label_wis">WEI</string>
+    <string name="label_cha">CHA</string>
+    <string name="label_level">Level</string>
+    <string name="label_encounters">Begegnungen</string>
+    <string name="label_relics">Relikte</string>
+    <string name="label_skills">Fähigkeiten</string>
+    <string name="label_attributes">Attribute</string>
+
+    <!-- ── Buttons ───────────────────────────────────────────────────────── -->
+    <string name="btn_back">← Zurück</string>
+    <string name="btn_rest">Rasten</string>
+    <string name="btn_leave">Weitergehen</string>
+    <string name="btn_continue">Weiter</string>
+    <string name="btn_try_again">Nochmal</string>
+    <string name="btn_end_turn">Zug beenden</string>
+    <string name="btn_cancel">Abbrechen</string>
+    <string name="btn_begin_run">Durchlauf starten</string>
+    <string name="btn_next_area">Nächstes Gebiet  →</string>
+    <string name="btn_end_run">Durchlauf beenden</string>
+    <string name="btn_understood">Verstanden!</string>
+    <string name="btn_execute">Ausführen</string>
+    <string name="btn_move">Bewegen</string>
+
+    <!-- ── CharacterSelectScreen ─────────────────────────────────────────── -->
+    <string name="character_select_title">Wähle deinen Charakter</string>
+
+    <!-- ── CharacterScreen ───────────────────────────────────────────────── -->
+    <string name="character_screen_title">Charakter</string>
+    <string name="character_no_active_run">Kein aktiver Durchlauf.</string>
+    <string name="character_level">Level %1$d</string>
+    <string name="character_points_to_spend_one">%1$d Punkt zu vergeben</string>
+    <string name="character_points_to_spend_other">%1$d Punkte zu vergeben</string>
+    <string name="character_ac_label">RK  %1$d</string>
+    <string name="character_stat_fraction">%1$d/%2$d</string>
+    <string name="character_mp_cost">%1$d MP</string>
+
+    <!-- ── BattleScreen ──────────────────────────────────────────────────── -->
+    <string name="battle_select_skill">Fähigkeit wählen</string>
+    <string name="battle_your_turn">Dein Zug</string>
+    <string name="battle_enemy_turn">Gegnerzug</string>
+    <string name="battle_environment">Umgebung</string>
+    <string name="battle_tap_target">Ziel antippen</string>
+    <string name="battle_cast">Wirken</string>
+    <string name="battle_enemies_defeated">Gegner besiegt</string>
+    <string name="battle_xp_earned">EP erhalten</string>
+    <string name="battle_level_up">Levelaufstieg!  →  Lv %1$d</string>
+    <string name="battle_choose_relic">Relikt wählen</string>
+    <string name="battle_victory">Sieg!</string>
+    <string name="battle_defeated">Niederlage</string>
+    <string name="battle_mana_status">%1$d/%2$d MP</string>
+    <string name="battle_hint_move_or_cast">Bewegen oder Zauber wirken</string>
+    <string name="battle_hint_cast_spell">Zauber wirken (%1$d MP)</string>
+    <string name="battle_hint_moves_left">%1$d Schritt(e) übrig — kein Mana</string>
+    <string name="battle_hint_end_turn">Zug beenden</string>
+
+    <!-- ── SkillPanel ────────────────────────────────────────────────────── -->
+    <string name="skill_mana_cost">%1$dMP</string>
+    <string name="skill_mana_free">Frei</string>
+    <string name="skill_range">R:%1$d</string>
+
+    <!-- ── OverworldScreen ───────────────────────────────────────────────── -->
+    <string name="overworld_stats_button">👤 Stats</string>
+    <string name="overworld_rest_prompt">Hier rasten und %1$d%% LP regenerieren?\n(%2$d → %3$d / %4$d)</string>
+    <string name="overworld_encounter_label">#%1$d</string>
+    <string name="overworld_events_remaining">%1$d übrig</string>
+    <string name="overworld_area_cleared">☠  Gebiet %1$d bezwungen!</string>
+    <string name="overworld_map_clear">Die Karte ist leer. Weiter geht\'s.</string>
+    <string name="overworld_level_label">Lv %1$d</string>
+
+    <!-- ── Skill names ───────────────────────────────────────────────────── -->
+    <string name="skill_name_magic_missile">Magisches Geschoss</string>
+    <string name="skill_name_basic_heal">Heilung</string>
+    <string name="skill_name_thorn_whip">Dornenpeitsche</string>
+    <string name="skill_name_fireball">Feuerball</string>
+    <string name="skill_name_basic_attack">Angriff</string>
+    <string name="skill_name_block">Blocken</string>
+
+    <!-- ── Skill descriptions ────────────────────────────────────────────── -->
+    <string name="skill_desc_magic_missile">Drei magische Geschosse treffen bis zu 3 Ziele. INT-Bonus. Trifft immer.</string>
+    <string name="skill_desc_basic_heal">Heile dich selbst mit WEI-Bonus. Kostet 2 Mana.</string>
+    <string name="skill_desc_thorn_whip">Nahkampfangriff der Gift aufträgt. INT-Bonus.</string>
+    <string name="skill_desc_fireball">Feuerschlag mit INT-Bonus. Setzt Ziel in Brand (×4 Stapel).</string>
+    <string name="skill_desc_basic_attack">Einfacher Nahkampfangriff mit Trefferprüfung. STR-Bonus.</string>
+    <string name="skill_desc_block">Erhalte 3 Stapel Block. Jeder Stapel absorbiert 1 Schadenspunkt.</string>
+
+    <!-- ── Relic names ───────────────────────────────────────────────────── -->
+    <string name="relic_name_ancient_tome">Altes Zauberbuch</string>
+    <string name="relic_name_iron_will">Eiserner Wille</string>
+    <string name="relic_name_war_trophy">Kriegstrophäe</string>
+    <string name="relic_name_mage_stone">Magierstein</string>
+    <string name="relic_name_well_of_power">Kraftquelle</string>
+    <string name="relic_name_scholars_ring">Gelehrtenring</string>
+    <string name="relic_name_blood_pact">Blutpakt</string>
+    <string name="relic_name_arcane_focus">Arkanfokus</string>
+
+    <!-- ── Relic descriptions ────────────────────────────────────────────── -->
+    <string name="relic_desc_ancient_tome">+20 maximale LP</string>
+    <string name="relic_desc_iron_will">+40 maximale LP</string>
+    <string name="relic_desc_war_trophy">+30 maximale LP</string>
+    <string name="relic_desc_mage_stone">+2 maximales Mana</string>
+    <string name="relic_desc_well_of_power">+4 maximales Mana</string>
+    <string name="relic_desc_scholars_ring">Erhalte 1,5× EP</string>
+    <string name="relic_desc_blood_pact">Starte jeden Kampf mit vollen LP</string>
+    <string name="relic_desc_arcane_focus">Starte jeden Kampf mit vollem Mana</string>
+
+    <!-- ── Unit names ────────────────────────────────────────────────────── -->
+    <string name="unit_name_wizard">Zauberer</string>
+    <string name="unit_name_grunt">Soldat</string>
+    <string name="unit_name_veteran_grunt">Veteran</string>
+    <string name="unit_name_chieftain">Häuptling</string>
+
+    <!-- ── Hint titles ───────────────────────────────────────────────────── -->
+    <string name="hint_title_battle_intro">Kampf-Grundlagen</string>
+    <string name="hint_title_skills">Fähigkeiten &amp; Mana</string>
+    <string name="hint_title_conditions">Statuseffekte</string>
+    <string name="hint_title_overworld">Die Karte</string>
+    <string name="hint_title_rest">Rastplatz</string>
+    <string name="hint_title_level_up">Levelaufstieg!</string>
+    <string name="hint_title_relic">Relikt gefunden!</string>
+    <string name="hint_title_boss">Bossgegner!</string>
+
+    <!-- ── Hint bodies ───────────────────────────────────────────────────── -->
+    <string name="hint_body_battle_intro">Blaue Felder zeigen deine Bewegungsreichweite. Wähle eine Fähigkeit, um Ziele zu markieren. Tippe auf \'Zug beenden\', wenn du fertig bist.</string>
+    <string name="hint_body_skills">Fähigkeiten kosten Mana. Du regenerierst jeden Zug automatisch 5 Mana. Ausgegrauete Fähigkeiten sind momentan zu teuer.</string>
+    <string name="hint_body_conditions">🔥 Verbrennung, ☠ Gift und ❄ Kälte verursachen jeden Zug Schaden. 🛡 Block absorbiert eingehende Treffer. Mehrere Stapel verstärken den Effekt.</string>
+    <string name="hint_body_overworld">Wähle deinen Weg durch die Karte. Erreichbare Knoten leuchten auf. Rastplätze erlauben es, LP zwischen den Kämpfen zu regenerieren.</string>
+    <string name="hint_body_rest">Hier kannst du rasten und einen Teil deiner LP regenerieren. Du kannst auch weitergehen ohne zu rasten — spare Kraft für später!</string>
+    <string name="hint_body_level_up">Du hast ein Level erreicht und erhältst 2 Attributpunkte. Besuche den Charakterbildschirm, um STR, GES, KON, INT, WEI oder CHA zu erhöhen.</string>
+    <string name="hint_body_relic">Relikte verleihen dauerhafte Boni für den Rest dieses Durchlaufs — von mehr LP bis hin zu mehr Mana oder EP-Boni. Jedes Relikt kann nur einmal gehalten werden.</string>
+    <string name="hint_body_boss">Ein mächtiger Feind erwartet dich. Bosse haben hohe LP, starke Angriffe und skalieren mit deinem Fortschritt. Geh gut vorbereitet in den Kampf!</string>
+</resources>

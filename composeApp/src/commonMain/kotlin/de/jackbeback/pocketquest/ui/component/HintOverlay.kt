@@ -15,6 +15,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.game.hint.HintDefinition
+import org.jetbrains.compose.resources.stringResource
+import pocketquest.composeapp.generated.resources.Res
+import pocketquest.composeapp.generated.resources.btn_understood
 
 private val ColorBackdrop  = Color(0xFF0d1117).copy(alpha = 0.80f)
 private val ColorCard      = Color(0xFF1c2128)
@@ -50,13 +53,13 @@ fun HintOverlay(
             horizontalAlignment = Alignment.Start,
         ) {
             Text(
-                text       = hint.title,
+                text       = stringResource(hint.titleRes),
                 color      = ColorTitle,
                 fontSize   = 16.sp,
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text     = hint.body,
+                text     = stringResource(hint.bodyRes),
                 color    = ColorBody,
                 fontSize = 13.sp,
                 lineHeight = 19.sp,
@@ -69,7 +72,7 @@ fun HintOverlay(
                 shape  = RoundedCornerShape(8.dp),
             ) {
                 Text(
-                    text     = "Verstanden!",
+                    text     = stringResource(Res.string.btn_understood),
                     fontSize = 13.sp,
                     color    = Color.White,
                     fontWeight = FontWeight.SemiBold,

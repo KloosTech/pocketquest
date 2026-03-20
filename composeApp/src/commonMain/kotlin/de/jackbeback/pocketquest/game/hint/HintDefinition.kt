@@ -1,51 +1,70 @@
 package de.jackbeback.pocketquest.game.hint
 
+import org.jetbrains.compose.resources.StringResource
+import pocketquest.composeapp.generated.resources.Res
+import pocketquest.composeapp.generated.resources.hint_body_battle_intro
+import pocketquest.composeapp.generated.resources.hint_body_boss
+import pocketquest.composeapp.generated.resources.hint_body_conditions
+import pocketquest.composeapp.generated.resources.hint_body_level_up
+import pocketquest.composeapp.generated.resources.hint_body_overworld
+import pocketquest.composeapp.generated.resources.hint_body_relic
+import pocketquest.composeapp.generated.resources.hint_body_rest
+import pocketquest.composeapp.generated.resources.hint_body_skills
+import pocketquest.composeapp.generated.resources.hint_title_battle_intro
+import pocketquest.composeapp.generated.resources.hint_title_boss
+import pocketquest.composeapp.generated.resources.hint_title_conditions
+import pocketquest.composeapp.generated.resources.hint_title_level_up
+import pocketquest.composeapp.generated.resources.hint_title_overworld
+import pocketquest.composeapp.generated.resources.hint_title_relic
+import pocketquest.composeapp.generated.resources.hint_title_rest
+import pocketquest.composeapp.generated.resources.hint_title_skills
+
 data class HintDefinition(
     val id: String,
-    val title: String,
-    val body: String,
+    val titleRes: StringResource,
+    val bodyRes: StringResource,
 )
 
 /** All in-game tutorial hints. Each is shown at most once (persisted in Room). */
 val allHints: List<HintDefinition> = listOf(
     HintDefinition(
-        id    = "hint_battle_intro",
-        title = "Kampf-Grundlagen",
-        body  = "Blaue Felder zeigen deine Bewegungsreichweite. Wähle eine Fähigkeit, um Ziele zu markieren. Tippe auf 'Zug beenden', wenn du fertig bist.",
+        id       = "hint_battle_intro",
+        titleRes = Res.string.hint_title_battle_intro,
+        bodyRes  = Res.string.hint_body_battle_intro,
     ),
     HintDefinition(
-        id    = "hint_skills",
-        title = "Fähigkeiten & Mana",
-        body  = "Fähigkeiten kosten Mana. Du regenerierst jeden Zug automatisch 5 Mana. Ausgegrauete Fähigkeiten sind momentan zu teuer.",
+        id       = "hint_skills",
+        titleRes = Res.string.hint_title_skills,
+        bodyRes  = Res.string.hint_body_skills,
     ),
     HintDefinition(
-        id    = "hint_conditions",
-        title = "Statuseffekte",
-        body  = "🔥 Verbrennung, ☠ Gift und ❄ Kälte verursachen jeden Zug Schaden. 🛡 Block absorbiert eingehende Treffer. Mehrere Stapel verstärken den Effekt.",
+        id       = "hint_conditions",
+        titleRes = Res.string.hint_title_conditions,
+        bodyRes  = Res.string.hint_body_conditions,
     ),
     HintDefinition(
-        id    = "hint_overworld",
-        title = "Die Karte",
-        body  = "Wähle deinen Weg durch die Karte. Erreichbare Knoten leuchten auf. Rastplätze erlauben es, HP zwischen den Kämpfen zu regenerieren.",
+        id       = "hint_overworld",
+        titleRes = Res.string.hint_title_overworld,
+        bodyRes  = Res.string.hint_body_overworld,
     ),
     HintDefinition(
-        id    = "hint_rest",
-        title = "Rastplatz",
-        body  = "Hier kannst du rasten und einen Teil deiner HP regenerieren. Du kannst auch weitergehen ohne zu rasten — spare Kraft für später!",
+        id       = "hint_rest",
+        titleRes = Res.string.hint_title_rest,
+        bodyRes  = Res.string.hint_body_rest,
     ),
     HintDefinition(
-        id    = "hint_level_up",
-        title = "Levelaufstieg!",
-        body  = "Du hast ein Level erreicht und erhältst 2 Attributpunkte. Besuche den Charakterbildschirm, um STR, DEX, CON, INT, WIS oder CHA zu erhöhen.",
+        id       = "hint_level_up",
+        titleRes = Res.string.hint_title_level_up,
+        bodyRes  = Res.string.hint_body_level_up,
     ),
     HintDefinition(
-        id    = "hint_relic",
-        title = "Relikt gefunden!",
-        body  = "Relikte verleihen dauerhafte Boni für den Rest dieses Durchlaufs — von mehr HP bis hin zu mehr Mana oder XP-Boni. Jedes Relikt kann nur einmal gehalten werden.",
+        id       = "hint_relic",
+        titleRes = Res.string.hint_title_relic,
+        bodyRes  = Res.string.hint_body_relic,
     ),
     HintDefinition(
-        id    = "hint_boss",
-        title = "Bossgegner!",
-        body  = "Ein mächtiger Feind erwartet dich. Bosse haben hohe HP, starke Angriffe und skalieren mit deinem Fortschritt. Geh gut vorbereitet in den Kampf!",
+        id       = "hint_boss",
+        titleRes = Res.string.hint_title_boss,
+        bodyRes  = Res.string.hint_body_boss,
     ),
 )

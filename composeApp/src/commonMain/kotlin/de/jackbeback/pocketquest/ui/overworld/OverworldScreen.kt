@@ -48,6 +48,27 @@ import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
 import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.game.run.RunScopedState
 import de.jackbeback.pocketquest.ui.component.HintOverlay
+import de.jackbeback.pocketquest.ui.relicLocalizedName
+import de.jackbeback.pocketquest.ui.unitLocalizedName
+import org.jetbrains.compose.resources.stringResource
+import pocketquest.composeapp.generated.resources.Res
+import pocketquest.composeapp.generated.resources.btn_end_run
+import pocketquest.composeapp.generated.resources.btn_leave
+import pocketquest.composeapp.generated.resources.btn_next_area
+import pocketquest.composeapp.generated.resources.btn_rest
+import pocketquest.composeapp.generated.resources.character_stat_fraction
+import pocketquest.composeapp.generated.resources.label_encounters
+import pocketquest.composeapp.generated.resources.label_hp
+import pocketquest.composeapp.generated.resources.label_level
+import pocketquest.composeapp.generated.resources.label_mp
+import pocketquest.composeapp.generated.resources.label_relics
+import pocketquest.composeapp.generated.resources.overworld_area_cleared
+import pocketquest.composeapp.generated.resources.overworld_encounter_label
+import pocketquest.composeapp.generated.resources.overworld_events_remaining
+import pocketquest.composeapp.generated.resources.overworld_level_label
+import pocketquest.composeapp.generated.resources.overworld_map_clear
+import pocketquest.composeapp.generated.resources.overworld_rest_prompt
+import pocketquest.composeapp.generated.resources.overworld_stats_button
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
@@ -353,11 +374,11 @@ private fun RestSiteDialog(
         onDismissRequest = onDismiss,
         title = { Text(rest.label) },
         text  = {
-            Text("Rest here to restore ${(rest.healPercent * 100).toInt()}% HP?\n" +
-                 "($currentHp → $healedHp / $maxHp)")
+            Text(stringResource(Res.string.overworld_rest_prompt,
+                (rest.healPercent * 100).toInt(), currentHp, healedHp, maxHp))
         },
-        confirmButton = { Button(onClick = onConfirm) { Text("Rest") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Leave") } },
+        confirmButton = { Button(onClick = onConfirm) { Text(stringResource(Res.string.btn_rest)) } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.btn_leave)) } },
     )
 }
 
@@ -372,7 +393,7 @@ private fun OverworldHud(
     onViewCharacter: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
-    val characterName = runState.characterTemplateId.replaceFirstChar { it.uppercase() }
+    val characterName = unitLocalizedName(runState.characterTemplateId)
     val encounterNum  = runState.difficultyCounter + 1
     val hpRatio       = health.current.toFloat() / health.max.toFloat().coerceAtLeast(1f)
     val manaRatio     = if (mana.max > 0) mana.current.toFloat() / mana.max.toFloat() else 0f
@@ -392,35 +413,35 @@ private fun OverworldHud(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(characterName, color = ColorText, fontSize = 13.sp, fontWeight = FontWeight.Bold)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text("HP", color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
+                    Text(stringResource(Res.string.label_hp), color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
                     LinearProgressIndicator(
                         progress    = { hpRatio },
                         modifier    = Modifier.weight(1f).height(5.dp),
                         color       = ColorHp, trackColor = ColorHpBg,
                     )
-                    Text("${health.current}/${health.max}", color = ColorSubtext, fontSize = 10.sp)
+                    Text(stringResource(Res.string.character_stat_fraction, health.current, health.max), color = ColorSubtext, fontSize = 10.sp)
                 }
                 if (mana.max > 0) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        Text("MP", color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
+                        Text(stringResource(Res.string.label_mp), color = ColorSubtext, fontSize = 10.sp, modifier = Modifier.width(20.dp))
                         LinearProgressIndicator(
                             progress    = { manaRatio },
                             modifier    = Modifier.weight(1f).height(5.dp),
                             color       = ColorMana, trackColor = ColorManaBg,
                         )
-                        Text("${mana.current}/${mana.max}", color = ColorSubtext, fontSize = 10.sp)
+                        Text(stringResource(Res.string.character_stat_fraction, mana.current, mana.max), color = ColorSubtext, fontSize = 10.sp)
                     }
                 }
             }
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text("#$encounterNum", color = ColorGold, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
-                Text("$eventsRemaining left", color = ColorSubtext, fontSize = 10.sp)
+                Text(stringResource(Res.string.overworld_encounter_label, encounterNum), color = ColorGold, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold)
+                Text(stringResource(Res.string.overworld_events_remaining, eventsRemaining), color = ColorSubtext, fontSize = 10.sp)
                 Spacer(Modifier.height(4.dp))
                 TextButton(
                     onClick = onViewCharacter,
                     contentPadding = PaddingValues(horizontal = 4.dp, vertical = 0.dp),
                 ) {
-                    Text("👤 Stats", color = ColorText, fontSize = 10.sp)
+                    Text(stringResource(Res.string.overworld_stats_button), color = ColorText, fontSize = 10.sp)
                 }
             }
         }
@@ -443,7 +464,7 @@ private fun RelicChip(relic: Relic) {
         horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(relicIcon(relic.id), fontSize = 11.sp)
-        Text(relic.name, color = ColorGold, fontSize = 9.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Start)
+        Text(relicLocalizedName(relic.id), color = ColorGold, fontSize = 9.sp, fontWeight = FontWeight.Medium, textAlign = TextAlign.Start)
     }
 }
 
@@ -471,25 +492,25 @@ private fun MapClearOverlay(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text("☠  Area $areaNum Cleared!", color = ColorGold, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
+            Text(stringResource(Res.string.overworld_area_cleared, areaNum), color = ColorGold, fontSize = 22.sp, fontWeight = FontWeight.ExtraBold)
             HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
             if (runState != null) {
-                StatRow("Level",      "Lv ${runState.level}")
-                StatRow("Encounters", "${runState.difficultyCounter}")
-                if (heldRelics.isNotEmpty()) StatRow("Relics", "${heldRelics.size}")
+                StatRow(stringResource(Res.string.label_level), stringResource(Res.string.overworld_level_label, runState.level))
+                StatRow(stringResource(Res.string.label_encounters), "${runState.difficultyCounter}")
+                if (heldRelics.isNotEmpty()) StatRow(stringResource(Res.string.label_relics), "${heldRelics.size}")
             }
             HorizontalDivider(color = Color(0xFF30363d), thickness = 0.5.dp)
-            Text("The map is clear. Press on.", color = ColorSubtext, fontSize = 11.sp, textAlign = TextAlign.Center)
+            Text(stringResource(Res.string.overworld_map_clear), color = ColorSubtext, fontSize = 11.sp, textAlign = TextAlign.Center)
             Button(
                 onClick = onNextArea,
                 colors  = ButtonDefaults.buttonColors(containerColor = ColorGold, contentColor = Color(0xFF0d1117)),
                 modifier = Modifier.fillMaxWidth(),
                 shape   = RoundedCornerShape(8.dp),
             ) {
-                Text("Next Area  →", fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text(stringResource(Res.string.btn_next_area), fontSize = 14.sp, fontWeight = FontWeight.Bold)
             }
             TextButton(onClick = onEndRun, modifier = Modifier.fillMaxWidth()) {
-                Text("End Run", color = ColorSubtext, fontSize = 12.sp)
+                Text(stringResource(Res.string.btn_end_run), color = ColorSubtext, fontSize = 12.sp)
             }
         }
     }
