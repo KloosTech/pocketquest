@@ -53,6 +53,7 @@ import de.jackbeback.pocketquest.ui.designer.DC
 import de.jackbeback.pocketquest.ui.designer.GraphInteractionMode
 import de.jackbeback.pocketquest.ui.designer.GraphSelectionKind
 import de.jackbeback.pocketquest.ui.designer.GraphSelectionState
+import de.jackbeback.pocketquest.ui.designer.util.defaultResourcesDir
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.jetbrains.skia.Bitmap
@@ -65,6 +66,84 @@ import kotlin.math.*
 private const val ZOOM_MIN = 0.3f
 private const val ZOOM_MAX = 4f
 private const val NODE_RADIUS_BASE = 26f
+
+// ── Extracted viewport + interaction state ────────────────────────────────────
+
+@androidx.compose.runtime.Stable
+class OverworldGraphState {
+    var zoom           by mutableStateOf(1f)
+    var panX           by mutableStateOf(0f)
+    var panY           by mutableStateOf(0f)
+    var canvasSize     by mutableStateOf(IntSize.Zero)
+    var draggingNodeId by mutableStateOf<String?>(null)
+    var dragOffset     by mutableStateOf(Offset.Zero)
+    var hoverPos       by mutableStateOf<Offset?>(null)
+    var showTileSprites by mutableStateOf(false)
+    var tileCache      by mutableStateOf<Map<Pair<Int, Int>, ImageBitmap>>(emptyMap())
+    var tilesLoading   by mutableStateOf(false)
+    var contextMenu    by mutableStateOf<ContextMenuState>(ContextMenuState.Hidden)
+    var rightClickDownPos by mutableStateOf<Offset?>(null)
+    var panDragLastPos by mutableStateOf<Offset?>(null)
+
+    fun nodeRadius(): Float = (NODE_RADIUS_BASE * zoom).coerceIn(8f, 56f)
+
+    fun nodeCanvasPos(node: OverworldNodeDef): Offset = Offset(
+        x = panX + (node.x * canvasSize.width).toFloat() * zoom,
+        y = panY + (node.y * canvasSize.height).toFloat() * zoom,
+    )
+
+    fun effectiveCanvasPos(node: OverworldNodeDef): Offset =
+        nodeCanvasPos(node) + if (node.id == draggingNodeId) dragOffset else Offset.Zero
+
+    fun toNormalized(canvasPos: Offset): Pair<Double, Double> {
+        val nx = ((canvasPos.x - panX) / (canvasSize.width * zoom)).toDouble().coerceIn(0.0, 1.0)
+        val ny = ((canvasPos.y - panY) / (canvasSize.height * zoom)).toDouble().coerceIn(0.0, 1.0)
+        return nx to ny
+    }
+
+    fun hitNode(pos: Offset, nodes: List<OverworldNodeDef>): OverworldNodeDef? {
+        val r = nodeRadius()
+        return nodes.firstOrNull { node -> (pos - nodeCanvasPos(node)).getDistance() < r }
+    }
+
+    fun hitEdge(pos: Offset, nodes: List<OverworldNodeDef>, edges: List<OverworldEdgeDef>): OverworldEdgeDef? {
+        val threshold = 8f
+        return edges.firstOrNull { edge ->
+            val fromNode = nodes.find { it.id == edge.fromId } ?: return@firstOrNull false
+            val toNode   = nodes.find { it.id == edge.toId }   ?: return@firstOrNull false
+            val from = nodeCanvasPos(fromNode)
+            val to   = nodeCanvasPos(toNode)
+            val dx = to.x - from.x
+            val dy = to.y - from.y
+            val len = sqrt(dx * dx + dy * dy)
+            if (len < 1f) return@firstOrNull false
+            val t = ((pos.x - from.x) * dx + (pos.y - from.y) * dy) / (len * len)
+            if (t < 0f || t > 1f) return@firstOrNull false
+            val projX = from.x + t * dx
+            val projY = from.y + t * dy
+            sqrt((pos.x - projX).pow(2) + (pos.y - projY).pow(2)) < threshold
+        }
+    }
+
+    fun fitNodes(nodes: List<OverworldNodeDef>) {
+        if (nodes.isEmpty() || canvasSize.width == 0) return
+        val xs = nodes.map { it.x.toFloat() }
+        val ys = nodes.map { it.y.toFloat() }
+        val pad = { range: Float -> range.coerceAtLeast(0.1f) * 0.20f }
+        val minX = xs.min() - pad(xs.max() - xs.min())
+        val maxX = xs.max() + pad(xs.max() - xs.min())
+        val minY = ys.min() - pad(ys.max() - ys.min())
+        val maxY = ys.max() + pad(ys.max() - ys.min())
+        val zoomX = 1f / (maxX - minX).coerceAtLeast(0.01f)
+        val zoomY = (canvasSize.height.toFloat() / canvasSize.width) / (maxY - minY).coerceAtLeast(0.01f)
+        zoom = minOf(zoomX, zoomY).coerceIn(ZOOM_MIN, ZOOM_MAX)
+        panX = (canvasSize.width  / 2f) - ((minX + maxX) / 2f) * canvasSize.width  * zoom
+        panY = (canvasSize.height / 2f) - ((minY + maxY) / 2f) * canvasSize.height * zoom
+    }
+}
+
+@Composable
+fun rememberOverworldGraphState(): OverworldGraphState = remember { OverworldGraphState() }
 
 private fun tileTypeColorForGraph(type: TileType): Color = when (type) {
     TileType.FLOOR             -> Color(0xFF3D3D52)
@@ -103,73 +182,17 @@ fun OverworldGraphPanel(
     onCompleteEdge: (toNodeId: String) -> Unit,
     onClearSelection: () -> Unit,
     onChangeNodeType: (nodeId: String, type: OverworldNodeType) -> Unit,
+    state: OverworldGraphState = rememberOverworldGraphState(),
     modifier: Modifier = Modifier,
 ) {
-    var zoom by remember { mutableStateOf(1f) }
-    var panX by remember { mutableStateOf(0f) }
-    var panY by remember { mutableStateOf(0f) }
-    var canvasSize by remember { mutableStateOf(IntSize.Zero) }
-    var draggingNodeId by remember { mutableStateOf<String?>(null) }
-    var dragOffset by remember { mutableStateOf(Offset.Zero) }
     val latestSelection by rememberUpdatedState(selection)
-    var hoverPos by remember { mutableStateOf<Offset?>(null) }
-    var showTileSprites by remember { mutableStateOf(false) }
-    var tileCache by remember { mutableStateOf<Map<Pair<Int, Int>, ImageBitmap>>(emptyMap()) }
-    var tilesLoading by remember { mutableStateOf(false) }
     val focusRequester = remember { FocusRequester() }
-    var contextMenu by remember { mutableStateOf<ContextMenuState>(ContextMenuState.Hidden) }
-    var rightClickDownPos by remember { mutableStateOf<Offset?>(null) }
-    var panDragLastPos by remember { mutableStateOf<Offset?>(null) }
-
-    fun nodeRadius() = (NODE_RADIUS_BASE * zoom).coerceIn(8f, 56f)
-
-    fun nodeCanvasPos(node: OverworldNodeDef): Offset = Offset(
-        x = panX + (node.x * canvasSize.width).toFloat() * zoom,
-        y = panY + (node.y * canvasSize.height).toFloat() * zoom,
-    )
-
-    fun effectiveCanvasPos(node: OverworldNodeDef): Offset =
-        nodeCanvasPos(node) + if (node.id == draggingNodeId) dragOffset else Offset.Zero
-
-    fun toNormalized(canvasPos: Offset): Pair<Double, Double> {
-        val nx = ((canvasPos.x - panX) / (canvasSize.width * zoom)).toDouble().coerceIn(0.0, 1.0)
-        val ny = ((canvasPos.y - panY) / (canvasSize.height * zoom)).toDouble().coerceIn(0.0, 1.0)
-        return nx to ny
-    }
-
-    fun hitNode(pos: Offset): OverworldNodeDef? {
-        val r = nodeRadius()
-        return overworld.nodes.firstOrNull { node ->
-            val cp = nodeCanvasPos(node)
-            (pos - cp).getDistance() < r
-        }
-    }
-
-    fun hitEdge(pos: Offset): OverworldEdgeDef? {
-        val threshold = 8f
-        return overworld.edges.firstOrNull { edge ->
-            val fromNode = overworld.nodes.find { it.id == edge.fromId } ?: return@firstOrNull false
-            val toNode = overworld.nodes.find { it.id == edge.toId } ?: return@firstOrNull false
-            val from = nodeCanvasPos(fromNode)
-            val to = nodeCanvasPos(toNode)
-            val dx = to.x - from.x
-            val dy = to.y - from.y
-            val len = sqrt(dx * dx + dy * dy)
-            if (len < 1f) return@firstOrNull false
-            val t = ((pos.x - from.x) * dx + (pos.y - from.y) * dy) / (len * len)
-            if (t < 0f || t > 1f) return@firstOrNull false
-            val projX = from.x + t * dx
-            val projY = from.y + t * dy
-            val dist = sqrt((pos.x - projX).pow(2) + (pos.y - projY).pow(2))
-            dist < threshold
-        }
-    }
 
     // Tile-loading LaunchedEffect
-    LaunchedEffect(backgroundMap?.id, showTileSprites) {
-        if (!showTileSprites || backgroundMap == null) { tileCache = emptyMap(); return@LaunchedEffect }
-        tilesLoading = true
-        tileCache = withContext(Dispatchers.IO) {
+    LaunchedEffect(backgroundMap?.id, state.showTileSprites) {
+        if (!state.showTileSprites || backgroundMap == null) { state.tileCache = emptyMap(); return@LaunchedEffect }
+        state.tilesLoading = true
+        state.tileCache = withContext(Dispatchers.IO) {
             val resDir = defaultResourcesDir() ?: return@withContext emptyMap()
             val tilesDir = File(resDir, "files/tiles/${backgroundMap.id}")
             if (!tilesDir.exists()) return@withContext emptyMap()
@@ -188,29 +211,13 @@ fun OverworldGraphPanel(
                 }
             }
         }
-        tilesLoading = false
-    }
-
-    fun fitNodes() {
-        if (overworld.nodes.isEmpty() || canvasSize.width == 0) return
-        val xs = overworld.nodes.map { it.x.toFloat() }
-        val ys = overworld.nodes.map { it.y.toFloat() }
-        val pad = { range: Float -> range.coerceAtLeast(0.1f) * 0.20f }
-        val minX = xs.min() - pad(xs.max() - xs.min())
-        val maxX = xs.max() + pad(xs.max() - xs.min())
-        val minY = ys.min() - pad(ys.max() - ys.min())
-        val maxY = ys.max() + pad(ys.max() - ys.min())
-        val zoomX = 1f / (maxX - minX).coerceAtLeast(0.01f)
-        val zoomY = (canvasSize.height.toFloat() / canvasSize.width) / (maxY - minY).coerceAtLeast(0.01f)
-        zoom = minOf(zoomX, zoomY).coerceIn(ZOOM_MIN, ZOOM_MAX)
-        panX = (canvasSize.width  / 2f) - ((minX + maxX) / 2f) * canvasSize.width  * zoom
-        panY = (canvasSize.height / 2f) - ((minY + maxY) / 2f) * canvasSize.height * zoom
+        state.tilesLoading = false
     }
 
     Box(
         modifier = modifier
             .background(DC.Background)
-            .onSizeChanged { canvasSize = it }
+            .onSizeChanged { state.canvasSize = it }
             .focusRequester(focusRequester)
             .focusable()
             .onKeyEvent { event ->
@@ -225,8 +232,8 @@ fun OverworldGraphPanel(
                         else -> false
                     }
                     Key.Escape -> {
-                        if (contextMenu != ContextMenuState.Hidden) {
-                            contextMenu = ContextMenuState.Hidden; true
+                        if (state.contextMenu != ContextMenuState.Hidden) {
+                            state.contextMenu = ContextMenuState.Hidden; true
                         } else {
                             onClearSelection(); true
                         }
@@ -247,7 +254,7 @@ fun OverworldGraphPanel(
                         val downPos = down.position
                         var lastPos = downPos
                         var hasMoved = false
-                        val hitAtDown = hitNode(downPos)
+                        val hitAtDown = state.hitNode(downPos, overworld.nodes)
 
                         when (interactionMode) {
                             GraphInteractionMode.SELECT -> {
@@ -255,7 +262,7 @@ fun OverworldGraphPanel(
                                     val alreadySelected = latestSelection.kind == GraphSelectionKind.NODE &&
                                             latestSelection.nodeId == hitAtDown.id
                                     onSelectNode(hitAtDown.id)
-                                    if (alreadySelected) draggingNodeId = hitAtDown.id
+                                    if (alreadySelected) state.draggingNodeId = hitAtDown.id
                                 } else {
                                     onClearSelection()
                                 }
@@ -277,11 +284,11 @@ fun OverworldGraphPanel(
                             if (change.positionChanged()) {
                                 val delta = change.position - lastPos
                                 if (delta.getDistance() > 3f) hasMoved = true
-                                hoverPos = change.position
+                                state.hoverPos = change.position
 
-                                val dragId = draggingNodeId
+                                val dragId = state.draggingNodeId
                                 if (interactionMode == GraphInteractionMode.SELECT && dragId != null && hasMoved) {
-                                    dragOffset += delta
+                                    state.dragOffset += delta
                                     change.consume()
                                 }
                                 lastPos = change.position
@@ -290,28 +297,28 @@ fun OverworldGraphPanel(
                             if (!change.pressed) {
                                 when (interactionMode) {
                                     GraphInteractionMode.SELECT -> {
-                                        val dragId = draggingNodeId
+                                        val dragId = state.draggingNodeId
                                         if (hasMoved && dragId != null) {
                                             val node = overworld.nodes.find { it.id == dragId }
                                             if (node != null) {
-                                                val finalPos = nodeCanvasPos(node) + dragOffset
-                                                val (nx, ny) = toNormalized(finalPos)
+                                                val finalPos = state.nodeCanvasPos(node) + state.dragOffset
+                                                val (nx, ny) = state.toNormalized(finalPos)
                                                 onMoveNode(dragId, nx, ny)
                                             }
                                         }
-                                        draggingNodeId = null
-                                        dragOffset = Offset.Zero
+                                        state.draggingNodeId = null
+                                        state.dragOffset = Offset.Zero
                                     }
                                     GraphInteractionMode.ADD_NODE -> {
                                         if (!hasMoved) {
-                                            val (nx, ny) = toNormalized(downPos)
+                                            val (nx, ny) = state.toNormalized(downPos)
                                             onPlaceNode(nodeTypeToPlace, nx, ny)
                                         }
                                     }
                                     GraphInteractionMode.DELETE -> {
                                         if (!hasMoved) {
-                                            val node = hitNode(downPos)
-                                            val edge = hitEdge(downPos)
+                                            val node = state.hitNode(downPos, overworld.nodes)
+                                            val edge = state.hitEdge(downPos, overworld.nodes, overworld.edges)
                                             when {
                                                 node != null -> onDeleteNode(node.id)
                                                 edge != null -> onDeleteEdge(edge.fromId, edge.toId)
@@ -337,81 +344,81 @@ fun OverworldGraphPanel(
                     if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) {
                         // Ctrl/Meta + scroll = zoom for both devices
                         val mousePos = change.position
-                        val zoom_ = zoom
+                        val zoom_ = state.zoom
                         val newZoom = (zoom_ * exp(-dy * 0.10f)).coerceIn(ZOOM_MIN, ZOOM_MAX)
                         val zoomRatio = newZoom / zoom_
-                        panX = mousePos.x + (panX - mousePos.x) * zoomRatio
-                        panY = mousePos.y + (panY - mousePos.y) * zoomRatio
-                        zoom = newZoom
+                        state.panX = mousePos.x + (state.panX - mousePos.x) * zoomRatio
+                        state.panY = mousePos.y + (state.panY - mousePos.y) * zoomRatio
+                        state.zoom = newZoom
                     } else if (isTrackpad) {
                         // Trackpad two-finger swipe = pan
                         val mult = 1.5f
-                        panX -= dx * mult
-                        panY -= dy * mult
+                        state.panX -= dx * mult
+                        state.panY -= dy * mult
                     } else {
                         // Mouse scroll wheel = zoom at cursor
                         val mousePos = change.position
-                        val zoom_ = zoom
+                        val zoom_ = state.zoom
                         val newZoom = (zoom_ * exp(-dy * 0.12f)).coerceIn(ZOOM_MIN, ZOOM_MAX)
                         val zoomRatio = newZoom / zoom_
-                        panX = mousePos.x + (panX - mousePos.x) * zoomRatio
-                        panY = mousePos.y + (panY - mousePos.y) * zoomRatio
-                        zoom = newZoom
+                        state.panX = mousePos.x + (state.panX - mousePos.x) * zoomRatio
+                        state.panY = mousePos.y + (state.panY - mousePos.y) * zoomRatio
+                        state.zoom = newZoom
                     }
                 }
                 .onPointerEvent(PointerEventType.Move) { event ->
                     val pos = event.changes.firstOrNull()?.position
-                    val last = panDragLastPos
+                    val last = state.panDragLastPos
                     if (last != null && pos != null &&
                         (event.buttons.isSecondaryPressed || event.buttons.isTertiaryPressed)) {
-                        panX += pos.x - last.x
-                        panY += pos.y - last.y
-                        panDragLastPos = pos
+                        state.panX += pos.x - last.x
+                        state.panY += pos.y - last.y
+                        state.panDragLastPos = pos
                     }
-                    hoverPos = pos
+                    state.hoverPos = pos
                 }
                 .onPointerEvent(PointerEventType.Press) { event ->
                     val pos = event.changes.firstOrNull()?.position
                     if (event.button == PointerButton.Secondary) {
-                        rightClickDownPos = pos
-                        panDragLastPos = pos
+                        state.rightClickDownPos = pos
+                        state.panDragLastPos = pos
                     } else if (event.button == PointerButton.Tertiary) {
-                        panDragLastPos = pos
+                        state.panDragLastPos = pos
                     }
                 }
                 .onPointerEvent(PointerEventType.Release) { event ->
                     if (event.button == PointerButton.Secondary) {
-                        val downPos = rightClickDownPos ?: return@onPointerEvent
+                        val downPos = state.rightClickDownPos ?: return@onPointerEvent
                         val upPos   = event.changes.firstOrNull()?.position ?: return@onPointerEvent
-                        rightClickDownPos = null
-                        panDragLastPos = null
+                        state.rightClickDownPos = null
+                        state.panDragLastPos = null
                         if ((upPos - downPos).getDistance() < 4f) {
-                            val hitN = hitNode(upPos)
-                            val hitE = hitEdge(upPos)
-                            contextMenu = when {
+                            val hitN = state.hitNode(upPos, overworld.nodes)
+                            val hitE = state.hitEdge(upPos, overworld.nodes, overworld.edges)
+                            state.contextMenu = when {
                                 hitN != null -> ContextMenuState.OnNode(upPos, hitN)
                                 hitE != null -> ContextMenuState.OnEdge(upPos, hitE)
                                 else         -> ContextMenuState.OnCanvas(upPos)
                             }
                         }
                     } else if (event.button == PointerButton.Tertiary) {
-                        panDragLastPos = null
+                        state.panDragLastPos = null
                     }
                 },
         ) {
             // ── Layer 1: Background ───────────────────────────────────────────
             if (backgroundMap != null) {
-                drawBackgroundMap(backgroundMap, panX, panY, zoom, canvasSize, tileCache)
+                drawBackgroundMap(backgroundMap, state.panX, state.panY, state.zoom, state.canvasSize, state.tileCache)
             } else {
-                drawHexGrid(panX, panY, zoom, canvasSize)
+                drawHexGrid(state.panX, state.panY, state.zoom, state.canvasSize)
             }
 
             // ── Layer 2: Edges ────────────────────────────────────────────────
             overworld.edges.forEach { edge ->
                 val fromNode = overworld.nodes.find { it.id == edge.fromId } ?: return@forEach
                 val toNode = overworld.nodes.find { it.id == edge.toId } ?: return@forEach
-                val from = effectiveCanvasPos(fromNode)
-                val to = effectiveCanvasPos(toNode)
+                val from = state.effectiveCanvasPos(fromNode)
+                val to = state.effectiveCanvasPos(toNode)
                 val isSelected = selection.kind == GraphSelectionKind.EDGE &&
                         selection.edgeFromId == edge.fromId && selection.edgeToId == edge.toId
                 val color   = if (isSelected) DC.Blue else DC.Overlay0.copy(alpha = 0.88f)
@@ -425,9 +432,9 @@ fun OverworldGraphPanel(
 
             // Pending edge preview
             val pendingFromNode = edgePendingFromId?.let { id -> overworld.nodes.find { it.id == id } }
-            val hPos = hoverPos
+            val hPos = state.hoverPos
             if (pendingFromNode != null && hPos != null) {
-                val from = effectiveCanvasPos(pendingFromNode)
+                val from = state.effectiveCanvasPos(pendingFromNode)
                 drawLine(
                     color = DC.Primary.copy(alpha = 0.7f),
                     start = from,
@@ -439,8 +446,8 @@ fun OverworldGraphPanel(
 
             // ── Layer 3: Nodes ────────────────────────────────────────────────
             overworld.nodes.forEach { node ->
-                val cp = effectiveCanvasPos(node)
-                val r = nodeRadius()
+                val cp = state.effectiveCanvasPos(node)
+                val r = state.nodeRadius()
                 val isSelected = selection.kind == GraphSelectionKind.NODE && selection.nodeId == node.id
 
                 // Glow ring
@@ -455,7 +462,7 @@ fun OverworldGraphPanel(
 
                 // Dark backdrop (contrast)
                 val backdropR = if (node.type == OverworldNodeType.BOSS) r * 1.3f else r
-                val isDragging = node.id == draggingNodeId && dragOffset != Offset.Zero
+                val isDragging = node.id == state.draggingNodeId && state.dragOffset != Offset.Zero
                 if (isDragging) {
                     drawCircle(Color.Black.copy(alpha = 0.45f), radius = backdropR + 3f, center = cp + Offset(4f, 6f))
                 }
@@ -504,8 +511,8 @@ fun OverworldGraphPanel(
 
         // ── Node glyphs (Text overlays) ───────────────────────────────────────
         overworld.nodes.forEach { node ->
-            val cp = effectiveCanvasPos(node)
-            val r = nodeRadius()
+            val cp = state.effectiveCanvasPos(node)
+            val r = state.nodeRadius()
             val glyph = when (node.type) {
                 OverworldNodeType.START  -> "▶"
                 OverworldNodeType.BATTLE -> "⚔"
@@ -514,19 +521,19 @@ fun OverworldGraphPanel(
             }
             Text(
                 text = glyph,
-                fontSize = (12f * zoom.coerceIn(0.5f, 2f)).sp,
+                fontSize = (12f * state.zoom.coerceIn(0.5f, 2f)).sp,
                 color = Color.White,
                 modifier = Modifier.absoluteOffset {
-                    IntOffset((cp.x - 8 * zoom).toInt(), (cp.y - 8 * zoom).toInt())
+                    IntOffset((cp.x - 8 * state.zoom).toInt(), (cp.y - 8 * state.zoom).toInt())
                 },
             )
 
             // Node label pill
-            val labelFontSize = (9f * zoom.coerceIn(0.5f, 1.5f)).sp
+            val labelFontSize = (9f * state.zoom.coerceIn(0.5f, 1.5f)).sp
             Box(
                 modifier = Modifier
                     .absoluteOffset {
-                        IntOffset((cp.x - 30 * zoom).toInt(), (cp.y + r + 4 * zoom).toInt())
+                        IntOffset((cp.x - 30 * state.zoom).toInt(), (cp.y + r + 4 * state.zoom).toInt())
                     }
                     .background(DC.Crust.copy(alpha = 0.75f), RoundedCornerShape(3.dp))
                     .padding(horizontal = 4.dp, vertical = 1.dp),
@@ -558,7 +565,7 @@ fun OverworldGraphPanel(
         }
 
         // ── Layer 4: Minimap ──────────────────────────────────────────────────
-        if (canvasSize.width > 200 && overworld.nodes.isNotEmpty()) {
+        if (state.canvasSize.width > 200 && overworld.nodes.isNotEmpty()) {
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
@@ -597,11 +604,11 @@ fun OverworldGraphPanel(
                     }
 
                     // Viewport rect
-                    if (canvasSize.width > 0 && canvasSize.height > 0) {
-                        val vpX0 = (-panX / (canvasSize.width * zoom)).coerceIn(0f, 1f)
-                        val vpY0 = (-panY / (canvasSize.height * zoom)).coerceIn(0f, 1f)
-                        val vpW = (1f / zoom).coerceIn(0f, 1f)
-                        val vpH = (1f / zoom).coerceIn(0f, 1f)
+                    if (state.canvasSize.width > 0 && state.canvasSize.height > 0) {
+                        val vpX0 = (-state.panX / (state.canvasSize.width * state.zoom)).coerceIn(0f, 1f)
+                        val vpY0 = (-state.panY / (state.canvasSize.height * state.zoom)).coerceIn(0f, 1f)
+                        val vpW = (1f / state.zoom).coerceIn(0f, 1f)
+                        val vpH = (1f / state.zoom).coerceIn(0f, 1f)
                         drawRect(
                             color = DC.Primary.copy(alpha = 0.25f),
                             topLeft = Offset(vpX0 * mW, vpY0 * mH),
@@ -627,7 +634,7 @@ fun OverworldGraphPanel(
                         .clip(RoundedCornerShape(4.dp))
                         .background(DC.Surface0.copy(alpha = 0.85f))
                         .border(1.dp, DC.Overlay0, RoundedCornerShape(4.dp))
-                        .clickable { fitNodes() }
+                        .clickable { state.fitNodes(overworld.nodes) }
                         .padding(horizontal = 8.dp, vertical = 4.dp),
                 ) {
                     Text("⊡ Fit", color = DC.Subtext1, fontSize = 10.sp)
@@ -636,17 +643,17 @@ fun OverworldGraphPanel(
                 // Tiles chip — only when a background map is loaded
                 if (backgroundMap != null) {
                     val tilesLabel = when {
-                        tilesLoading    -> "⌛ Tiles…"
-                        showTileSprites -> "🗺 Tiles ✓"
-                        else            -> "🗺 Tiles"
+                        state.tilesLoading    -> "⌛ Tiles…"
+                        state.showTileSprites -> "🗺 Tiles ✓"
+                        else                  -> "🗺 Tiles"
                     }
-                    val tilesActive = showTileSprites && !tilesLoading
+                    val tilesActive = state.showTileSprites && !state.tilesLoading
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
                             .background(if (tilesActive) DC.Blue.copy(alpha = 0.20f) else DC.Surface0.copy(alpha = 0.85f))
                             .border(1.dp, if (tilesActive) DC.Blue else DC.Overlay0, RoundedCornerShape(4.dp))
-                            .clickable { showTileSprites = !showTileSprites }
+                            .clickable { state.showTileSprites = !state.showTileSprites }
                             .padding(horizontal = 8.dp, vertical = 4.dp),
                     ) {
                         Text(tilesLabel, color = if (tilesActive) DC.Blue else DC.Subtext1, fontSize = 10.sp)
@@ -670,7 +677,7 @@ fun OverworldGraphPanel(
         }
 
         // ── Right-click context menu ──────────────────────────────────────────
-        val cm = contextMenu
+        val cm = state.contextMenu
         if (cm !is ContextMenuState.Hidden) {
             val pos = when (cm) {
                 is ContextMenuState.OnCanvas -> cm.canvasPos
@@ -681,7 +688,7 @@ fun OverworldGraphPanel(
             Popup(
                 alignment  = Alignment.TopStart,
                 offset     = IntOffset(pos.x.toInt(), pos.y.toInt()),
-                onDismissRequest = { contextMenu = ContextMenuState.Hidden },
+                onDismissRequest = { state.contextMenu = ContextMenuState.Hidden },
                 properties = PopupProperties(focusable = true),
             ) {
                 Column(
@@ -691,7 +698,7 @@ fun OverworldGraphPanel(
                         .padding(6.dp)
                         .onKeyEvent { e ->
                             if (e.type == KeyEventType.KeyDown && e.key == Key.Escape) {
-                                contextMenu = ContextMenuState.Hidden; true
+                                state.contextMenu = ContextMenuState.Hidden; true
                             } else false
                         },
                     verticalArrangement = Arrangement.spacedBy(2.dp),
@@ -701,9 +708,9 @@ fun OverworldGraphPanel(
                             CtxMenuLabel("PLACE NODE")
                             OverworldNodeType.values().forEach { t ->
                                 CtxMenuTypeButton(t, isSelected = t == nodeTypeToPlace) {
-                                    val (nx, ny) = toNormalized(cm.canvasPos)
+                                    val (nx, ny) = state.toNormalized(cm.canvasPos)
                                     onPlaceNode(t, nx, ny)
-                                    contextMenu = ContextMenuState.Hidden
+                                    state.contextMenu = ContextMenuState.Hidden
                                 }
                             }
                         }
@@ -712,19 +719,19 @@ fun OverworldGraphPanel(
                             OverworldNodeType.values().forEach { t ->
                                 CtxMenuTypeButton(t, isSelected = t == cm.node.type) {
                                     onChangeNodeType(cm.node.id, t)
-                                    contextMenu = ContextMenuState.Hidden
+                                    state.contextMenu = ContextMenuState.Hidden
                                 }
                             }
                             CtxMenuDivider()
                             CtxMenuActionButton("Delete Node", DC.Red) {
                                 onDeleteNode(cm.node.id)
-                                contextMenu = ContextMenuState.Hidden
+                                state.contextMenu = ContextMenuState.Hidden
                             }
                         }
                         is ContextMenuState.OnEdge -> {
                             CtxMenuActionButton("Delete Edge", DC.Red) {
                                 onDeleteEdge(cm.edge.fromId, cm.edge.toId)
-                                contextMenu = ContextMenuState.Hidden
+                                state.contextMenu = ContextMenuState.Hidden
                             }
                         }
                         is ContextMenuState.Hidden -> {}
@@ -918,12 +925,3 @@ private fun CtxMenuActionButton(label: String, color: Color, onClick: () -> Unit
     }
 }
 
-private fun defaultResourcesDir(): File? {
-    var dir = File(System.getProperty("user.dir"))
-    repeat(4) {
-        val candidate = File(dir, "composeApp/src/commonMain/composeResources")
-        if (candidate.exists()) return candidate
-        dir = dir.parentFile ?: return null
-    }
-    return null
-}
