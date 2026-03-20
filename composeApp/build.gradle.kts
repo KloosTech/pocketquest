@@ -103,7 +103,7 @@ dependencies {
     add("kspAndroid", libs.room.compiler)
     add("kspIosArm64", libs.room.compiler)
     add("kspIosSimulatorArm64", libs.room.compiler)
-    add("kspJvm", libs.room.compiler) // desktop
+    add("kspDesktop", libs.room.compiler) // desktop
 }
 
 room {
