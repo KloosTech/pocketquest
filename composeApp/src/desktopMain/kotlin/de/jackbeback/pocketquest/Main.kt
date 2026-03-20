@@ -22,10 +22,11 @@ import androidx.room.Room
 import de.jackbeback.pocketquest.data.db.PocketQuestDatabase
 import de.jackbeback.pocketquest.di.initKoin
 import java.io.File
+import de.jackbeback.pocketquest.ui.catalog.UiCatalogApp
 import de.jackbeback.pocketquest.ui.designer.DC
 import de.jackbeback.pocketquest.ui.designer.EncounterDesignerApp
 
-private enum class LaunchMode { GAME, DESIGNER }
+private enum class LaunchMode { GAME, DESIGNER, UI_CATALOG }
 
 fun main() = application {
     var mode by remember { mutableStateOf<LaunchMode?>(null) }
@@ -50,6 +51,9 @@ fun main() = application {
                 },
                 onOpenDesigner = {
                     mode = LaunchMode.DESIGNER
+                },
+                onOpenCatalog = {
+                    mode = LaunchMode.UI_CATALOG
                 },
             )
         }
@@ -76,12 +80,24 @@ fun main() = application {
             EncounterDesignerApp()
         }
     }
+
+    // ── UI Catalog window ─────────────────────────────────────────────────
+    if (mode == LaunchMode.UI_CATALOG) {
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "PocketQuest — UI Catalog",
+            state = rememberWindowState(width = 1100.dp, height = 700.dp),
+        ) {
+            UiCatalogApp()
+        }
+    }
 }
 
 @Composable
 private fun LauncherScreen(
     onPlayGame: () -> Unit,
     onOpenDesigner: () -> Unit,
+    onOpenCatalog: () -> Unit,
 ) {
     MaterialTheme(
         colorScheme = darkColorScheme(
@@ -136,6 +152,13 @@ private fun LauncherScreen(
                         subtitle = "Create & test encounters",
                         accentColor = DC.Blue,
                         onClick = onOpenDesigner,
+                    )
+                    LaunchCard(
+                        icon = "🎨",
+                        title = "UI Catalog",
+                        subtitle = "Browse & test components",
+                        accentColor = DC.Mauve,
+                        onClick = onOpenCatalog,
                     )
                 }
 
