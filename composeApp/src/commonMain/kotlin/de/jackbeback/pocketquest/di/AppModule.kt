@@ -9,6 +9,8 @@ import de.jackbeback.pocketquest.content.events.allOverworldEvents
 import de.jackbeback.pocketquest.content.events.kaerMorhenGraph
 import de.jackbeback.pocketquest.content.map.throneRoomConfig
 import de.jackbeback.pocketquest.content.registry.SkillRegistry
+import de.jackbeback.pocketquest.data.db.PersistenceRepository
+import de.jackbeback.pocketquest.data.db.PocketQuestDatabase
 import de.jackbeback.pocketquest.game.battle.BattleTileCache
 import de.jackbeback.pocketquest.game.battle.TileMapRepository
 import de.jackbeback.pocketquest.ecs.components.core.FactionComponent
@@ -22,6 +24,7 @@ import de.jackbeback.pocketquest.ecs.core.query
 import de.jackbeback.pocketquest.ecs.core.set
 import de.jackbeback.pocketquest.game.animation.AnimationEventCollector
 import de.jackbeback.pocketquest.game.battle.buildBattleSystemRegistry
+import de.jackbeback.pocketquest.game.hint.HintManager
 import de.jackbeback.pocketquest.game.loop.GameLoop
 import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
 import de.jackbeback.pocketquest.game.run.RunStateHolder
@@ -30,9 +33,29 @@ import de.jackbeback.pocketquest.ui.battle.BattleViewModel
 import de.jackbeback.pocketquest.ui.character.CharacterViewModel
 import de.jackbeback.pocketquest.ui.navigation.Navigator
 import de.jackbeback.pocketquest.ui.overworld.OverworldViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.koin.dsl.module
 
-val gameModule = module {
+fun gameModule(databaseFactory: () -> PocketQuestDatabase) = module {
+    // ── Persistence ───────────────────────────────────────────────────────────
+    single<PocketQuestDatabase> { databaseFactory() }
+    single { PersistenceRepository(get()) }
+
+    // Shared IO scope for background DB operations
+    single(createdAtStart = false) {
+        CoroutineScope(Dispatchers.Default + SupervisorJob())
+    }
+
+    single {
+        HintManager(repo = get(), ioScope = get())
+    }
+
+    // ── Game state ────────────────────────────────────────────────────────────
+    single { RunStateHolder(repo = get(), ioScope = get()) }
+
     // World starts with only the player — enemies are spawned per-encounter
     single {
         World().also { world ->
@@ -42,7 +65,6 @@ val gameModule = module {
     single { SkillRegistry(allSkills) }
     single { BattleLog() }
     single { Navigator() }
-    single { RunStateHolder() }
     single { OverworldEventRegistry(allOverworldEvents) }
     // Pre-loads Throneroom tiles in the background; ready before battle starts
     single { BattleTileCache(throneRoomConfig) }
@@ -50,6 +72,19 @@ val gameModule = module {
     single { AnimationEventCollector(get(), get()) }
     single { buildBattleSystemRegistry(get(), get(), get()) }
     single { GameLoop(get()) }
+
+    // Preload persistent data (seen hints + character unlocks) as soon as Koin is ready
+    single(createdAtStart = true) {
+        val hintManager    = get<HintManager>()
+        val runStateHolder = get<RunStateHolder>()
+        val scope          = get<CoroutineScope>()
+        scope.launch {
+            runStateHolder.preload()
+            hintManager.preload()
+        }
+        Unit // needed so Koin doesn't try to infer a return type
+    }
+
     single {
         val world          = get<World>()
         val battleLog      = get<BattleLog>()
@@ -62,6 +97,7 @@ val gameModule = module {
             animCollector        = get(),
             tileCache            = get(),
             tileMapRepository    = get(),
+            hintManager          = get(),
             levelUpPreview       = { xp -> runStateHolder.previewGainExp(xp) },
             pickRelicCandidates  = {
                 val heldIds = runStateHolder.run.value?.relics?.toSet() ?: emptySet()
@@ -162,14 +198,14 @@ val gameModule = module {
     }
     single {
         OverworldViewModel(
-            world         = get(),
-            navigator     = get(),
-            eventRegistry = get(),
+            world          = get(),
+            navigator      = get(),
+            eventRegistry  = get(),
             runStateHolder = get(),
-            graph         = kaerMorhenGraph,
-            allEvents     = allOverworldEvents.associateBy { it.id },
+            hintManager    = get(),
+            graph          = kaerMorhenGraph,
+            allEvents      = allOverworldEvents.associateBy { it.id },
         )
     }
     single { CharacterViewModel(get(), get(), get(), get()) }
 }
-

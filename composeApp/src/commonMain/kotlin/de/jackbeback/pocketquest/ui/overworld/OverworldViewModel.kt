@@ -10,6 +10,8 @@ import de.jackbeback.pocketquest.ecs.core.World
 import de.jackbeback.pocketquest.ecs.core.get
 import de.jackbeback.pocketquest.ecs.core.query
 import de.jackbeback.pocketquest.ecs.core.set
+import de.jackbeback.pocketquest.game.hint.HintDefinition
+import de.jackbeback.pocketquest.game.hint.HintManager
 import de.jackbeback.pocketquest.game.overworld.OverworldEventRegistry
 import de.jackbeback.pocketquest.game.run.RunScopedState
 import de.jackbeback.pocketquest.game.run.RunStateHolder
@@ -23,6 +25,7 @@ class OverworldViewModel(
     private val navigator: Navigator,
     private val eventRegistry: OverworldEventRegistry,
     private val runStateHolder: RunStateHolder,
+    private val hintManager: HintManager? = null,
     /** The progression graph for this area. */
     val graph: MapGraph,
     /** All events keyed by their id — includes the start node and all encounters/rests. */
@@ -45,6 +48,28 @@ class OverworldViewModel(
     private val _playerMana = MutableStateFlow(queryPlayerMana())
     val playerMana: StateFlow<ManaComponent> = _playerMana
 
+    // ── Hint system ───────────────────────────────────────────────────────────
+    private val hintQueue = ArrayDeque<HintDefinition>()
+    private val _pendingHint = MutableStateFlow<HintDefinition?>(null)
+    val pendingHint: StateFlow<HintDefinition?> = _pendingHint
+
+    fun dismissHint() {
+        _pendingHint.value = hintQueue.removeFirstOrNull()
+    }
+
+    private fun enqueueHint(id: String) {
+        val hint = hintManager?.tryShow(id) ?: return
+        if (_pendingHint.value == null) {
+            _pendingHint.value = hint
+        } else {
+            hintQueue += hint
+        }
+    }
+
+    init {
+        enqueueHint("hint_overworld")
+    }
+
     /**
      * Called by the UI when the player taps a graph node.
      * Only fires when the node is reachable (in the forward edges of the current node
@@ -60,10 +85,14 @@ class OverworldViewModel(
         runStateHolder.moveToNode(nodeId)
 
         when (event) {
-            is OverworldEvent.BattleEncounter ->
+            is OverworldEvent.BattleEncounter -> {
+                if (event.isBoss) enqueueHint("hint_boss")
                 navigator.goToBattle(BattleParams(eventId = event.id, enemies = event.enemies))
-            is OverworldEvent.RestSite ->
+            }
+            is OverworldEvent.RestSite -> {
+                enqueueHint("hint_rest")
                 _pendingRest.value = event
+            }
             is OverworldEvent.StartNode -> Unit
         }
     }
@@ -79,6 +108,7 @@ class OverworldViewModel(
         _eventsRemaining.value = eventRegistry.activeCount
         _playerHealth.value = queryPlayerHealth()
         _playerMana.value   = queryPlayerMana()
+        enqueueHint("hint_conditions")
         checkMapCleared()
     }
 

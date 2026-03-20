@@ -16,8 +16,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import de.jackbeback.pocketquest.ui.skillLocalizedName
 import de.jackbeback.pocketquest.ui.battle.SkillUiState
 import org.jetbrains.compose.resources.painterResource
+import org.jetbrains.compose.resources.stringResource
 import pocketquest.composeapp.generated.resources.*
 
 private val ColorBg = Color(0xFF161b22)
@@ -97,7 +99,7 @@ private fun SkillButton(
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
-                text = skill.name,
+                text = skillLocalizedName(skill.id),
                 color = ColorText.copy(alpha = alpha),
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -107,20 +109,20 @@ private fun SkillButton(
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 if (skill.manaCost > 0) {
                     Text(
-                        text = "${skill.manaCost}MP",
+                        text = stringResource(Res.string.skill_mana_cost, skill.manaCost),
                         color = ColorMana.copy(alpha = alpha),
                         fontSize = 9.sp,
                         fontWeight = FontWeight.Bold,
                     )
                 } else {
                     Text(
-                        text = "Free",
+                        text = stringResource(Res.string.skill_mana_free),
                         color = ColorSubtext.copy(alpha = alpha),
                         fontSize = 9.sp,
                     )
                 }
                 Text(
-                    text = "R:${skill.range}",
+                    text = stringResource(Res.string.skill_range, skill.range),
                     color = ColorSubtext.copy(alpha = alpha),
                     fontSize = 9.sp,
                 )

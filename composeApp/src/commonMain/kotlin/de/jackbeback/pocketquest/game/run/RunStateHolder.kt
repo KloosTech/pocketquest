@@ -1,8 +1,12 @@
 package de.jackbeback.pocketquest.game.run
 
+import de.jackbeback.pocketquest.data.db.PersistenceRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
 
 /** State that resets when the player dies. */
 data class RunScopedState(
@@ -33,11 +37,29 @@ data class PersistentState(
     val globalSkillUnlocks: List<String> = emptyList(),
 )
 
-class RunStateHolder {
+class RunStateHolder(
+    private val repo: PersistenceRepository,
+    private val ioScope: CoroutineScope = CoroutineScope(Dispatchers.Default),
+) {
     private val _run = MutableStateFlow<RunScopedState?>(null)
     val run: StateFlow<RunScopedState?> = _run
 
-    val persistent: PersistentState = PersistentState()
+    private val _persistent = MutableStateFlow(PersistentState())
+    val persistent: PersistentState get() = _persistent.value
+
+    /** Loads persistent state from Room. Call once at app startup before showing any screen. */
+    suspend fun preload() {
+        _persistent.value = PersistentState(
+            unlockedCharacterIds = repo.loadUnlockedCharacters(),
+        )
+    }
+
+    /** Persists the current unlocked characters to Room. */
+    fun unlockCharacter(characterId: String) {
+        val updated = (_persistent.value.unlockedCharacterIds + characterId).distinct()
+        _persistent.value = _persistent.value.copy(unlockedCharacterIds = updated)
+        ioScope.launch { repo.saveUnlockedCharacters(updated) }
+    }
 
     fun startRun(characterTemplateId: String) {
         _run.value = RunScopedState(characterTemplateId = characterTemplateId)

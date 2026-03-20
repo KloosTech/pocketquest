@@ -20,6 +20,8 @@ import de.jackbeback.pocketquest.game.animation.MELEE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.MOVE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.AnimationEvent
 import de.jackbeback.pocketquest.game.animation.AnimationEventCollector
+import de.jackbeback.pocketquest.game.hint.HintDefinition
+import de.jackbeback.pocketquest.game.hint.HintManager
 import de.jackbeback.pocketquest.game.loop.GameLoop
 import de.jackbeback.pocketquest.game.loop.PlayerAction
 import de.jackbeback.pocketquest.game.loop.TurnPhase
@@ -66,12 +68,32 @@ class BattleViewModel(
      * Called once when the battle result is computed; should exclude already-held relics.
      */
     private val pickRelicCandidates: () -> List<Relic> = { emptyList() },
+    /** Manages one-time tutorial hints; null disables hint display (e.g. in the designer). */
+    private val hintManager: HintManager? = null,
 ) {
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var selectedSkill: String? = null
     private val pendingTargets = mutableListOf<EntityId>()
     private var initialEnemyCount: Int = 0
     private val exploredTiles = mutableSetOf<Pair<Int, Int>>()
+
+    // ── Hint system ───────────────────────────────────────────────────────────
+    private val hintQueue = ArrayDeque<HintDefinition>()
+    private val _pendingHint = MutableStateFlow<HintDefinition?>(null)
+    val pendingHint: StateFlow<HintDefinition?> = _pendingHint
+
+    fun dismissHint() {
+        _pendingHint.value = hintQueue.removeFirstOrNull()
+    }
+
+    private fun enqueueHint(id: String) {
+        val hint = hintManager?.tryShow(id) ?: return
+        if (_pendingHint.value == null) {
+            _pendingHint.value = hint
+        } else {
+            hintQueue += hint
+        }
+    }
 
     /**
      * Terrain map for the current battle. Pre-set via [initialTileMap] (designer) or loaded
@@ -86,8 +108,8 @@ class BattleViewModel(
     private val _animationEvent = MutableStateFlow<AnimationEvent?>(null)
     val animationEvent: StateFlow<AnimationEvent?> = _animationEvent
 
-    private val _phaseBanner = MutableStateFlow<String?>(null)
-    val phaseBanner: StateFlow<String?> = _phaseBanner
+    private val _phaseBanner = MutableStateFlow<TurnPhase?>(null)
+    val phaseBanner: StateFlow<TurnPhase?> = _phaseBanner
 
     private val _isLocked = MutableStateFlow(false)
     val isLocked: StateFlow<Boolean> = _isLocked
@@ -122,6 +144,7 @@ class BattleViewModel(
             resetAndSpawn(params?.enemies ?: emptyList())
             _state.value = snapshot(TurnPhase.PlayerPhase)
             initialEnemyCount = _state.value.units.count { it.faction == Faction.ENEMY }
+            enqueueHint("hint_battle_intro")
         }
     }
 
@@ -130,6 +153,7 @@ class BattleViewModel(
         pendingTargets.clear()
         selectedSkill = skillId
         _state.value = snapshot(TurnPhase.PlayerPhase)
+        enqueueHint("hint_skills")
     }
 
     /**
@@ -270,7 +294,7 @@ class BattleViewModel(
         _isLocked.value = true
 
         scope.launch {
-            _phaseBanner.value = "Enemy Turn"
+            _phaseBanner.value = TurnPhase.EnemyPhase
             delay(700L)
             _phaseBanner.value = null
 
@@ -289,7 +313,7 @@ class BattleViewModel(
                 return@launch
             }
 
-            _phaseBanner.value = "Your Turn"
+            _phaseBanner.value = TurnPhase.PlayerPhase
             delay(500L)
             _phaseBanner.value = null
 
@@ -311,6 +335,8 @@ class BattleViewModel(
             newLevel         = levelInfo.newLevel,
             relicCandidates  = relicCandidates,
         )
+        if (levelInfo.didLevelUp) enqueueHint("hint_level_up")
+        if (relicCandidates.isNotEmpty()) enqueueHint("hint_relic")
     }
 
     private suspend fun playAnimations(events: List<AnimationEvent>) {
