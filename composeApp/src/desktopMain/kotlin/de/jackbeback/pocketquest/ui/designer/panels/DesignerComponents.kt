@@ -280,3 +280,68 @@ fun SuccessChip(label: String, onClick: () -> Unit) {
         Text(label, color = DC.Green, fontSize = 11.sp, fontWeight = FontWeight.Medium)
     }
 }
+
+// ── Status bar ────────────────────────────────────────────────────────────────
+
+@Composable
+fun StatusBar(
+    message: String,
+    isError: Boolean,
+    isDirty: Boolean,
+    filePath: String?,
+    campaignName: String?,
+    campaignLastSavedMs: Long,
+    campaignDirty: Boolean,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(DC.Mantle)
+            .padding(horizontal = 14.dp, vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(
+            Modifier
+                .size(6.dp)
+                .clip(RoundedCornerShape(3.dp))
+                .background(if (isError) DC.Error else if (isDirty) DC.Warning else DC.Success)
+        )
+        Text(
+            message,
+            color = if (isError) DC.Error else DC.Subtext0,
+            fontSize = 11.sp,
+            modifier = Modifier.weight(1f),
+        )
+        if (campaignName != null) {
+            Text("Campaign: $campaignName", color = DC.Mauve, fontSize = 10.sp)
+        }
+        if (isDirty) Text("● Unsaved changes", color = DC.Warning, fontSize = 10.sp)
+        if (filePath != null) {
+            Text(
+                filePath.let { if (it.length > 55) "…${it.takeLast(52)}" else it },
+                color = DC.Overlay0,
+                fontSize = 10.sp,
+            )
+        }
+    }
+}
+
+// ── Empty state ───────────────────────────────────────────────────────────────
+
+@Composable
+fun EmptyEditorPlaceholder(message: String, hint: String) {
+    Box(
+        modifier = Modifier.fillMaxSize().background(DC.Background),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("⚔", fontSize = 40.sp, color = DC.Surface1)
+            Text(message, color = DC.Subtext0, fontSize = 15.sp, fontWeight = FontWeight.Medium)
+            Text(hint, color = DC.Overlay0, fontSize = 12.sp)
+        }
+    }
+}

@@ -1,29 +1,14 @@
 package de.jackbeback.pocketquest.ui.designer
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Text
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import de.jackbeback.pocketquest.designer.io.CampaignFileIo
-import de.jackbeback.pocketquest.designer.io.EncounterFileIo
 import de.jackbeback.pocketquest.ui.designer.panels.*
-import de.jackbeback.pocketquest.ui.designer.panels.MapEditorPanel
-import java.awt.FileDialog
-import java.awt.Frame
-import java.io.File
-import java.io.FilenameFilter
 
 @Composable
 fun EncounterDesignerApp() {
@@ -33,14 +18,15 @@ fun EncounterDesignerApp() {
     MaterialTheme(
         colorScheme = darkColorScheme(
             background = DC.Background,
-            surface = DC.Panel,
-            primary = DC.Primary,
+            surface    = DC.Panel,
+            primary    = DC.Primary,
             onBackground = DC.Text,
-            onSurface = DC.Text,
+            onSurface  = DC.Text,
         )
     ) {
         Box(modifier = Modifier.fillMaxSize().background(DC.Background)) {
             Column(modifier = Modifier.fillMaxSize()) {
+
                 // ── Top toolbar ───────────────────────────────────────────
                 DesignerToolbar(state = state, vm = vm)
 
@@ -49,57 +35,62 @@ fun EncounterDesignerApp() {
                 // ── Graph mode toolbar (CAMPAIGN tab only) ────────────────
                 if (state.activeTab == EditorTab.CAMPAIGN && state.activeCampaign != null) {
                     GraphModeToolbar(
-                        mode = state.graphMode,
-                        nodeType = state.graphNodeTypeToPlace,
+                        mode          = state.graphMode,
+                        nodeType      = state.graphNodeTypeToPlace,
                         campaignDirty = state.campaignDirty,
-                        lastSavedMs = state.campaignLastSavedMs,
-                        onSetMode = vm::setGraphMode,
+                        lastSavedMs   = state.campaignLastSavedMs,
+                        onSetMode     = vm::setGraphMode,
                         onSetNodeType = vm::setGraphNodeTypeToPlace,
-                        onSave = vm::saveCampaignNow,
+                        onSave        = vm::saveCampaignNow,
                     )
                     HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
                 }
 
                 // ── Main 3-column layout ──────────────────────────────────
                 Row(modifier = Modifier.weight(1f).fillMaxWidth()) {
+
                     // Left: Library
                     LibraryPanel(
-                        state = state,
-                        onSelectEncounter = vm::selectEncounter,
-                        onNewEncounter = vm::newEncounter,
-                        onSelectEnemy = vm::selectEnemy,
-                        onNewEnemy = vm::newEnemy,
-                        onSelectSkill = vm::selectSkill,
-                        onNewSkill = vm::newSkill,
-                        onSelectOverworld = vm::selectOverworld,
-                        onNewOverworld = vm::newOverworld,
+                        state               = state,
+                        onSelectEncounter   = vm::selectEncounter,
+                        onNewEncounter      = vm::newEncounter,
+                        onSelectEnemy       = vm::selectEnemy,
+                        onNewEnemy          = vm::newEnemy,
+                        onSelectSkill       = vm::selectSkill,
+                        onNewSkill          = vm::newSkill,
+                        onSelectOverworld   = vm::selectOverworld,
+                        onNewOverworld      = vm::newOverworld,
                         onOpenCampaignBrowser = vm::showCampaignBrowser,
-                        modifier = Modifier.width(240.dp).fillMaxHeight(),
+                        modifier            = Modifier.width(240.dp).fillMaxHeight(),
                     )
 
-                    Box(Modifier.width(1.dp).fillMaxHeight().background(DC.PanelBorder))
+                    Box(
+                        Modifier.width(1.dp).fillMaxHeight().background(DC.PanelBorder)
+                    )
 
-                    // Center: Editor
-                    Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
+                    // Center: Context editor
+                    Box(
+                        modifier = Modifier.weight(1f).fillMaxHeight()
+                    ) {
                         when (state.activeTab) {
                             EditorTab.ENCOUNTER -> {
                                 val enc = state.encounters.find { it.id == state.selectedEncounterId }
                                 if (enc != null) {
                                     EncounterEditorPanel(
-                                        encounter = enc,
-                                        enemyLibrary = state.enemyLibrary,
-                                        availableMaps = state.maps,
-                                        onUpdate = vm::updateEncounter,
-                                        onDelete = { vm.deleteEncounter(enc.id) },
-                                        onAddEnemy = { vm.addEnemyToEncounter(it, enc.id) },
-                                        onRemoveEnemy = { vm.removeEnemyFromEncounter(enc.id, it) },
-                                        onPlayPreview = { vm.startBattlePreview(enc) },
-                                        modifier = Modifier.fillMaxSize(),
+                                        encounter      = enc,
+                                        enemyLibrary   = state.enemyLibrary,
+                                        availableMaps  = state.maps,
+                                        onUpdate       = vm::updateEncounter,
+                                        onDelete       = { vm.deleteEncounter(enc.id) },
+                                        onAddEnemy     = { vm.addEnemyToEncounter(it, enc.id) },
+                                        onRemoveEnemy  = { vm.removeEnemyFromEncounter(enc.id, it) },
+                                        onPlayPreview  = { vm.startBattlePreview(enc) },
+                                        modifier       = Modifier.fillMaxSize(),
                                     )
                                 } else {
                                     EmptyEditorPlaceholder(
                                         message = "Select or create an encounter to begin",
-                                        hint = "Use the Library panel on the left →",
+                                        hint    = "Use the Library panel on the left →",
                                     )
                                 }
                             }
@@ -107,16 +98,16 @@ fun EncounterDesignerApp() {
                                 val enemy = state.enemyLibrary.find { it.id == state.selectedEnemyId }
                                 if (enemy != null) {
                                     EnemyEditorPanel(
-                                        enemy = enemy,
-                                        availableSkillIds = state.skillLibrary.map { it.id },
-                                        onUpdate = vm::updateEnemy,
-                                        onDelete = { vm.deleteEnemy(enemy.id) },
-                                        modifier = Modifier.fillMaxSize(),
+                                        enemy              = enemy,
+                                        availableSkillIds  = state.skillLibrary.map { it.id },
+                                        onUpdate           = vm::updateEnemy,
+                                        onDelete           = { vm.deleteEnemy(enemy.id) },
+                                        modifier           = Modifier.fillMaxSize(),
                                     )
                                 } else {
                                     EmptyEditorPlaceholder(
                                         message = "Select or create an enemy to begin",
-                                        hint = "Enemies define the characters that appear in encounters",
+                                        hint    = "Enemies define the characters that appear in encounters",
                                     )
                                 }
                             }
@@ -124,7 +115,7 @@ fun EncounterDesignerApp() {
                                 val skill = state.skillLibrary.find { it.id == state.selectedSkillId }
                                 if (skill != null) {
                                     SkillEditorPanel(
-                                        skill = skill,
+                                        skill    = skill,
                                         onUpdate = vm::updateSkill,
                                         onDelete = { vm.deleteSkill(skill.id) },
                                         modifier = Modifier.fillMaxSize(),
@@ -132,89 +123,91 @@ fun EncounterDesignerApp() {
                                 } else {
                                     EmptyEditorPlaceholder(
                                         message = "Select or create a skill to begin",
-                                        hint = "Skills can be assigned to any enemy or player",
+                                        hint    = "Skills can be assigned to any enemy or player",
                                     )
                                 }
                             }
                             EditorTab.MAP -> {
                                 MapEditorPanel(
-                                    maps = state.maps,
+                                    maps          = state.maps,
                                     selectedMapId = state.selectedMapId,
                                     onMapExported = vm::addMap,
-                                    onMapLoaded = vm::addMap,
-                                    onSelectMap = vm::selectMap,
-                                    modifier = Modifier.fillMaxSize(),
+                                    onMapLoaded   = vm::addMap,
+                                    onSelectMap   = vm::selectMap,
+                                    modifier      = Modifier.fillMaxSize(),
                                 )
                             }
                             EditorTab.CAMPAIGN -> {
-                                val campaign = state.activeCampaign
+                                val campaign  = state.activeCampaign
                                 val overworld = campaign?.overworlds?.find { it.id == state.activeOverworldId }
                                 when {
                                     campaign == null -> EmptyEditorPlaceholder(
                                         message = "No campaign open",
-                                        hint = "Open or create a campaign to get started",
+                                        hint    = "Open or create a campaign to get started",
                                     )
                                     overworld == null -> EmptyEditorPlaceholder(
                                         message = "No overworld selected",
-                                        hint = "Select or create one in the library",
+                                        hint    = "Select or create one in the library",
                                     )
                                     else -> OverworldGraphPanel(
-                                        overworld = overworld,
-                                        backgroundMap = state.maps.find { it.id == overworld.backgroundMapId },
-                                        interactionMode = state.graphMode,
-                                        nodeTypeToPlace = state.graphNodeTypeToPlace,
-                                        selection = state.graphSelection,
+                                        overworld         = overworld,
+                                        backgroundMap     = state.maps.find { it.id == overworld.backgroundMapId },
+                                        interactionMode   = state.graphMode,
+                                        nodeTypeToPlace   = state.graphNodeTypeToPlace,
+                                        selection         = state.graphSelection,
                                         edgePendingFromId = state.edgePendingFromId,
-                                        onPlaceNode = { t, x, y -> vm.placeNode(overworld.id, t, x, y) },
-                                        onMoveNode = { nid, x, y -> vm.moveNode(overworld.id, nid, x, y) },
-                                        onSelectNode = { vm.selectGraphNode(overworld.id, it) },
-                                        onSelectEdge = { f, t -> vm.selectGraphEdge(overworld.id, f, t) },
-                                        onDeleteNode = { vm.deleteNode(overworld.id, it) },
-                                        onDeleteEdge = { f, t -> vm.deleteEdge(overworld.id, f, t) },
-                                        onBeginEdge = { vm.beginEdgePlacement(overworld.id, it) },
-                                        onCompleteEdge = { vm.completeEdgePlacement(overworld.id, it) },
-                                        onClearSelection = vm::clearGraphSelection,
-                                        onChangeNodeType = { nodeId, type -> vm.changeNodeType(overworld.id, nodeId, type) },
-                                        modifier = Modifier.fillMaxSize(),
+                                        onPlaceNode       = { t, x, y -> vm.placeNode(overworld.id, t, x, y) },
+                                        onMoveNode        = { nid, x, y -> vm.moveNode(overworld.id, nid, x, y) },
+                                        onSelectNode      = { vm.selectGraphNode(overworld.id, it) },
+                                        onSelectEdge      = { f, t -> vm.selectGraphEdge(overworld.id, f, t) },
+                                        onDeleteNode      = { vm.deleteNode(overworld.id, it) },
+                                        onDeleteEdge      = { f, t -> vm.deleteEdge(overworld.id, f, t) },
+                                        onBeginEdge       = { vm.beginEdgePlacement(overworld.id, it) },
+                                        onCompleteEdge    = { vm.completeEdgePlacement(overworld.id, it) },
+                                        onClearSelection  = vm::clearGraphSelection,
+                                        onChangeNodeType  = { nodeId, type -> vm.changeNodeType(overworld.id, nodeId, type) },
+                                        modifier          = Modifier.fillMaxSize(),
                                     )
                                 }
                             }
                         }
                     }
 
-                    Box(Modifier.width(1.dp).fillMaxHeight().background(DC.PanelBorder))
+                    Box(
+                        Modifier.width(1.dp).fillMaxHeight().background(DC.PanelBorder)
+                    )
 
                     // Right: Inspector
                     if (state.activeTab == EditorTab.CAMPAIGN) {
                         CampaignInspectorPanel(
-                            state = state,
-                            onRenameCapmaign = vm::renameCampaign,
-                            onUpdateOverworldMeta = vm::updateOverworldMeta,
-                            onUpdateNodeLabel = vm::updateNodeLabel,
+                            state                  = state,
+                            onRenameCapmaign       = vm::renameCampaign,
+                            onUpdateOverworldMeta  = vm::updateOverworldMeta,
+                            onUpdateNodeLabel      = vm::updateNodeLabel,
                             onUpdateNodeHealPercent = vm::updateNodeHealPercent,
-                            onAssignEncounter = vm::assignEncounterToNode,
+                            onAssignEncounter      = vm::assignEncounterToNode,
                             onCreateEncounterForNode = vm::createEncounterForNode,
-                            onEditEncounter = vm::editEncounterForNode,
-                            onDeleteEdge = vm::deleteEdge,
-                            modifier = Modifier.width(220.dp).fillMaxHeight().background(DC.Panel),
+                            onEditEncounter        = vm::editEncounterForNode,
+                            onDeleteEdge           = vm::deleteEdge,
+                            modifier               = Modifier.width(220.dp).fillMaxHeight().background(DC.Panel),
                         )
                     } else {
                         DesignerInspectorPanel(
-                            state = state,
-                            modifier = Modifier.width(220.dp).fillMaxHeight(),
+                            state    = state,
+                            modifier = Modifier.width(220.dp).fillMaxHeight().background(DC.Panel),
                         )
                     }
                 }
 
                 // ── Status bar ────────────────────────────────────────────
                 StatusBar(
-                    message = state.statusMessage,
-                    isError = state.statusIsError,
-                    isDirty = state.isDirty || state.campaignDirty,
-                    filePath = state.currentFilePath,
-                    campaignName = state.activeCampaign?.name,
+                    message            = state.statusMessage,
+                    isError            = state.statusIsError,
+                    isDirty            = state.isDirty || state.campaignDirty,
+                    filePath           = state.currentFilePath,
+                    campaignName       = state.activeCampaign?.name,
                     campaignLastSavedMs = state.campaignLastSavedMs,
-                    campaignDirty = state.campaignDirty,
+                    campaignDirty      = state.campaignDirty,
                 )
             }
 
@@ -224,9 +217,9 @@ fun EncounterDesignerApp() {
                 if (previewVm != null) {
                     val enc = state.encounters.find { it.id == state.selectedEncounterId }
                     BattlePreviewOverlay(
-                        viewModel = previewVm,
+                        viewModel     = previewVm,
                         encounterName = enc?.name ?: "Preview",
-                        onClose = vm::closeBattlePreview,
+                        onClose       = vm::closeBattlePreview,
                     )
                 }
             }
@@ -234,386 +227,12 @@ fun EncounterDesignerApp() {
             // ── Campaign browser overlay ──────────────────────────────────
             if (state.showCampaignBrowser) {
                 CampaignBrowser(
-                    config = state.designerConfig,
-                    onOpen = vm::openCampaign,
-                    onNew = { name, desc -> vm.newCampaign(name) },
+                    config    = state.designerConfig,
+                    onOpen    = vm::openCampaign,
+                    onNew     = { name, _ -> vm.newCampaign(name) },
                     onDismiss = if (state.activeCampaign != null) vm::closeCampaignBrowser else null,
                 )
             }
         }
     }
-}
-
-// ── Toolbar ───────────────────────────────────────────────────────────────────
-
-@Composable
-private fun DesignerToolbar(state: DesignerState, vm: DesignerViewModel) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DC.Mantle)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        // Logo
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Box(
-                Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)).background(DC.Primary),
-                contentAlignment = Alignment.Center,
-            ) { Text("⚔", fontSize = 11.sp) }
-            Text("PocketQuest Designer", color = DC.Text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
-        }
-
-        Spacer(Modifier.width(8.dp))
-
-        // File ops
-        ToolbarButton("New Encounter") { vm.newEncounter() }
-        ToolbarButton("New Enemy") { vm.newEnemy() }
-        ToolbarButton("New Skill") { vm.newSkill() }
-
-        Box(Modifier.width(1.dp).height(20.dp).background(DC.Surface1))
-
-        ToolbarButton("Open File…") {
-            val file = showOpenDialog()
-            if (file != null) vm.loadEncounterFromFile(file)
-        }
-
-        val selectedEncounter = state.encounters.find { it.id == state.selectedEncounterId }
-        ToolbarButton("Save…", enabled = selectedEncounter != null) {
-            if (selectedEncounter != null) {
-                val file = showSaveDialog(selectedEncounter.name)
-                if (file != null) vm.saveEncounter(selectedEncounter, file)
-            }
-        }
-
-        // "← Campaign" button when in ENCOUNTER tab with active campaign
-        if (state.activeCampaign != null && state.activeTab == EditorTab.ENCOUNTER) {
-            Box(Modifier.width(1.dp).height(20.dp).background(DC.Surface1))
-            ToolbarButton("← Campaign") { vm.setActiveTab(EditorTab.CAMPAIGN) }
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        // Tab switcher
-        TabButton("Campaign", state.activeTab == EditorTab.CAMPAIGN, DC.Mauve) { vm.setActiveTab(EditorTab.CAMPAIGN) }
-        TabButton("Encounter", state.activeTab == EditorTab.ENCOUNTER, DC.Blue) { vm.setActiveTab(EditorTab.ENCOUNTER) }
-        TabButton("Enemy", state.activeTab == EditorTab.ENEMY, DC.Red) { vm.setActiveTab(EditorTab.ENEMY) }
-        TabButton("Skill", state.activeTab == EditorTab.SKILL, DC.Yellow) { vm.setActiveTab(EditorTab.SKILL) }
-        TabButton("Map", state.activeTab == EditorTab.MAP, DC.Green) { vm.setActiveTab(EditorTab.MAP) }
-
-        Spacer(Modifier.weight(1f))
-
-        // Play preview
-        val enc = state.encounters.find { it.id == state.selectedEncounterId }
-        if (enc != null && state.activeTab == EditorTab.ENCOUNTER) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(6.dp))
-                    .background(DC.Green.copy(alpha = 0.15f))
-                    .border(1.dp, DC.Green.copy(alpha = 0.3f), RoundedCornerShape(6.dp))
-                    .clickable { vm.startBattlePreview(enc) }
-                    .padding(horizontal = 14.dp, vertical = 6.dp),
-                contentAlignment = Alignment.Center,
-            ) {
-                Text("▶  Play Encounter", color = DC.Green, fontSize = 13.sp, fontWeight = FontWeight.Medium)
-            }
-        }
-    }
-}
-
-// ── Graph Mode Toolbar ────────────────────────────────────────────────────────
-
-@Composable
-private fun GraphModeToolbar(
-    mode: GraphInteractionMode,
-    nodeType: de.jackbeback.pocketquest.designer.model.OverworldNodeType,
-    campaignDirty: Boolean,
-    lastSavedMs: Long,
-    onSetMode: (GraphInteractionMode) -> Unit,
-    onSetNodeType: (de.jackbeback.pocketquest.designer.model.OverworldNodeType) -> Unit,
-    onSave: () -> Unit,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DC.Mantle)
-            .padding(horizontal = 14.dp, vertical = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("MODE:", color = DC.Overlay0, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.5.sp)
-
-        ModeButton("SELECT", mode == GraphInteractionMode.SELECT, DC.Blue) { onSetMode(GraphInteractionMode.SELECT) }
-        ModeButton("ADD NODE", mode == GraphInteractionMode.ADD_NODE, DC.Green) { onSetMode(GraphInteractionMode.ADD_NODE) }
-        ModeButton("ADD EDGE", mode == GraphInteractionMode.ADD_EDGE, DC.Sapphire) { onSetMode(GraphInteractionMode.ADD_EDGE) }
-        ModeButton("DELETE", mode == GraphInteractionMode.DELETE, DC.Red) { onSetMode(GraphInteractionMode.DELETE) }
-
-        Box(Modifier.width(1.dp).height(18.dp).background(DC.Surface1))
-        Text("TYPE:", color = DC.Overlay0, fontSize = 10.sp, letterSpacing = 0.5.sp)
-        de.jackbeback.pocketquest.designer.model.OverworldNodeType.values().forEach { t ->
-            val label = when (t) {
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.START -> "▶ START"
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BATTLE -> "⚔ BATTLE"
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.REST -> "⛺ REST"
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BOSS -> "☠ BOSS"
-            }
-            val color = when (t) {
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.START -> DC.Green
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BATTLE -> DC.Blue
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.REST -> DC.Yellow
-                de.jackbeback.pocketquest.designer.model.OverworldNodeType.BOSS -> DC.Red
-            }
-            ModeButton(label, nodeType == t, color) { onSetNodeType(t) }
-        }
-
-        Spacer(Modifier.weight(1f))
-
-        // Save status
-        val saveText = if (campaignDirty) {
-            "● Unsaved"
-        } else if (lastSavedMs > 0L) {
-            val ago = (System.currentTimeMillis() - lastSavedMs) / 1000
-            when {
-                ago < 5 -> "Saved just now"
-                ago < 60 -> "Saved ${ago}s ago"
-                ago < 3600 -> "Saved ${ago / 60}m ago"
-                else -> "Saved"
-            }
-        } else ""
-        if (saveText.isNotEmpty()) {
-            Text(
-                saveText,
-                color = if (campaignDirty) DC.Warning else DC.Success,
-                fontSize = 10.sp,
-            )
-        }
-
-        ToolbarButton("Save Campaign") { onSave() }
-    }
-}
-
-@Composable
-private fun ModeButton(
-    label: String,
-    active: Boolean,
-    activeColor: androidx.compose.ui.graphics.Color,
-    onClick: () -> Unit,
-) {
-    val bg = if (active) activeColor.copy(alpha = 0.15f) else DC.Surface0.copy(alpha = 0.4f)
-    val border = if (active) activeColor.copy(alpha = 0.4f) else DC.Surface1
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .background(bg)
-            .border(1.dp, border, RoundedCornerShape(4.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (active) activeColor else DC.Subtext0,
-            fontSize = 11.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-        )
-    }
-}
-
-@Composable
-private fun ToolbarButton(label: String, enabled: Boolean = true, onClick: () -> Unit) {
-    val color = if (enabled) DC.Subtext1 else DC.Overlay0
-    Text(
-        label,
-        color = color,
-        fontSize = 12.sp,
-        modifier = Modifier
-            .clip(RoundedCornerShape(4.dp))
-            .clickable(enabled = enabled) { onClick() }
-            .padding(horizontal = 10.dp, vertical = 4.dp),
-    )
-}
-
-@Composable
-private fun TabButton(label: String, active: Boolean, activeColor: androidx.compose.ui.graphics.Color, onClick: () -> Unit) {
-    val bg = if (active) activeColor.copy(alpha = 0.15f) else DC.Surface0.copy(alpha = 0.5f)
-    val border = if (active) activeColor.copy(alpha = 0.4f) else DC.Surface1
-    Box(
-        modifier = Modifier
-            .clip(RoundedCornerShape(5.dp))
-            .background(bg)
-            .border(1.dp, border, RoundedCornerShape(5.dp))
-            .clickable { onClick() }
-            .padding(horizontal = 12.dp, vertical = 5.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (active) activeColor else DC.Subtext0,
-            fontSize = 12.sp,
-            fontWeight = if (active) FontWeight.SemiBold else FontWeight.Normal,
-        )
-    }
-}
-
-// ── Inspector ─────────────────────────────────────────────────────────────────
-
-@Composable
-private fun DesignerInspectorPanel(state: DesignerState, modifier: Modifier) {
-    Column(
-        modifier = modifier
-            .background(DC.Panel)
-            .padding(14.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        Text("STATS", color = DC.Overlay0, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
-        HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
-
-        StatRow("Encounters", state.encounters.size.toString())
-        StatRow("Enemy Types", state.enemyLibrary.size.toString())
-        StatRow("Skills", state.skillLibrary.size.toString())
-
-        val enc = state.encounters.find { it.id == state.selectedEncounterId }
-        if (enc != null) {
-            HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
-            Text("CURRENT ENCOUNTER", color = DC.Overlay0, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-            StatRow("Name", enc.name.ifBlank { "—" })
-            StatRow("Enemies", enc.enemies.size.toString())
-            StatRow("Player spawn", "${enc.playerSpawnCol}, ${enc.playerSpawnRow}")
-            if (enc.enemies.isNotEmpty()) {
-                HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
-                Text("ENEMIES", color = DC.Overlay0, fontSize = 10.sp, letterSpacing = 0.8.sp)
-                enc.enemies.forEach { e ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                    ) {
-                        Text(e.name, color = DC.Subtext1, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                        Text("HP ${e.maxHealth}", color = DC.Overlay0, fontSize = 10.sp)
-                    }
-                }
-            }
-        }
-
-        val skill = state.skillLibrary.find { it.id == state.selectedSkillId }
-        if (skill != null && state.activeTab == EditorTab.SKILL) {
-            HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
-            Text("SELECTED SKILL", color = DC.Overlay0, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-            StatRow("Name", skill.name)
-            StatRow("Mana", skill.manaCost.toString())
-            StatRow("Range", skill.range.toString())
-            StatRow("Effects", skill.effects.size.toString())
-        }
-
-        val enemy = state.enemyLibrary.find { it.id == state.selectedEnemyId }
-        if (enemy != null && state.activeTab == EditorTab.ENEMY) {
-            HorizontalDivider(color = DC.PanelBorder, thickness = 1.dp)
-            Text("SELECTED ENEMY", color = DC.Overlay0, fontSize = 10.sp, fontWeight = FontWeight.Bold, letterSpacing = 0.8.sp)
-            StatRow("HP", enemy.maxHealth.toString())
-            StatRow("AC", enemy.stats.ac.toString())
-            StatRow("Initiative", enemy.initiative.toString())
-            StatRow("AI", enemy.aiStrategy)
-        }
-    }
-}
-
-@Composable
-private fun StatRow(label: String, value: String) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-    ) {
-        Text(label, color = DC.Subtext0, fontSize = 11.sp)
-        Text(value, color = DC.Text, fontSize = 11.sp, fontWeight = FontWeight.Medium)
-    }
-}
-
-// ── Status bar ────────────────────────────────────────────────────────────────
-
-@Composable
-private fun StatusBar(
-    message: String,
-    isError: Boolean,
-    isDirty: Boolean,
-    filePath: String?,
-    campaignName: String?,
-    campaignLastSavedMs: Long,
-    campaignDirty: Boolean,
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(DC.Mantle)
-            .padding(horizontal = 14.dp, vertical = 5.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(
-            Modifier
-                .size(6.dp)
-                .clip(RoundedCornerShape(3.dp))
-                .background(if (isError) DC.Error else if (isDirty) DC.Warning else DC.Success)
-        )
-        Text(
-            message,
-            color = if (isError) DC.Error else DC.Subtext0,
-            fontSize = 11.sp,
-            modifier = Modifier.weight(1f),
-        )
-        if (campaignName != null) {
-            Text("Campaign: $campaignName", color = DC.Mauve, fontSize = 10.sp)
-        }
-        if (isDirty) Text("● Unsaved changes", color = DC.Warning, fontSize = 10.sp)
-        if (filePath != null) {
-            Text(
-                filePath.let { if (it.length > 55) "…${it.takeLast(52)}" else it },
-                color = DC.Overlay0,
-                fontSize = 10.sp,
-            )
-        }
-    }
-}
-
-// ── Empty state ───────────────────────────────────────────────────────────────
-
-@Composable
-fun EmptyEditorPlaceholder(message: String, hint: String) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(DC.Background),
-        contentAlignment = Alignment.Center,
-    ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            Text("⚔", fontSize = 40.sp, color = DC.Surface1)
-            Text(message, color = DC.Subtext0, fontSize = 15.sp, fontWeight = FontWeight.Medium)
-            Text(hint, color = DC.Overlay0, fontSize = 12.sp)
-        }
-    }
-}
-
-// ── File dialogs (AWT) ────────────────────────────────────────────────────────
-
-private fun showOpenDialog(): File? {
-    val dialog = FileDialog(null as Frame?, "Open Encounter", FileDialog.LOAD).apply {
-        directory = EncounterFileIo.defaultDirectory.absolutePath
-        filenameFilter = FilenameFilter { _, name -> name.endsWith(".json") }
-        isVisible = true
-    }
-    val dir  = dialog.directory ?: return null
-    val file = dialog.file     ?: return null
-    return File(dir, file)
-}
-
-private fun showSaveDialog(suggestedName: String): File? {
-    val dialog = FileDialog(null as Frame?, "Save Encounter", FileDialog.SAVE).apply {
-        directory = EncounterFileIo.defaultDirectory.absolutePath
-        file = "$suggestedName.json"
-        isVisible = true
-    }
-    val dir  = dialog.directory ?: return null
-    val name = dialog.file     ?: return null
-    val f = File(dir, if (name.endsWith(".json")) name else "$name.json")
-    return f
 }
