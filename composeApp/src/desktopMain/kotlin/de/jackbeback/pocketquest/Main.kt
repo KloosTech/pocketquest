@@ -18,7 +18,10 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import androidx.room.Room
+import de.jackbeback.pocketquest.data.db.PocketQuestDatabase
 import de.jackbeback.pocketquest.di.initKoin
+import java.io.File
 import de.jackbeback.pocketquest.ui.designer.DC
 import de.jackbeback.pocketquest.ui.designer.EncounterDesignerApp
 
@@ -37,7 +40,12 @@ fun main() = application {
         ) {
             LauncherScreen(
                 onPlayGame = {
-                    initKoin()
+                    val dbDir = File(System.getProperty("user.home"), ".pocketquest").also { it.mkdirs() }
+                    initKoin {
+                        Room.databaseBuilder<PocketQuestDatabase>(
+                            name = File(dbDir, "pocketquest.db").absolutePath,
+                        ).build()
+                    }
                     mode = LaunchMode.GAME
                 },
                 onOpenDesigner = {

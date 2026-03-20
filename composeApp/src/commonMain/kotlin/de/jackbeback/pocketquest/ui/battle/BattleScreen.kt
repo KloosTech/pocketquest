@@ -59,6 +59,7 @@ import de.jackbeback.pocketquest.game.animation.MOVE_ANIM_MS
 import de.jackbeback.pocketquest.game.animation.AnimationEvent
 import de.jackbeback.pocketquest.game.loop.TurnPhase
 import de.jackbeback.pocketquest.ui.component.ConditionBadges
+import de.jackbeback.pocketquest.ui.component.HintOverlay
 import de.jackbeback.pocketquest.ui.component.SkillPanel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -121,6 +122,7 @@ fun BattleScreen(
     val isLocked by viewModel.isLocked.collectAsState()
     val tiles by viewModel.tileCache.tiles.collectAsState()
     val battleResult by viewModel.battleResult.collectAsState()
+    val pendingHint by viewModel.pendingHint.collectAsState()
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showSkillSheet by remember { mutableStateOf(false) }
@@ -288,6 +290,11 @@ fun BattleScreen(
                 onRelicChosen  = onRelicChosen,
                 onContinue     = { onBattleEnd(result) },
             )
+        }
+
+        // Tutorial hint overlay — shown on top of everything, dismissed by player
+        pendingHint?.let { hint ->
+            HintOverlay(hint = hint, onDismiss = viewModel::dismissHint)
         }
     }
 

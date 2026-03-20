@@ -7,6 +7,8 @@ plugins {
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinSerialization)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 kotlin {
@@ -47,14 +49,19 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
             implementation(libs.mapcompose)
+            implementation(libs.room.runtime)
         }
         androidMain.dependencies {
             implementation(libs.koin.android)
+        }
+        iosMain.dependencies {
+            implementation(libs.sqlite.bundled)
         }
         val desktopMain by getting {
             dependencies {
                 implementation(compose.desktop.currentOs)
                 implementation(libs.kotlinx.coroutines.swing)
+                implementation(libs.sqlite.bundled)
             }
         }
         commonTest.dependencies {
@@ -92,6 +99,15 @@ android {
 
 dependencies {
     debugImplementation(libs.compose.uiTooling)
+    // KSP processors for Room — one entry per KMP target
+    add("kspAndroid", libs.room.compiler)
+    add("kspIosArm64", libs.room.compiler)
+    add("kspIosSimulatorArm64", libs.room.compiler)
+    add("kspJvm", libs.room.compiler) // desktop
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 compose.desktop {

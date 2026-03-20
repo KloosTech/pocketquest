@@ -47,6 +47,7 @@ import de.jackbeback.pocketquest.content.events.OverworldEvent
 import de.jackbeback.pocketquest.ecs.components.core.HealthComponent
 import de.jackbeback.pocketquest.ecs.components.core.ManaComponent
 import de.jackbeback.pocketquest.game.run.RunScopedState
+import de.jackbeback.pocketquest.ui.component.HintOverlay
 import kotlinx.coroutines.launch
 import kotlin.math.sqrt
 
@@ -75,6 +76,7 @@ fun OverworldScreen(
     val mapCleared      by viewModel.mapCleared.collectAsState()
     val playerHealth    by viewModel.playerHealth.collectAsState()
     val playerMana      by viewModel.playerMana.collectAsState()
+    val pendingHint     by viewModel.pendingHint.collectAsState()
 
     val currentNodeId    = runState?.currentNodeId ?: "start"
     val completedNodeIds = runState?.completedNodeIds ?: setOf("start")
@@ -130,6 +132,11 @@ fun OverworldScreen(
                 },
                 onEndRun  = onEndRun,
             )
+        }
+
+        // Tutorial hint overlay — shown on top of everything, dismissed by player
+        pendingHint?.let { hint ->
+            HintOverlay(hint = hint, onDismiss = viewModel::dismissHint)
         }
     }
 }
