@@ -186,6 +186,15 @@ internal fun OverworldGraphPanel(
     modifier: Modifier = Modifier,
 ) {
     val latestSelection by rememberUpdatedState(selection)
+    val latestOverworld by rememberUpdatedState(overworld)
+    val latestOnMoveNode by rememberUpdatedState(onMoveNode)
+    val latestOnPlaceNode by rememberUpdatedState(onPlaceNode)
+    val latestOnSelectNode by rememberUpdatedState(onSelectNode)
+    val latestOnClearSelection by rememberUpdatedState(onClearSelection)
+    val latestOnBeginEdge by rememberUpdatedState(onBeginEdge)
+    val latestOnCompleteEdge by rememberUpdatedState(onCompleteEdge)
+    val latestOnDeleteNode by rememberUpdatedState(onDeleteNode)
+    val latestOnDeleteEdge by rememberUpdatedState(onDeleteEdge)
     val focusRequester = remember { FocusRequester() }
 
     // Tile-loading LaunchedEffect
@@ -248,30 +257,33 @@ internal fun OverworldGraphPanel(
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
-                .pointerInput(interactionMode, overworld, edgePendingFromId) {
+                .pointerInput(interactionMode, edgePendingFromId) {
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         val downPos = down.position
                         var lastPos = downPos
                         var hasMoved = false
-                        val hitAtDown = state.hitNode(downPos, overworld.nodes)
+                        // Reset any leftover drag state from a cancelled gesture
+                        state.draggingNodeId = null
+                        state.dragOffset = Offset.Zero
+                        val hitAtDown = state.hitNode(downPos, latestOverworld.nodes)
 
                         when (interactionMode) {
                             GraphInteractionMode.SELECT -> {
                                 if (hitAtDown != null) {
                                     val alreadySelected = latestSelection.kind == GraphSelectionKind.NODE &&
                                             latestSelection.nodeId == hitAtDown.id
-                                    onSelectNode(hitAtDown.id)
+                                    latestOnSelectNode(hitAtDown.id)
                                     if (alreadySelected) state.draggingNodeId = hitAtDown.id
                                 } else {
-                                    onClearSelection()
+                                    latestOnClearSelection()
                                 }
                             }
                             GraphInteractionMode.ADD_NODE -> { /* handled on up */ }
                             GraphInteractionMode.ADD_EDGE -> {
                                 if (hitAtDown != null) {
-                                    if (edgePendingFromId == null) onBeginEdge(hitAtDown.id)
-                                    else onCompleteEdge(hitAtDown.id)
+                                    if (edgePendingFromId == null) latestOnBeginEdge(hitAtDown.id)
+                                    else latestOnCompleteEdge(hitAtDown.id)
                                 }
                             }
                             GraphInteractionMode.DELETE -> { /* handled on up */ }
@@ -299,11 +311,13 @@ internal fun OverworldGraphPanel(
                                     GraphInteractionMode.SELECT -> {
                                         val dragId = state.draggingNodeId
                                         if (hasMoved && dragId != null) {
-                                            val node = overworld.nodes.find { it.id == dragId }
+                                            val node = latestOverworld.nodes.find { it.id == dragId }
                                             if (node != null) {
-                                                val finalPos = state.nodeCanvasPos(node) + state.dragOffset
-                                                val (nx, ny) = state.toNormalized(finalPos)
-                                                onMoveNode(dragId, nx, ny)
+                                                val cw = state.canvasSize.width.toDouble() * state.zoom
+                                                val ch = state.canvasSize.height.toDouble() * state.zoom
+                                                val nx = (node.x + state.dragOffset.x / cw).coerceIn(0.0, 1.0)
+                                                val ny = (node.y + state.dragOffset.y / ch).coerceIn(0.0, 1.0)
+                                                latestOnMoveNode(dragId, nx, ny)
                                             }
                                         }
                                         state.draggingNodeId = null
@@ -312,16 +326,16 @@ internal fun OverworldGraphPanel(
                                     GraphInteractionMode.ADD_NODE -> {
                                         if (!hasMoved) {
                                             val (nx, ny) = state.toNormalized(downPos)
-                                            onPlaceNode(nodeTypeToPlace, nx, ny)
+                                            latestOnPlaceNode(nodeTypeToPlace, nx, ny)
                                         }
                                     }
                                     GraphInteractionMode.DELETE -> {
                                         if (!hasMoved) {
-                                            val node = state.hitNode(downPos, overworld.nodes)
-                                            val edge = state.hitEdge(downPos, overworld.nodes, overworld.edges)
+                                            val node = state.hitNode(downPos, latestOverworld.nodes)
+                                            val edge = state.hitEdge(downPos, latestOverworld.nodes, latestOverworld.edges)
                                             when {
-                                                node != null -> onDeleteNode(node.id)
-                                                edge != null -> onDeleteEdge(edge.fromId, edge.toId)
+                                                node != null -> latestOnDeleteNode(node.id)
+                                                edge != null -> latestOnDeleteEdge(edge.fromId, edge.toId)
                                             }
                                         }
                                     }
