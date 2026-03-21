@@ -456,7 +456,7 @@ fun UiCatalogApp() {
             onSurface = DC.Text,
         )
     ) {
-        val entries = remember { buildEntries() }
+        val entries = buildEntries()
         var selectedEntry by remember { mutableStateOf(entries.first()) }
 
         Row(modifier = Modifier.fillMaxSize()) {
@@ -519,7 +519,7 @@ private fun CatalogSidebar(
                 letterSpacing = 1.sp,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, top = 14.dp, bottom = 4.dp),
+                    .padding(start = 16.dp, end = 16.dp, top = 14.dp, bottom = 4.dp),
             )
 
             categoryEntries.forEach { entry ->

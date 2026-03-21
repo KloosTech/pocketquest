@@ -70,7 +70,7 @@ private const val NODE_RADIUS_BASE = 26f
 // ── Extracted viewport + interaction state ────────────────────────────────────
 
 @androidx.compose.runtime.Stable
-class OverworldGraphState {
+internal class OverworldGraphState {
     var zoom           by mutableStateOf(1f)
     var panX           by mutableStateOf(0f)
     var panY           by mutableStateOf(0f)
@@ -143,7 +143,7 @@ class OverworldGraphState {
 }
 
 @Composable
-fun rememberOverworldGraphState(): OverworldGraphState = remember { OverworldGraphState() }
+internal fun rememberOverworldGraphState(): OverworldGraphState = remember { OverworldGraphState() }
 
 private fun tileTypeColorForGraph(type: TileType): Color = when (type) {
     TileType.FLOOR             -> Color(0xFF3D3D52)
@@ -156,7 +156,7 @@ private fun tileTypeColorForGraph(type: TileType): Color = when (type) {
     TileType.VOID              -> Color(0xFF101010)
 }
 
-private sealed class ContextMenuState {
+internal sealed class ContextMenuState {
     object Hidden : ContextMenuState()
     data class OnCanvas(val canvasPos: Offset) : ContextMenuState()
     data class OnNode(val canvasPos: Offset, val node: OverworldNodeDef) : ContextMenuState()
@@ -165,7 +165,7 @@ private sealed class ContextMenuState {
 
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun OverworldGraphPanel(
+internal fun OverworldGraphPanel(
     overworld: OverworldDef,
     backgroundMap: TileMap?,
     interactionMode: GraphInteractionMode,
