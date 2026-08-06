@@ -16,6 +16,7 @@ dependencies {
     // assigns to :app.
     implementation(projects.core.content)
     implementation(projects.core.rules)
+    implementation(projects.core.ai)
     implementation(projects.data)
     implementation(libs.room.runtime)
     implementation(libs.sqlite.bundled)

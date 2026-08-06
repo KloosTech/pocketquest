@@ -21,6 +21,7 @@ import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
+import de.jackbeback.pocketquest.core.ai.chooseAction
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
@@ -160,12 +161,19 @@ fun main() {
         runResolver(Resolver(state, stack = listOf(Effect.EndTurn(heroId))), catalog),
     ).state
 
-    // Round 1, goblin's turn: Firebolt the hero. :core:ai is still a placeholder — the enemy's
-    // action is chosen by hand here, exactly like the hero's, not by any real AI decision logic.
-    state = record(
-        "goblin uses Firebolt on hero:",
-        perform(state, goblinId, ActionId("firebolt"), ActionCtx(goblinId, listOf(heroId), point = state.byId.getValue(heroId).pos), catalog),
-    ).state
+    // Round 1, goblin's turn: :core:ai picks the goblin's action for real — enumerates its
+    // archetype's actions x legal targets, scores each via preview() in Expected mode, plays
+    // the best. No hardcoded "goblin uses Firebolt on hero" anymore.
+    val goblinDecision = chooseAction(state, goblinId, catalog)
+    state = if (goblinDecision != null) {
+        record(
+            "goblin (AI, score=${goblinDecision.score}) uses ${goblinDecision.actionId.raw}:",
+            perform(state, goblinId, goblinDecision.actionId, goblinDecision.ctx, catalog),
+        ).state
+    } else {
+        log += "goblin (AI) has no legal action — passes"
+        state
+    }
 
     // Goblin ends their turn -> round 2, hero's turn begins. If Firebolt's burn caught, this is
     // where it ticks: onTurnStart effects fire automatically as part of the SAME turn-boundary

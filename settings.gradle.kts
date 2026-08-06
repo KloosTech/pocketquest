@@ -31,6 +31,7 @@ dependencyResolutionManagement {
 include(":core:model")
 include(":core:rules")
 include(":core:content")
+include(":core:ai")
 include(":data")
 include(":ui")
 include(":app")
