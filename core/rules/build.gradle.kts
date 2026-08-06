@@ -27,7 +27,9 @@ kotlin {
 
     sourceSets {
         commonMain.dependencies {
-            implementation(projects.core.model)
+            // api, not implementation: Resolver/Effect/GameEvent etc. expose core:model types
+            // directly in :core:rules' own public API, so consumers (like :data) need them too.
+            api(projects.core.model)
             implementation(libs.kotlinx.serialization.core)
         }
         commonTest.dependencies {

@@ -30,3 +30,4 @@ dependencyResolutionManagement {
 
 include(":core:model")
 include(":core:rules")
+include(":data")
