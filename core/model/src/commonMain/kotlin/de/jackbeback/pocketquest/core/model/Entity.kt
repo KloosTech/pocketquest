@@ -24,4 +24,6 @@ data class Entity(
     val equipment: Equipment = Equipment.EMPTY,
     val statuses: List<ActiveStatus> = emptyList(),
     val blocksMovement: Boolean = true,
+    /** One LinkId per entity at a time — starting a new one ends the previous, see docs/03-modifiers-and-status.md. */
+    val concentrating: LinkId? = null,
 )

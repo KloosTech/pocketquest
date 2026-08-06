@@ -38,10 +38,16 @@ fun GameEvent.kind(): ReactionTriggerKind = when (this) {
     is GameEvent.DamageTaken -> ReactionTriggerKind.DamageTaken
     is GameEvent.Died -> ReactionTriggerKind.Died
     is GameEvent.StatusApplied -> ReactionTriggerKind.StatusApplied
+    is GameEvent.StatusExpired -> ReactionTriggerKind.StatusExpired
     is GameEvent.AttackRolled -> ReactionTriggerKind.AttackRolled
     is GameEvent.SaveRolled -> ReactionTriggerKind.SaveRolled
     is GameEvent.ResourcesSpent -> ReactionTriggerKind.ResourcesSpent
     is GameEvent.Fizzled -> ReactionTriggerKind.Fizzled
+    is GameEvent.TurnStarted -> ReactionTriggerKind.TurnStarted
+    is GameEvent.TurnEnded -> ReactionTriggerKind.TurnEnded
+    is GameEvent.ConcentrationStarted -> ReactionTriggerKind.ConcentrationStarted
+    is GameEvent.ConcentrationBroken -> ReactionTriggerKind.ConcentrationBroken
+    is GameEvent.ConcentrationCheckRolled -> ReactionTriggerKind.ConcentrationCheckRolled
 }
 
 /** Which entities this event's reaction naturally concerns — feeds the reaction's ActionCtx.targets. */
@@ -50,8 +56,14 @@ internal fun targetsFor(event: GameEvent): List<EntityId> = when (event) {
     is GameEvent.DamageTaken -> listOf(event.target)
     is GameEvent.Died -> listOf(event.target)
     is GameEvent.StatusApplied -> listOf(event.target)
+    is GameEvent.StatusExpired -> listOf(event.target)
     is GameEvent.AttackRolled -> listOf(event.attacker, event.target)
     is GameEvent.SaveRolled -> listOf(event.target)
+    is GameEvent.TurnStarted -> listOf(event.who)
+    is GameEvent.TurnEnded -> listOf(event.who)
+    is GameEvent.ConcentrationStarted -> listOf(event.who)
+    is GameEvent.ConcentrationBroken -> listOf(event.who)
+    is GameEvent.ConcentrationCheckRolled -> listOf(event.who)
     is GameEvent.ResourcesSpent -> listOf(event.who)
     is GameEvent.Fizzled -> emptyList()
 }

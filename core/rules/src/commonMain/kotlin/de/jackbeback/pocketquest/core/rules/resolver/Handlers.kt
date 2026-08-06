@@ -16,13 +16,17 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Resistance
 import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.StackPolicy
+import de.jackbeback.pocketquest.core.model.TurnPhase
+import de.jackbeback.pocketquest.core.rules.TurnMoment
 import de.jackbeback.pocketquest.core.rules.abilityModifier
 import de.jackbeback.pocketquest.core.rules.action.instantiate
 import de.jackbeback.pocketquest.core.rules.d20
+import de.jackbeback.pocketquest.core.rules.matches
 import de.jackbeback.pocketquest.core.rules.resolveAdvantage
 import de.jackbeback.pocketquest.core.rules.roll
 import de.jackbeback.pocketquest.core.rules.stat.stats
@@ -53,6 +57,9 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.RollSave -> rollSave(state, effect, cat, mode)
         is Effect.OfferReaction -> offerReaction(state, effect, cat)
         is Effect.ResolveReaction -> resolveReaction(state, effect, answers, cat)
+        is Effect.EndTurn -> endTurn(state, effect, cat)
+        is Effect.StartConcentration -> startConcentration(state, effect)
+        is Effect.ConcentrationCheck -> concentrationCheck(state, effect, cat, mode)
     }
 
 /**
@@ -99,13 +106,24 @@ private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog
         Resistance.None -> effect.amount
     }
     val newCurrent = (health.current - finalAmount).coerceAtLeast(0)
-    val newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
+    var newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
 
-    val events = buildList {
-        add(GameEvent.DamageTaken(target.id, finalAmount, effect.type))
-        if (newCurrent == 0) add(GameEvent.Died(target.id))
+    val events = mutableListOf<GameEvent>()
+    events += GameEvent.DamageTaken(target.id, finalAmount, effect.type)
+    if (newCurrent == 0) events += GameEvent.Died(target.id)
+
+    // Damage triggers a CON save (or breaks unconditionally on death) for whichever entity is
+    // concentrating, if any is — see docs/03-modifiers-and-status.md.
+    val linkId = target.concentrating
+    val spawn = if (linkId != null && newCurrent == 0) {
+        newState = breakConcentration(newState, linkId, events)
+        emptyList()
+    } else if (linkId != null && finalAmount > 0) {
+        listOf(Effect.ConcentrationCheck(target.id, dc = maxOf(10, finalAmount / 2)))
+    } else {
+        emptyList()
     }
-    return HandlerOutcome(newState, events)
+    return HandlerOutcome(newState, events, spawn)
 }
 
 private fun moveAlong(state: GameState, effect: Effect.MoveAlong): HandlerOutcome {
@@ -267,4 +285,122 @@ private fun acceptReaction(state: GameState, who: EntityId, actionId: ActionId, 
     val spend = Effect.SpendCost(who, mana = def.cost.mana, markReactionUsed = true)
     val instantiated = def.effects.flatMap { it.instantiate(ctx, cat) }
     return HandlerOutcome(state, spawn = listOf(spend) + instantiated)
+}
+
+/**
+ * Removes every ActiveStatus sharing [linkId] from every entity (mutating
+ * directly rather than returning RemoveStatus effects to push, since that
+ * primitive doesn't exist yet — a deviation from doc03's shown
+ * `breakConcentration(...): List<Effect>` signature) and clears whichever
+ * entity was concentrating under it. Appends the resulting events to
+ * [events] in place so callers (dealDamage, concentrationCheck) can keep
+ * building one combined event list.
+ */
+private fun breakConcentration(state: GameState, linkId: LinkId, events: MutableList<GameEvent>): GameState {
+    var working = state
+    for (entity in state.entities) {
+        val toRemove = entity.statuses.filter { it.linkId == linkId }
+        if (toRemove.isEmpty()) continue
+        working = working.withEntity(entity.id) { it.copy(statuses = it.statuses.filterNot { s -> s.linkId == linkId }) }
+        for (status in toRemove) events += GameEvent.StatusExpired(entity.id, status.def)
+    }
+    val concentrator = state.entities.find { it.concentrating == linkId }
+    if (concentrator != null) {
+        working = working.withEntity(concentrator.id) { it.copy(concentrating = null) }
+        events += GameEvent.ConcentrationBroken(concentrator.id, linkId)
+    }
+    return working
+}
+
+private fun startConcentration(state: GameState, effect: Effect.StartConcentration): HandlerOutcome {
+    val caster = state.byId[effect.caster] ?: return HandlerOutcome(state)
+    val events = mutableListOf<GameEvent>()
+    var working = state
+    caster.concentrating?.let { previous -> working = breakConcentration(working, previous, events) }
+    working = working.withEntity(effect.caster) { it.copy(concentrating = effect.linkId) }
+    events += GameEvent.ConcentrationStarted(effect.caster, effect.linkId)
+    return HandlerOutcome(working, events)
+}
+
+private fun concentrationCheck(state: GameState, effect: Effect.ConcentrationCheck, cat: Catalog, mode: RngMode): HandlerOutcome {
+    val who = state.byId[effect.who] ?: return HandlerOutcome(state)
+    val linkId = who.concentrating ?: return HandlerOutcome(state) // already broken by something else this step
+
+    val conScore = who.stats(cat).abilities.con
+    val mod = abilityModifier(conScore)
+    val (rollValue, afterRoll) = rollD20(state, mode, RollMode.Normal)
+    val success = rollValue + mod >= effect.dc
+
+    val events = mutableListOf<GameEvent>(GameEvent.ConcentrationCheckRolled(who.id, effect.dc, rollValue.roundToInt(), mod, success))
+    var working = afterRoll
+    if (!success) working = breakConcentration(working, linkId, events)
+    return HandlerOutcome(working, events)
+}
+
+/** All statuses (across every entity) whose expiry matches [moment], removed with a StatusExpired event each. */
+private fun expireStatuses(state: GameState, moment: TurnMoment, events: MutableList<GameEvent>): GameState {
+    var working = state
+    for (entity in state.entities) {
+        val expired = entity.statuses.filter { it.expiry.matches(moment) }
+        if (expired.isEmpty()) continue
+        working = working.withEntity(entity.id) { it.copy(statuses = it.statuses.filterNot { s -> s.expiry.matches(moment) }) }
+        for (status in expired) events += GameEvent.StatusExpired(entity.id, status.def)
+    }
+    return working
+}
+
+/**
+ * Doc04's 7-step turn boundary, done atomically (steps 6-7-1-2-3-4; step 5
+ * "Main phase: commands accepted" is just a phase flag, not an effect).
+ * Step 4's "tick start-of-turn statuses" runs each status's
+ * StatusDef.onTurnStart template list, with the status's original caster
+ * (or the ticking entity itself, if unsourced) as Ref.Caster.
+ */
+private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): HandlerOutcome {
+    val endingId = effect.who
+    if (state.byId[endingId] == null) return HandlerOutcome(state)
+
+    val events = mutableListOf<GameEvent>()
+    var working = state
+
+    // step 6
+    working = expireStatuses(working, TurnMoment.EndOfTurn(endingId, working.turn.round), events)
+    events += GameEvent.TurnEnded(endingId)
+
+    // step 7
+    val order = working.turn.order
+    val nextIndex = (working.turn.activeIndex + 1) % order.size
+    var round = working.turn.round
+    if (nextIndex == 0) {
+        working = expireStatuses(working, TurnMoment.EndOfRound(round), events)
+        round += 1
+    }
+    val nextActiveId = order[nextIndex]
+
+    // steps 1-2 (stats are always derived, nothing to "recompute" as a write) -3
+    working = expireStatuses(working, TurnMoment.StartOfTurn(nextActiveId, round), events)
+    working = working.copy(turn = working.turn.copy(round = round, activeIndex = nextIndex, phase = TurnPhase.Start))
+
+    val nextActive = working.byId.getValue(nextActiveId)
+    val stats = nextActive.stats(cat)
+    working = working.withEntity(nextActiveId) { entity ->
+        val resources = entity.resources
+        if (resources == null) entity else entity.copy(resources = resources.copy(ap = stats.maxAp, mana = stats.maxMana, quickUsed = false, reactionUsed = false))
+    }
+
+    // step 4
+    val tickEffects = nextActive.statuses.flatMap { status ->
+        val def = cat.statusDef(status.def)
+        if (def.onTurnStart.isEmpty()) {
+            emptyList()
+        } else {
+            val ctx = ActionCtx(caster = status.sourceId ?: nextActiveId, targets = listOf(nextActiveId))
+            def.onTurnStart.flatMap { it.instantiate(ctx, cat) }
+        }
+    }
+
+    working = working.copy(turn = working.turn.copy(phase = TurnPhase.Main)) // step 5
+    events += GameEvent.TurnStarted(nextActiveId, round)
+
+    return HandlerOutcome(working, events, tickEffects)
 }

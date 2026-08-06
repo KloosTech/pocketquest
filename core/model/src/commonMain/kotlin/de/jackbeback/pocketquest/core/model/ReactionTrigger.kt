@@ -10,7 +10,10 @@ import kotlinx.serialization.Serializable
  * language content authors write themselves.
  */
 @Serializable
-enum class ReactionTriggerKind { MoveStepped, DamageTaken, Died, StatusApplied, AttackRolled, SaveRolled, ResourcesSpent, Fizzled }
+enum class ReactionTriggerKind {
+    MoveStepped, DamageTaken, Died, StatusApplied, StatusExpired, AttackRolled, SaveRolled,
+    ResourcesSpent, Fizzled, TurnStarted, TurnEnded, ConcentrationStarted, ConcentrationBroken, ConcentrationCheckRolled,
+}
 
 @Serializable
 data class ReactionTrigger(val kind: ReactionTriggerKind)

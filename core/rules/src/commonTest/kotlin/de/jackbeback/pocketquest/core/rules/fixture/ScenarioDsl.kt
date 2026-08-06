@@ -103,8 +103,8 @@ class ScenarioBuilder {
         entityBuilders[name] = EntityBuilder().apply(block)
     }
 
-    fun status(entityName: String, statusName: String, stacks: Int = 1, concentration: Boolean = false) {
-        pendingStatuses += PendingStatus(entityName, statusName, stacks, concentration)
+    fun status(entityName: String, statusName: String, stacks: Int = 1, concentration: Boolean = false, source: String? = null, expiry: Expiry = Expiry.Permanent) {
+        pendingStatuses += PendingStatus(entityName, statusName, stacks, concentration, source, expiry)
     }
 
     fun initiative(vararg names: String) {
@@ -122,10 +122,10 @@ class ScenarioBuilder {
                 .map { ps ->
                     ActiveStatus(
                         def = StatusId(ps.statusName),
-                        sourceId = null,
+                        sourceId = ps.source?.let { ids.getValue(it) },
                         linkId = if (ps.concentration) LinkId(ids.getValue(name).raw) else null,
                         stacks = ps.stacks,
-                        expiry = Expiry.Permanent,
+                        expiry = ps.expiry,
                         appliedAtVersion = 0,
                     )
                 }
@@ -163,7 +163,7 @@ class ScenarioBuilder {
         return Scenario(state, catalog, ids)
     }
 
-    private data class PendingStatus(val entityName: String, val statusName: String, val stacks: Int, val concentration: Boolean)
+    private data class PendingStatus(val entityName: String, val statusName: String, val stacks: Int, val concentration: Boolean, val source: String?, val expiry: Expiry)
 }
 
 class ArchetypeBuilder(private val name: String) {
@@ -205,12 +205,17 @@ class ArchetypeBuilder(private val name: String) {
 class StatusDefBuilder(private val name: String) {
     var stackPolicy: StackPolicy = StackPolicy.Refresh
     private val mods = mutableListOf<Modifier>()
+    private val onTurnStartTemplates = mutableListOf<EffectTemplate>()
 
     fun modifier(m: Modifier) {
         mods += m
     }
 
-    fun build(): StatusDef = StatusDef(StatusId(name), name, stackPolicy, mods.toList())
+    fun onTurnStart(template: EffectTemplate) {
+        onTurnStartTemplates += template
+    }
+
+    fun build(): StatusDef = StatusDef(StatusId(name), name, stackPolicy, mods.toList(), onTurnStartTemplates.toList())
 }
 
 class ItemDefBuilder(private val name: String) {

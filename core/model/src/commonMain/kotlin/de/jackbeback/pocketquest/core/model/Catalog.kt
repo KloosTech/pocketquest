@@ -14,6 +14,8 @@ data class StatusDef(
     val stackPolicy: StackPolicy,
     /** Applied once per stack — see Entity.stats() in :core:rules. */
     val modifiers: List<Modifier> = emptyList(),
+    /** Executed once when the affected entity's turn starts (regeneration, damage over time). */
+    val onTurnStart: List<EffectTemplate> = emptyList(),
 )
 
 @Serializable

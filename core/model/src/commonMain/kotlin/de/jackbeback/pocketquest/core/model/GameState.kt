@@ -18,6 +18,8 @@ data class GameState(
     val version: Long = 0,
     /** Monotonic source for fresh DecisionIds (e.g. when offering a reaction) — never reused, never reset. */
     val nextDecisionId: Long = 0,
+    /** Monotonic source for fresh LinkIds (e.g. when starting concentration) — never reused, never reset. */
+    val nextLinkId: Long = 0,
 ) {
     @Transient
     val byId: Map<EntityId, Entity> = entities.associateBy { it.id }

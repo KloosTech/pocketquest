@@ -81,4 +81,16 @@ sealed interface Effect {
     /** The continuation pushed alongside Ask when a human must decide; reads the answer and either spawns the reaction's effects or does nothing. */
     @Serializable @SerialName("resolveReaction")
     data class ResolveReaction(val decisionId: DecisionId, val trigger: GameEvent, val who: EntityId, val actionId: ActionId) : Effect
+
+    /** Doc04's 7-step turn boundary, done atomically: no player decision happens mid-transition, so nothing needs a separate stack entry. */
+    @Serializable @SerialName("endTurn")
+    data class EndTurn(val who: EntityId) : Effect
+
+    /** Ends [caster]'s previous concentration (if any) before starting this one — "one LinkId per entity at a time". */
+    @Serializable @SerialName("startConcentration")
+    data class StartConcentration(val caster: EntityId, val linkId: LinkId) : Effect
+
+    /** Auto-spawned by DealDamage when its target is concentrating — never authored directly. */
+    @Serializable @SerialName("concentrationCheck")
+    data class ConcentrationCheck(val who: EntityId, val dc: Int) : Effect
 }
