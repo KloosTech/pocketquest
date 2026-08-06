@@ -48,6 +48,9 @@ fun GameEvent.kind(): ReactionTriggerKind = when (this) {
     is GameEvent.ConcentrationStarted -> ReactionTriggerKind.ConcentrationStarted
     is GameEvent.ConcentrationBroken -> ReactionTriggerKind.ConcentrationBroken
     is GameEvent.ConcentrationCheckRolled -> ReactionTriggerKind.ConcentrationCheckRolled
+    is GameEvent.ResourcesReset -> ReactionTriggerKind.ResourcesReset
+    is GameEvent.ReactionTriggered -> ReactionTriggerKind.ReactionTriggered
+    is GameEvent.ActionStarted -> ReactionTriggerKind.ActionStarted
 }
 
 /** Which entities this event's reaction naturally concerns — feeds the reaction's ActionCtx.targets. */
@@ -66,6 +69,9 @@ internal fun targetsFor(event: GameEvent): List<EntityId> = when (event) {
     is GameEvent.ConcentrationCheckRolled -> listOf(event.who)
     is GameEvent.ResourcesSpent -> listOf(event.who)
     is GameEvent.Fizzled -> emptyList()
+    is GameEvent.ResourcesReset -> listOf(event.who)
+    is GameEvent.ReactionTriggered -> listOf(event.who)
+    is GameEvent.ActionStarted -> listOf(event.who)
 }
 
 /**

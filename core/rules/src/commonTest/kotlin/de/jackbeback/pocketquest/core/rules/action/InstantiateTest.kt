@@ -103,4 +103,38 @@ class InstantiateTest {
             result,
         )
     }
+
+    @Test
+    fun rollSaveWithMultipleTargetsScopesEachOnFailToOnlyThatTarget() {
+        // Regression test: a naive instantiate() would resolve a nested Ref.EachTarget inside
+        // onFail against the FULL original targets list, applying the on-fail status to every
+        // target regardless of which one actually failed. Each target's RollSave must only see
+        // itself when resolving its own onFail/onSuccess templates.
+        val template = EffectTemplate.RollSave(
+            target = Ref.EachTarget,
+            ability = Ability.Dex,
+            dc = 14,
+            onFail = listOf(EffectTemplate.ApplyStatus(Ref.EachTarget, StatusId("restrained"), expiry = Expiry.Permanent)),
+        )
+        val ctx = ActionCtx(caster, targets = listOf(EntityId(20), EntityId(10)))
+        val result = template.instantiate(ctx, cat)
+
+        assertEquals(
+            listOf(
+                Effect.RollSave(
+                    target = EntityId(10),
+                    ability = Ability.Dex,
+                    dc = 14,
+                    onFail = listOf(Effect.ApplyStatus(EntityId(10), StatusId("restrained"), expiry = Expiry.Permanent)),
+                ),
+                Effect.RollSave(
+                    target = EntityId(20),
+                    ability = Ability.Dex,
+                    dc = 14,
+                    onFail = listOf(Effect.ApplyStatus(EntityId(20), StatusId("restrained"), expiry = Expiry.Permanent)),
+                ),
+            ),
+            result,
+        )
+    }
 }

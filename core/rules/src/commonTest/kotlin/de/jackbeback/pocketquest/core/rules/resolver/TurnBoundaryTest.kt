@@ -96,6 +96,7 @@ class TurnBoundaryTest {
         val hero = out.state.byId.getValue(s.id("hero")).resources!!
         assertEquals(2, hero.ap)
         assertEquals(3, hero.mana)
+        assertTrue(out.events.contains(GameEvent.ResourcesReset(s.id("hero"), ap = 2, mana = 3)))
     }
 
     @Test
@@ -135,7 +136,9 @@ class TurnBoundaryTest {
         val s = twoEntityScenario()
         val out = applyEffect(s.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
         assertEquals(GameEvent.TurnEnded(s.id("hero")), out.events.first())
-        val started = assertIs<GameEvent.TurnStarted>(out.events.last())
+        // TurnStarted fires right after TurnEnded — before that turn's own expiry/reset events,
+        // not after them (it marks the turn beginning, not everything that happens as a result).
+        val started = assertIs<GameEvent.TurnStarted>(out.events[1])
         assertEquals(s.id("goblin"), started.who)
         assertEquals(1, started.round)
     }

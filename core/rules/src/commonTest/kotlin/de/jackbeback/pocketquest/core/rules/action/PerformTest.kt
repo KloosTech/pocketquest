@@ -44,7 +44,8 @@ class PerformTest {
 
         val completed = assertIs<StepResult.Completed>(result)
         val events = completed.resolver.emitted
-        assertIs<GameEvent.ResourcesSpent>(events[0], "cost must be spent before any other effect runs")
+        assertIs<GameEvent.ActionStarted>(events[0], "ActionStarted is seeded before the resolver even runs")
+        assertIs<GameEvent.ResourcesSpent>(events[1], "cost must be spent before any other effect runs")
         assertTrue(events.any { it is GameEvent.AttackRolled })
 
         val hero = completed.resolver.state.byId.getValue(s.id("hero"))

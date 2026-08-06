@@ -30,13 +30,17 @@ fun EffectTemplate.instantiate(ctx: ActionCtx, cat: Catalog): List<Effect> = whe
 
     is EffectTemplate.RollSave ->
         resolveRef(target, ctx).map { t ->
+            // Each target gets its own save, so onSuccess/onFail must be instantiated against a
+            // ctx scoped to just THIS target — reusing the full multi-target ctx would make a
+            // nested Ref.EachTarget inside onFail apply to every target, not just the one that failed.
+            val scopedCtx = ctx.copy(targets = listOf(t))
             Effect.RollSave(
                 target = t,
                 ability = ability,
                 dc = dc,
                 advantage = advantage,
-                onSuccess = onSuccess.flatMap { it.instantiate(ctx, cat) },
-                onFail = onFail.flatMap { it.instantiate(ctx, cat) },
+                onSuccess = onSuccess.flatMap { it.instantiate(scopedCtx, cat) },
+                onFail = onFail.flatMap { it.instantiate(scopedCtx, cat) },
             )
         }
 }

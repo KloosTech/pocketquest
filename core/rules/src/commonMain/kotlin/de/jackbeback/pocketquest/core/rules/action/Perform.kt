@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.EntityId
+import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.PreviewResult
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
@@ -32,7 +33,8 @@ fun perform(state: GameState, caster: EntityId, actionId: ActionId, ctx: ActionC
     val rejections = canPerform(state, caster, def, ctx, cat)
     if (rejections.isNotEmpty()) return StepResult.Rejected(Resolver(state), rejections)
 
-    return runResolver(Resolver(state, stack = initialStack(state, caster, actionId, ctx, cat)), cat)
+    val initial = Resolver(state, stack = initialStack(state, caster, actionId, ctx, cat), emitted = listOf(GameEvent.ActionStarted(caster, actionId)))
+    return runResolver(initial, cat)
 }
 
 /**

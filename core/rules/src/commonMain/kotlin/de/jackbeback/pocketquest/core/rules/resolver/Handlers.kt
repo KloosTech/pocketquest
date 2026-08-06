@@ -257,7 +257,8 @@ private fun AbilityScores.forAbility(ability: Ability): Int =
 
 private fun offerReaction(state: GameState, effect: Effect.OfferReaction, cat: Catalog): HandlerOutcome {
     val reactor = state.byId[effect.who] ?: return HandlerOutcome(state)
-    return when (answererFor(reactor)) {
+    val triggeredEvent = GameEvent.ReactionTriggered(effect.who, effect.actionId)
+    val outcome = when (answererFor(reactor)) {
         Answerer.HumanUi -> {
             val decisionId = DecisionId(state.nextDecisionId)
             val nextState = state.copy(nextDecisionId = state.nextDecisionId + 1)
@@ -272,6 +273,7 @@ private fun offerReaction(state: GameState, effect: Effect.OfferReaction, cat: C
         // mechanism (inline resolution, never AwaitingInput for AI) without inventing AI judgement.
         is Answerer.Ai -> acceptReaction(state, effect.who, effect.actionId, effect.trigger, cat)
     }
+    return outcome.copy(events = listOf(triggeredEvent) + outcome.events)
 }
 
 private fun resolveReaction(state: GameState, effect: Effect.ResolveReaction, answers: Map<DecisionId, Decision>, cat: Catalog): HandlerOutcome {
@@ -376,10 +378,11 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
         round += 1
     }
     val nextActiveId = order[nextIndex]
+    working = working.copy(turn = working.turn.copy(round = round, activeIndex = nextIndex, phase = TurnPhase.Start))
+    events += GameEvent.TurnStarted(nextActiveId, round)
 
     // steps 1-2 (stats are always derived, nothing to "recompute" as a write) -3
     working = expireStatuses(working, TurnMoment.StartOfTurn(nextActiveId, round), events)
-    working = working.copy(turn = working.turn.copy(round = round, activeIndex = nextIndex, phase = TurnPhase.Start))
 
     val nextActive = working.byId.getValue(nextActiveId)
     val stats = nextActive.stats(cat)
@@ -387,6 +390,7 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
         val resources = entity.resources
         if (resources == null) entity else entity.copy(resources = resources.copy(ap = stats.maxAp, mana = stats.maxMana, quickUsed = false, reactionUsed = false))
     }
+    if (nextActive.resources != null) events += GameEvent.ResourcesReset(nextActiveId, stats.maxAp, stats.maxMana)
 
     // step 4
     val tickEffects = nextActive.statuses.flatMap { status ->
@@ -400,7 +404,6 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
     }
 
     working = working.copy(turn = working.turn.copy(phase = TurnPhase.Main)) // step 5
-    events += GameEvent.TurnStarted(nextActiveId, round)
 
     return HandlerOutcome(working, events, tickEffects)
 }

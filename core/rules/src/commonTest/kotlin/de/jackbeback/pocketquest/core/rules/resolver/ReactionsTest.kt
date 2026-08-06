@@ -142,6 +142,10 @@ class ReactionsTest {
 
         val completed = assertCompleted(result)
         assertTrue(completed.resolver.emitted.any { it is GameEvent.AttackRolled }, "AI must resolve the opportunity attack inline")
+        assertTrue(
+            completed.resolver.emitted.contains(GameEvent.ReactionTriggered(s.id("fighter"), ActionId("oppAttack"))),
+            "ReactionTriggered must fire regardless of who answers",
+        )
         val fighter = completed.resolver.state.byId.getValue(s.id("fighter"))
         assertTrue(fighter.resources!!.reactionUsed, "using the reaction must mark it used")
         val runner = completed.resolver.state.byId.getValue(s.id("runner"))
