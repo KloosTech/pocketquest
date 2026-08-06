@@ -11,3 +11,4 @@ import kotlin.jvm.JvmInline
 @JvmInline @Serializable value class LinkId(val raw: Long)
 @JvmInline @Serializable value class AiProfileId(val raw: String)
 @JvmInline @Serializable value class DecisionId(val raw: Long)
+@JvmInline @Serializable value class SlotKey(val raw: String)

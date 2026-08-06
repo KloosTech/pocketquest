@@ -1,6 +1,9 @@
 package de.jackbeback.pocketquest.core.rules.fixture
 
 import de.jackbeback.pocketquest.core.model.AbilityScores
+import de.jackbeback.pocketquest.core.model.ActionCost
+import de.jackbeback.pocketquest.core.model.ActionDef
+import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.Actor
 import de.jackbeback.pocketquest.core.model.AiProfileId
 import de.jackbeback.pocketquest.core.model.Archetype
@@ -8,6 +11,7 @@ import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Controller
+import de.jackbeback.pocketquest.core.model.Cost
 import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Equipment
@@ -17,17 +21,23 @@ import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Health
 import de.jackbeback.pocketquest.core.model.ActiveStatus
+import de.jackbeback.pocketquest.core.model.EffectTemplate
 import de.jackbeback.pocketquest.core.model.ItemDef
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.ItemInstance
 import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Modifier
+import de.jackbeback.pocketquest.core.model.Range
 import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
+import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.Slot
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.StatusDef
 import de.jackbeback.pocketquest.core.model.StatusId
+import de.jackbeback.pocketquest.core.model.TargetFilter
+import de.jackbeback.pocketquest.core.model.TargetMode
+import de.jackbeback.pocketquest.core.model.Targeting
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
 import de.jackbeback.pocketquest.core.rules.checkInvariants
@@ -55,6 +65,7 @@ class ScenarioBuilder {
     private val archetypes = mutableMapOf<String, Archetype>()
     private val statusDefs = mutableMapOf<String, StatusDef>()
     private val itemDefs = mutableMapOf<String, ItemDef>()
+    private val actionDefs = mutableMapOf<String, ActionDef>()
     private val entityOrder = mutableListOf<String>()
     private val entityBuilders = mutableMapOf<String, EntityBuilder>()
     private val pendingStatuses = mutableListOf<PendingStatus>()
@@ -79,6 +90,10 @@ class ScenarioBuilder {
 
     fun itemDef(name: String, block: ItemDefBuilder.() -> Unit) {
         itemDefs[name] = ItemDefBuilder(name).apply(block).build()
+    }
+
+    fun actionDef(name: String, block: ActionDefBuilder.() -> Unit) {
+        actionDefs[name] = ActionDefBuilder(name).apply(block).build()
     }
 
     fun entity(name: String, block: EntityBuilder.() -> Unit) {
@@ -137,6 +152,7 @@ class ScenarioBuilder {
             archetypes = archetypes.values.associateBy { it.id },
             statuses = statusDefs.values.associateBy { it.id },
             items = itemDefs.values.associateBy { it.id },
+            actions = actionDefs.values.associateBy { it.id },
         )
 
         val violations = checkInvariants(state, catalog)
@@ -247,4 +263,31 @@ class EntityBuilder {
     fun equip(slot: Slot, itemName: String, enchantment: Int = 0, attuned: Boolean = false) {
         equipmentSlots[slot] = ItemInstance(ItemId(itemName), enchantment, attuned = attuned)
     }
+}
+
+class ActionDefBuilder(private val name: String) {
+    private var cost: Cost = Cost(ActionCost.Main)
+    private var targeting: Targeting = Targeting(TargetMode.SelfOnly, Range.SelfRange, Shape.Single)
+    private val effectTemplates = mutableListOf<EffectTemplate>()
+
+    fun cost(action: ActionCost, mana: Int = 0) {
+        cost = Cost(action, mana)
+    }
+
+    fun targeting(
+        mode: TargetMode,
+        range: Range,
+        shape: Shape,
+        filter: TargetFilter = TargetFilter(),
+        requiresLoS: Boolean = true,
+        maxTargets: Int = 1,
+    ) {
+        targeting = Targeting(mode, range, shape, filter, requiresLoS, maxTargets)
+    }
+
+    fun effect(template: EffectTemplate) {
+        effectTemplates += template
+    }
+
+    fun build(): ActionDef = ActionDef(ActionId(name), name, cost, targeting, effectTemplates.toList())
 }

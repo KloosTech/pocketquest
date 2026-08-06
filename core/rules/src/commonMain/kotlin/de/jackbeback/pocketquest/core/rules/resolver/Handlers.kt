@@ -1,9 +1,12 @@
 package de.jackbeback.pocketquest.core.rules.resolver
 
+import de.jackbeback.pocketquest.core.model.Ability
+import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.ActiveStatus
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Decision
 import de.jackbeback.pocketquest.core.model.DecisionId
+import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
@@ -12,8 +15,14 @@ import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Resistance
+import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.StackPolicy
+import de.jackbeback.pocketquest.core.rules.abilityModifier
+import de.jackbeback.pocketquest.core.rules.d20
+import de.jackbeback.pocketquest.core.rules.resolveAdvantage
+import de.jackbeback.pocketquest.core.rules.roll
 import de.jackbeback.pocketquest.core.rules.stat.stats
+import kotlin.math.roundToInt
 
 /** What applying one effect produced. `spawn` goes to the FRONT of the stack — see docs/04-resolver.md. */
 data class HandlerOutcome(
@@ -29,14 +38,41 @@ data class HandlerOutcome(
  * exhaustiveness; a registry would just be indirection with nothing to
  * plug into it.
  */
-internal fun applyEffect(state: GameState, effect: Effect, answers: Map<DecisionId, Decision>, cat: Catalog): HandlerOutcome =
+internal fun applyEffect(state: GameState, effect: Effect, answers: Map<DecisionId, Decision>, cat: Catalog, mode: RngMode = RngMode.Live): HandlerOutcome =
     when (effect) {
         is Effect.Ask -> error("Ask must be intercepted by run() before reaching a handler")
         is Effect.DealDamage -> dealDamage(state, effect, cat)
         is Effect.MoveAlong -> moveAlong(state, effect)
         is Effect.SpendCost -> spendCost(state, effect)
         is Effect.ApplyStatus -> applyStatus(state, effect, cat)
+        is Effect.RollAttack -> rollAttack(state, effect, cat, mode)
+        is Effect.RollSave -> rollSave(state, effect, cat, mode)
     }
+
+/**
+ * Live rolls from `state.rng`, advancing it and carrying the new state
+ * forward. Expected substitutes a fixed value and never touches `state.rng`
+ * — see [RngMode]. Returned as Double so both callers (hit/miss comparison,
+ * damage totals) share one code path regardless of mode.
+ */
+private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): Pair<Double, GameState> = when (mode) {
+    RngMode.Live -> {
+        val (next, value) = state.rng.d20(advantage)
+        value.toDouble() to state.copy(rng = next)
+    }
+    RngMode.Expected -> 10.5 to state
+}
+
+private fun rollDice(state: GameState, mode: RngMode, spec: DiceSpec): Pair<Double, GameState> = when (mode) {
+    RngMode.Live -> {
+        val (next, result) = state.rng.roll(spec)
+        result.total.toDouble() to state.copy(rng = next)
+    }
+    RngMode.Expected -> {
+        val avgPerDie = (spec.sides + 1) / 2.0
+        (spec.count * avgPerDie + spec.modifier) to state
+    }
+}
 
 private fun GameState.withEntity(id: EntityId, transform: (Entity) -> Entity): GameState =
     copy(entities = entities.map { if (it.id == id) transform(it) else it }, version = version + 1)
@@ -136,3 +172,60 @@ private fun applyStatus(state: GameState, effect: Effect.ApplyStatus, cat: Catal
         }
     }
 }
+
+private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog, mode: RngMode): HandlerOutcome {
+    val attacker = state.byId[effect.attacker] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.attacker))
+    val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    if ((target.health?.current ?: 0) <= 0) return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+
+    val ac = target.stats(cat).armorClass
+    val advantageMode = resolveAdvantage(effect.advantage)
+    val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
+    val total = rollValue + effect.attackBonus
+    val hit = total >= ac
+
+    val rolledEvent = GameEvent.AttackRolled(
+        attacker = attacker.id,
+        target = target.id,
+        d20 = rollValue.roundToInt(),
+        mod = effect.attackBonus,
+        ac = ac,
+        hit = hit,
+    )
+    if (!hit) return HandlerOutcome(afterD20, listOf(rolledEvent))
+
+    val (dmgValue, afterDamageRoll) = rollDice(afterD20, mode, effect.damage)
+    val spawn = listOf(Effect.DealDamage(effect.target, dmgValue.roundToInt(), effect.damageType, source = effect.attacker))
+    return HandlerOutcome(afterDamageRoll, listOf(rolledEvent), spawn)
+}
+
+private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mode: RngMode): HandlerOutcome {
+    val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+
+    val score = target.stats(cat).abilities.forAbility(effect.ability)
+    val mod = abilityModifier(score)
+    val advantageMode = resolveAdvantage(effect.advantage)
+    val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
+    val success = rollValue + mod >= effect.dc
+
+    val rolledEvent = GameEvent.SaveRolled(
+        target = target.id,
+        ability = effect.ability,
+        d20 = rollValue.roundToInt(),
+        mod = mod,
+        dc = effect.dc,
+        success = success,
+    )
+    val spawn = if (success) effect.onSuccess else effect.onFail
+    return HandlerOutcome(afterD20, listOf(rolledEvent), spawn)
+}
+
+private fun AbilityScores.forAbility(ability: Ability): Int =
+    when (ability) {
+        Ability.Str -> str
+        Ability.Dex -> dex
+        Ability.Con -> con
+        Ability.Int -> int
+        Ability.Wis -> wis
+        Ability.Cha -> cha
+    }

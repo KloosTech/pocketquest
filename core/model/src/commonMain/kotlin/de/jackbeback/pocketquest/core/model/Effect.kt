@@ -45,4 +45,26 @@ sealed interface Effect {
         val sourceId: EntityId? = null,
         val linkId: LinkId? = null,
     ) : Effect
+
+    /** d20 + attackBonus vs target's AC. On hit, rolls [damage] itself and spawns DealDamage — dice never roll outside a handler. */
+    @Serializable @SerialName("rollAttack")
+    data class RollAttack(
+        val attacker: EntityId,
+        val target: EntityId,
+        val attackBonus: Int,
+        val advantage: Set<AdvSide> = emptySet(),
+        val damage: DiceSpec,
+        val damageType: DamageType,
+    ) : Effect
+
+    /** d20 + ability modifier vs dc. Spawns whichever branch wins — see docs/05's Slot example; this is the simpler direct-branch shape. */
+    @Serializable @SerialName("rollSave")
+    data class RollSave(
+        val target: EntityId,
+        val ability: Ability,
+        val dc: Int,
+        val advantage: Set<AdvSide> = emptySet(),
+        val onSuccess: List<Effect> = emptyList(),
+        val onFail: List<Effect> = emptyList(),
+    ) : Effect
 }

@@ -28,6 +28,7 @@ data class Catalog(
     val archetypes: Map<ArchetypeId, Archetype> = emptyMap(),
     val statuses: Map<StatusId, StatusDef> = emptyMap(),
     val items: Map<ItemId, ItemDef> = emptyMap(),
+    val actions: Map<ActionId, ActionDef> = emptyMap(),
 ) {
     fun archetype(id: ArchetypeId): Archetype =
         archetypes[id] ?: error("Unknown archetype: ${id.raw}")
@@ -37,4 +38,7 @@ data class Catalog(
 
     fun itemDef(id: ItemId): ItemDef =
         items[id] ?: error("Unknown item: ${id.raw}")
+
+    fun actionDef(id: ActionId): ActionDef =
+        actions[id] ?: error("Unknown action: ${id.raw}")
 }

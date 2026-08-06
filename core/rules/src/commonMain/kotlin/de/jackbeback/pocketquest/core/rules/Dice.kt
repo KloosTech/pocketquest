@@ -1,15 +1,11 @@
 package de.jackbeback.pocketquest.core.rules
 
 import de.jackbeback.pocketquest.core.model.AdvSide
+import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollMode
+import de.jackbeback.pocketquest.core.model.RollResult
 import kotlin.random.Random
-
-data class DiceSpec(val count: Int, val sides: Int, val modifier: Int = 0)
-
-data class RollResult(val rolls: List<Int>, val modifier: Int) {
-    val total: Int get() = rolls.sum() + modifier
-}
 
 /**
  * Deterministically derives a fresh, independent [Random] for this exact
@@ -54,3 +50,6 @@ fun resolveAdvantage(sides: Set<AdvSide>): RollMode = when {
     AdvSide.Disadvantage in sides -> RollMode.Disadvantage
     else -> RollMode.Normal
 }
+
+/** D&D ability modifier: floor((score - 10) / 2). */
+fun abilityModifier(score: Int): Int = if (score >= 10) (score - 10) / 2 else -((10 - score + 1) / 2)

@@ -7,7 +7,17 @@ import de.jackbeback.pocketquest.core.model.DecisionRequest
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.Rejection
 import kotlinx.serialization.Serializable
+
+/**
+ * Live rolls dice from `state.rng`, advancing it. Expected substitutes a
+ * fixed representative value (10.5 for a d20, average-per-die for damage)
+ * and never touches `state.rng` — used by preview() so estimating an
+ * outcome doesn't consume randomness. Not stored anywhere persisted; it's
+ * a call-time parameter to run()/resume(), same as [Catalog].
+ */
+enum class RngMode { Live, Expected }
 
 /**
  * The whole snapshot needed to resume mid-decision after process death —
@@ -28,12 +38,13 @@ sealed interface StepResult {
     val resolver: Resolver
     data class Completed(override val resolver: Resolver) : StepResult
     data class AwaitingInput(override val resolver: Resolver, val request: DecisionRequest) : StepResult
+    data class Rejected(override val resolver: Resolver, val reasons: List<Rejection>) : StepResult
 }
 
 /** Effect loop guard — generous, only trips on a real bug (e.g. a runaway self-spawning effect). */
 const val MAX_STEPS = 10_000
 
-tailrec fun run(r: Resolver, cat: Catalog): StepResult {
+tailrec fun run(r: Resolver, cat: Catalog, mode: RngMode = RngMode.Live): StepResult {
     r.pending?.let { return StepResult.AwaitingInput(r, it) }
     if (r.stack.isEmpty()) return StepResult.Completed(r)
     check(r.steps < MAX_STEPS) { "effect loop exceeded MAX_STEPS: ${r.stack.take(5)}" }
@@ -45,7 +56,7 @@ tailrec fun run(r: Resolver, cat: Catalog): StepResult {
         return StepResult.AwaitingInput(r.copy(stack = rest, pending = head.request), head.request)
     }
 
-    val out = applyEffect(r.state, head, r.answers, cat)
+    val out = applyEffect(r.state, head, r.answers, cat, mode)
     return run(
         r.copy(
             state = out.state,
@@ -54,10 +65,11 @@ tailrec fun run(r: Resolver, cat: Catalog): StepResult {
             steps = r.steps + 1,
         ),
         cat,
+        mode,
     )
 }
 
-fun resume(r: Resolver, id: DecisionId, decision: Decision, cat: Catalog): StepResult {
+fun resume(r: Resolver, id: DecisionId, decision: Decision, cat: Catalog, mode: RngMode = RngMode.Live): StepResult {
     require(r.pending?.id == id) { "stale decision answer for $id (pending: ${r.pending?.id})" }
-    return run(r.copy(pending = null, answers = r.answers + (id to decision)), cat)
+    return run(r.copy(pending = null, answers = r.answers + (id to decision)), cat, mode)
 }

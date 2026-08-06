@@ -1,6 +1,7 @@
 package de.jackbeback.pocketquest.core.rules
 
 import de.jackbeback.pocketquest.core.model.AdvSide
+import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollMode
 import kotlin.test.Test
