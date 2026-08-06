@@ -39,7 +39,9 @@ kotlin {
 
             implementation(compose.runtime)
             implementation(compose.foundation)
+            implementation(compose.animation)
             implementation(compose.ui)
+            implementation(libs.kotlinx.coroutines.core)
         }
         val desktopMain by getting {
             dependencies {

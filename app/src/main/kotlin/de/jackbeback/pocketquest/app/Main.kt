@@ -13,6 +13,7 @@ import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
+import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Health
@@ -127,14 +128,19 @@ fun main() {
         rng = RngState(seed = 42, calls = 0),
     )
     log += "Round 1: hero (fighter, ${hero.health?.current} HP) at ${hero.pos} vs goblin (mage, ${goblin.health?.current} HP) at ${goblin.pos}"
+    val initialState = state
+    val allEvents = mutableListOf<GameEvent>()
 
-    // Records a step's outcome to the log and returns its resulting Resolver, so callers can
-    // thread `state` through the whole turn loop the same way a real UI/AI driver would.
+    // Records a step's outcome to the log and event list, and returns its resulting Resolver, so
+    // callers can thread `state` through the whole turn loop the same way a real UI/AI driver
+    // would. :ui's AnimationPlayer replays `allEvents` as one sequence once every step is done —
+    // sequential-playback design, not a live incremental loop (see the design discussion).
     fun record(label: String, result: StepResult): Resolver {
         when (result) {
             is StepResult.Completed -> {
                 log += label
                 result.resolver.emitted.forEach { log += "  -> $it" }
+                allEvents += result.resolver.emitted
             }
             is StepResult.Rejected -> log += "$label — REJECTED: ${result.reasons}"
             is StepResult.AwaitingInput -> log += "$label — paused awaiting a decision: ${result.request}"
@@ -190,5 +196,5 @@ fun main() {
     db.close()
 
     log.forEach(::println)
-    runDesktopApp(state, log)
+    runDesktopApp(initialState, state, allEvents, log)
 }
