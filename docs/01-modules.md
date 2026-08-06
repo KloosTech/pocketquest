@@ -32,9 +32,18 @@ Rules, read top to bottom:
    `kotlinx-serialization-core`.
 2. `:core:rules` depends on `:core:model` only. No coroutines. No `Random` —
    RNG comes from state (see [02](02-state-model.md)).
-3. `:core:content` may depend on `kotlinx-serialization-json` and Compose
-   Resources for reading `composeResources/files/`. It must not depend on
-   `:core:rules` internals beyond the public types.
+3. `:core:content` may depend on `kotlinx-serialization-json` only. It must
+   not depend on `:core:rules` internals beyond the public types.
+
+   Earlier drafts of this doc said it could also depend on Compose
+   Resources, for reading `composeResources/files/` directly. That does not
+   work: as of Compose Multiplatform 1.10.0, the resource codegen requires
+   the Compose Compiler plugin, and the Compose Compiler plugin requires
+   the real Compose Runtime on the classpath to run at all — there is no
+   way to read a bundled resource file without pulling actual Compose into
+   the module, which breaks rule 6 below. `:core:content` therefore only
+   turns JSON *text* into a `Catalog` (`CatalogLoader.parse(text: String)`);
+   getting that text off disk/assets/bundle is `:app`'s or `:data`'s job.
 4. `:core:ai` depends on `:core:rules`. It is a *consumer* of the resolver, not
    a special case inside it.
 5. `:data` owns Room and is the only module that may perform IO.
@@ -67,10 +76,13 @@ The v1 code keeps running the whole time. We are not doing a big-bang move.
 2. **Build the new core inside them**, with tests, entirely disconnected from
    the running game. This is the step described in
    [09-test-plan.md](09-test-plan.md).
-3. **Port content** — `content/definitions/*.kt` and the JSON under
-   `composeResources/files/` map onto the new `Archetype` / `ActionDef`
-   catalog. The designer tooling in `desktopMain` keeps writing the same JSON;
-   only the loader changes.
+3. **Author content, not "port" it** — v1 has no JSON catalog to map onto
+   the new `Archetype` / `ActionDef` shape. Its content
+   (`content/definitions/*.kt`, `UnitDsl`/`SkillDsl`) is authored as Kotlin
+   DSL code, not data; the only JSON under its `composeResources/files/` is
+   Tiled map exports, unrelated to unit/skill/item definitions. Use the DSL
+   definitions as a reference for values while hand-authoring the new JSON
+   catalog from scratch.
 4. **Add a second battle screen** behind a debug flag that runs on the new
    engine. Both engines coexist.
 5. **Delete `ecs/` and `game/systems/`** once the new screen reaches parity.

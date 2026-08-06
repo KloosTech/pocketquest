@@ -181,10 +181,14 @@ deduction would never appear in the event list.
 
 ## Content authoring
 
-`ActionDef`, `Archetype`, `ItemDef` and `StatusDef` are JSON under
-`composeResources/files/`, loaded once into a `Catalog` at startup. The existing
-desktop designer (`ui/designer/`) keeps writing that JSON; only the schema and
-the loader change.
+`ActionDef`, `Archetype`, `ItemDef` and `StatusDef` are authored as JSON text
+and loaded once into a `Catalog` at startup via `:core:content`'s
+`CatalogLoader.parse()` — see [01](01-modules.md) rule 3 for why that module
+takes a `String` rather than reading `composeResources/files/` itself.
+v1's desktop designer (`ui/designer/`) writes encounter/map/campaign JSON,
+not unit/skill/item content — its `Units.kt`/`Skills.kt`/`Relics.kt` are
+Kotlin DSL, compiled in, never serialized. A designer panel for the new
+`Catalog` schema would be new work, not a port of an existing one.
 
 The Kotlin DSL in `content/dsl/SkillDsl.kt` stays useful as a *test fixture*
 builder — expressing a one-off action inline in a test is much nicer than

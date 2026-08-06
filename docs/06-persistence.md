@@ -74,8 +74,11 @@ overwrite rather than accumulate.
 ## The catalog does not go in the database
 
 `Archetype`, `ActionDef`, `ItemDef`, `StatusDef` are static content that changes
-only with an app update. They live as JSON in `composeResources/files/` and are
-parsed once into a `Catalog` at startup.
+only with an app update. They live as JSON text, parsed once into a `Catalog`
+at startup by `:core:content`'s `CatalogLoader.parse()`. That module cannot
+read the file itself — see [01](01-modules.md) rule 3 — so `:app`/`:data`
+own getting the JSON text off disk/assets/bundle before handing it to the
+parser.
 
 Only put them in the database if mod support or live content updates arrive —
 and then as a second layer that overlays the bundled catalog, not as a
@@ -95,9 +98,18 @@ index on load. This is why `GameState.entities` is a list and `byId` /
 can be loaded back in a stale, self-contradicting form.
 
 **Polymorphic effects need a stable discriminator.** Use explicit
-`@SerialName("move_along")` on every `Effect`, `GameEvent`, `Modifier` and
-`Expiry` subtype. Class names refactor; serial names must not. Register them in
-a `SerializersModule` in `:data`, not in `:core:model`.
+`@SerialName` on every `Effect`, `GameEvent`, `Modifier` and `Expiry`
+subtype. Class names refactor; serial names must not. In practice this
+needs no `SerializersModule` registration anywhere: every sealed hierarchy
+here is a closed `sealed interface` in `:core:model`, and
+`kotlinx.serialization` resolves closed sealed hierarchies at compile time
+from the `@Serializable`/`@SerialName` annotations alone. A
+`SerializersModule` is only for *open* polymorphism (interfaces implemented
+outside the module that declares them), which nothing in this codebase
+needs. Watch for one real pitfall instead: a field literally named `type`
+on a subtype collides with the default `"type"` discriminator key for its
+sealed parent and throws on encode — rename the field (`Effect.DealDamage`
+hit this; its `damageType` field used to be `type`).
 
 **Use JSON, not a compact binary format.** Snapshots are a few tens of
 kilobytes; the size saving is irrelevant next to being able to open a broken
