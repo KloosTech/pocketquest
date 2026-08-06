@@ -20,9 +20,11 @@ import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
+import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.core.rules.resolver.StepResult
+import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
 import de.jackbeback.pocketquest.data.PocketQuestDatabase
 import de.jackbeback.pocketquest.data.SaveRepository
 import de.jackbeback.pocketquest.ui.runDesktopApp
@@ -80,7 +82,7 @@ private val DEMO_CATALOG_JSON = """
       "cost": { "action": { "type": "main" }, "mana": 3, "charges": null, "hpCost": 0 },
       "targeting": {
         "mode": "SingleEntity", "range": { "type": "tiles", "n": 6 }, "shape": { "type": "single" },
-        "filter": { "faction": "Enemy", "requireAlive": true, "hasStatus": null, "excludeSelf": false },
+        "filter": { "faction": "Player", "requireAlive": true, "hasStatus": null, "excludeSelf": false },
         "requiresLoS": true, "maxTargets": 1
       },
       "effects": [
@@ -118,32 +120,57 @@ fun main() {
         health = Health(12), resources = Resources(ap = 2, mana = 10),
         actor = Actor(Faction.Enemy, Controller.Ai(de.jackbeback.pocketquest.core.model.AiProfileId("default"))),
     )
-    val state = GameState(
+    var state = GameState(
         entities = listOf(hero, goblin),
         map = BattleMap(10, 10),
         turn = TurnState(round = 1, order = listOf(heroId, goblinId), activeIndex = 0, phase = TurnPhase.Main),
         rng = RngState(seed = 42, calls = 0),
     )
-    log += "hero (fighter) at ${hero.pos} vs goblin (mage) at ${goblin.pos}, ${goblin.health?.current} HP"
+    log += "Round 1: hero (fighter, ${hero.health?.current} HP) at ${hero.pos} vs goblin (mage, ${goblin.health?.current} HP) at ${goblin.pos}"
 
-    val ctx = ActionCtx(caster = heroId, targets = listOf(goblinId), point = goblin.pos)
-    val result = perform(state, heroId, ActionId("strike"), ctx, catalog)
-
-    val resolver: Resolver = when (result) {
-        is StepResult.Completed -> {
-            log += "hero uses Strike on goblin:"
-            result.resolver.emitted.forEach { log += "  -> $it" }
-            result.resolver
+    // Records a step's outcome to the log and returns its resulting Resolver, so callers can
+    // thread `state` through the whole turn loop the same way a real UI/AI driver would.
+    fun record(label: String, result: StepResult): Resolver {
+        when (result) {
+            is StepResult.Completed -> {
+                log += label
+                result.resolver.emitted.forEach { log += "  -> $it" }
+            }
+            is StepResult.Rejected -> log += "$label — REJECTED: ${result.reasons}"
+            is StepResult.AwaitingInput -> log += "$label — paused awaiting a decision: ${result.request}"
         }
-        is StepResult.Rejected -> {
-            log += "Strike was rejected: ${result.reasons}"
-            result.resolver
-        }
-        is StepResult.AwaitingInput -> {
-            log += "Strike paused awaiting a decision (unexpected for this demo): ${result.request}"
-            result.resolver
-        }
+        return result.resolver
     }
+
+    // Round 1, hero's turn: Strike the goblin.
+    state = record(
+        "hero uses Strike on goblin:",
+        perform(state, heroId, ActionId("strike"), ActionCtx(heroId, listOf(goblinId), point = state.byId.getValue(goblinId).pos), catalog),
+    ).state
+
+    // Hero ends their turn -> goblin's turn begins (doc04's 7-step turn boundary).
+    state = record(
+        "hero ends their turn:",
+        runResolver(Resolver(state, stack = listOf(Effect.EndTurn(heroId))), catalog),
+    ).state
+
+    // Round 1, goblin's turn: Firebolt the hero. :core:ai is still a placeholder — the enemy's
+    // action is chosen by hand here, exactly like the hero's, not by any real AI decision logic.
+    state = record(
+        "goblin uses Firebolt on hero:",
+        perform(state, goblinId, ActionId("firebolt"), ActionCtx(goblinId, listOf(heroId), point = state.byId.getValue(heroId).pos), catalog),
+    ).state
+
+    // Goblin ends their turn -> round 2, hero's turn begins. If Firebolt's burn caught, this is
+    // where it ticks: onTurnStart effects fire automatically as part of the SAME turn-boundary
+    // resolution, before this step returns.
+    val resolver = record(
+        "goblin ends their turn:",
+        runResolver(Resolver(state, stack = listOf(Effect.EndTurn(goblinId))), catalog),
+    )
+    state = resolver.state
+
+    log += "Round ${state.turn.round}: hero ${state.byId.getValue(heroId).health?.current} HP, goblin ${state.byId.getValue(goblinId).health?.current} HP"
 
     val dbPath = File("pocketquest-demo.db").absolutePath
     val db = Room.databaseBuilder<PocketQuestDatabase>(name = dbPath)
