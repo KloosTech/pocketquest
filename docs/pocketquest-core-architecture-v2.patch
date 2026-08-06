@@ -1,0 +1,1913 @@
+From 9a883c65b560c4aca490f2b199f5e28e67679e84 Mon Sep 17 00:00:00 2001
+From: Jack <jack@local>
+Date: Thu, 6 Aug 2026 13:12:01 +0000
+Subject: [PATCH] docs(core): architecture v2 design reference
+
+Design documentation for the combat core rewrite, written before
+implementation. Covers module split, immutable state model, modifier
+and status system, the pausable effect-stack resolver, data-driven
+actions, snapshot persistence, and the animation director.
+
+Includes a mapping of the twelve structural issues found in the v1
+ECS proof of concept to their v2 answers, plus the test plan that
+serves as the implementation contract for the next step.
+---
+ docs/architecture/01-modules.md              | 101 ++++++++
+ docs/architecture/02-state-model.md          | 188 +++++++++++++++
+ docs/architecture/03-modifiers-and-status.md | 193 +++++++++++++++
+ docs/architecture/04-resolver.md             | 236 +++++++++++++++++++
+ docs/architecture/05-actions-and-effects.md  | 191 +++++++++++++++
+ docs/architecture/06-persistence.md          | 161 +++++++++++++
+ docs/architecture/07-animation.md            | 208 ++++++++++++++++
+ docs/architecture/08-migration-from-poc.md   | 183 ++++++++++++++
+ docs/architecture/09-test-plan.md            | 230 ++++++++++++++++++
+ docs/architecture/README.md                  | 123 ++++++++++
+ 10 files changed, 1814 insertions(+)
+ create mode 100644 docs/architecture/01-modules.md
+ create mode 100644 docs/architecture/02-state-model.md
+ create mode 100644 docs/architecture/03-modifiers-and-status.md
+ create mode 100644 docs/architecture/04-resolver.md
+ create mode 100644 docs/architecture/05-actions-and-effects.md
+ create mode 100644 docs/architecture/06-persistence.md
+ create mode 100644 docs/architecture/07-animation.md
+ create mode 100644 docs/architecture/08-migration-from-poc.md
+ create mode 100644 docs/architecture/09-test-plan.md
+ create mode 100644 docs/architecture/README.md
+
+diff --git a/docs/architecture/01-modules.md b/docs/architecture/01-modules.md
+new file mode 100644
+index 0000000..db935b0
+--- /dev/null
++++ b/docs/architecture/01-modules.md
+@@ -0,0 +1,101 @@
++# 01 — Modules and dependency rules
++
++## Why split at all
++
++Today everything lives in `:composeApp`. That means nothing stops a rules class
++from importing `androidx.compose.ui.geometry.Offset` — and v1 already does the
++equivalent: `AnimationEventCollector` computes normalised canvas coordinates
++inside what is nominally game logic, and holds mutable `gridCols`/`gridRows`
++that the ViewModel pokes at.
++
++A module boundary turns "we agreed not to do that" into a compile error. That
++is the entire justification. It also makes the rules testable as a plain JVM
++test run measured in milliseconds, instead of anything touching the Android or
++iOS toolchain.
++
++## Target graph
++
++```
++:app                (android / ios / desktop entry points, DI wiring)
++  └── :ui           Compose, ViewModels, Director, AnimationPlayer
++        ├── :data   Room, repositories, snapshot serialization
++        │     └── :core:content
++        ├── :core:ai
++        └── :core:content   catalog loading, JSON schemas
++              └── :core:rules   resolver, handlers, actions, stats
++                    └── :core:model   GameState, Entity, Effect, GameEvent
++```
++
++Rules, read top to bottom:
++
++1. `:core:model` depends on **nothing** except `kotlin-stdlib` and
++   `kotlinx-serialization-core`.
++2. `:core:rules` depends on `:core:model` only. No coroutines. No `Random` —
++   RNG comes from state (see [02](02-state-model.md)).
++3. `:core:content` may depend on `kotlinx-serialization-json` and Compose
++   Resources for reading `composeResources/files/`. It must not depend on
++   `:core:rules` internals beyond the public types.
++4. `:core:ai` depends on `:core:rules`. It is a *consumer* of the resolver, not
++   a special case inside it.
++5. `:data` owns Room and is the only module that may perform IO.
++6. `:ui` may depend on everything below it, and is the only module allowed to
++   import Compose.
++7. **No module may depend on `:ui`.** If something in `:core` needs a UI
++   concept, the concept is in the wrong place.
++
++## Multiplatform shape
++
++The project targets Android, iOS (`iosArm64`, `iosSimulatorArm64`) and Desktop
++JVM. Therefore:
++
++- `:core:model` and `:core:rules` are **Kotlin Multiplatform library** modules
++  with only a `commonMain` source set. Not `jvm()`-only — iOS needs them.
++- They apply `kotlinMultiplatform` + `kotlinSerialization`, and explicitly
++  **not** `composeMultiplatform`, `androidApplication`, or `room`.
++- Their tests live in `commonTest` and run on the JVM target for speed
++  (`./gradlew :core:rules:desktopTest`) while remaining compilable for iOS.
++
++`:data` needs `androidLibrary` + `room` + `ksp` and keeps the existing
++`sqlite-bundled` setup for iOS and Desktop.
++
++## Migration path (non-breaking, in this order)
++
++The v1 code keeps running the whole time. We are not doing a big-bang move.
++
++1. **Create empty modules** `:core:model`, `:core:rules` and wire them into
++   `settings.gradle.kts`. Nothing depends on them yet.
++2. **Build the new core inside them**, with tests, entirely disconnected from
++   the running game. This is the step described in
++   [09-test-plan.md](09-test-plan.md).
++3. **Port content** — `content/definitions/*.kt` and the JSON under
++   `composeResources/files/` map onto the new `Archetype` / `ActionDef`
++   catalog. The designer tooling in `desktopMain` keeps writing the same JSON;
++   only the loader changes.
++4. **Add a second battle screen** behind a debug flag that runs on the new
++   engine. Both engines coexist.
++5. **Delete `ecs/` and `game/systems/`** once the new screen reaches parity.
++
++Step 4 is what keeps this from becoming a six-week rewrite with nothing
++playable in the middle.
++
++## Package naming
++
++Inside the new modules, drop the `ecs` prefix — the new design is not an ECS,
++and keeping the name will mislead future readers.
++
++```
++de.jackbeback.pocketquest.core.model      GameState, Entity, GridPos, ids
++de.jackbeback.pocketquest.core.model.event
++de.jackbeback.pocketquest.core.rules      Resolver, StepResult, handlers
++de.jackbeback.pocketquest.core.rules.stat Stats derivation
++de.jackbeback.pocketquest.core.rules.action
++de.jackbeback.pocketquest.core.content    Catalog, loaders
++```
++
++## What "no Compose in core" costs us
++
++One real thing: `GridPos` cannot be `IntOffset`, and interpolated positions
++cannot be `Offset`. The core uses its own `GridPos(col, row)`; the UI layer
++converts. This is a few lines of adapter code and is worth it — the v1
++`AnimationEvent` carrying `fromNormX: Float` is exactly the coupling we are
++paying to remove.
+diff --git a/docs/architecture/02-state-model.md b/docs/architecture/02-state-model.md
+new file mode 100644
+index 0000000..1584200
+--- /dev/null
++++ b/docs/architecture/02-state-model.md
+@@ -0,0 +1,188 @@
++# 02 — State model
++
++## Static vs. runtime
++
++The most expensive mistake to correct later is mixing per-kind data with
++per-instance data. A goblin has values that apply to *every* goblin (max HP 7,
++AC 15, its action list) and values that belong to this one (current HP,
++position). The first kind must not end up in every save file.
++
++```kotlin
++@JvmInline @Serializable value class EntityId(val raw: Long)
++@JvmInline @Serializable value class ArchetypeId(val raw: String)
++@JvmInline @Serializable value class ActionId(val raw: String)
++@JvmInline @Serializable value class StatusId(val raw: String)
++@JvmInline @Serializable value class ItemId(val raw: String)
++
++/** Static. Loaded from JSON at startup, never mutated at runtime. */
++data class Archetype(
++    val id: ArchetypeId,
++    val name: String,
++    val abilities: AbilityScores,      // STR DEX CON INT WIS CHA
++    val baseMaxHp: Int,
++    val baseAc: Int,
++    val speedTiles: Int,
++    val baseMaxAp: Int,
++    val baseMaxMana: Int,
++    val actions: List<ActionId>,
++    val innateModifiers: List<Modifier> = emptyList(),
++)
++```
++
++Saves store `ArchetypeId` references only. This keeps snapshots small and means
++a balance patch applies retroactively to existing save files.
++
++## The entity
++
++Not inheritance (`class Player : Entity`), which breaks on the first charmed
++NPC or destructible barrel. Not a `Map<KClass, Component>` either — at our
++entity count that buys nothing but casts and null checks, and it is what makes
++v1's `world.get<HealthComponent>(id)` return a nullable every single time.
++
++Typed, nullable fields on one `data class`:
++
++```kotlin
++@Serializable
++data class Entity(
++    val id: EntityId,
++    val archetype: ArchetypeId,
++    val pos: GridPos?,                       // null = not on the map (reserve, dead)
++    val health: Health?,                     // null = indestructible (wall, marker)
++    val resources: Resources?,               // null = does not act (barrel)
++    val actor: Actor?,                       // null = not in the initiative order
++    val equipment: Equipment = Equipment.EMPTY,
++    val statuses: List<ActiveStatus> = emptyList(),
++    val blocksMovement: Boolean = true,
++)
++
++@Serializable data class Health(val current: Int, val temp: Int = 0)
++@Serializable data class Resources(val ap: Int, val mana: Int, val quickUsed: Boolean)
++@Serializable data class Actor(val faction: Faction, val controller: Controller)
++
++@Serializable sealed interface Controller {
++    @Serializable data object Human : Controller
++    @Serializable data class Ai(val profile: AiProfileId) : Controller
++}
++```
++
++Player and enemy differ **only** in `actor.faction` and `actor.controller` —
++not in type. That is what makes a charmed enemy or an auto-piloted companion a
++one-field change rather than a new class.
++
++Compare with v1: `GameLoop.getActivePlayer()` picks the first entity with
++`Faction.PLAYER`. That silently forbids a party of more than one, and it is not
++a bug you can patch — it is the data model.
++
++## Derived values are functions
++
++`maxHp`, `armorClass` and `speed` change with equipment, buffs and conditions.
++Stored as fields they will drift. In v1 `StatsComponent` is stored and
++`ConditionsComponent` is separate, so a condition that should modify AC has
++nowhere correct to write.
++
++```kotlin
++/** Flat, immutable, fully resolved. Computed once per state version. */
++data class Stats(
++    val maxHp: Int,
++    val armorClass: Int,
++    val speedTiles: Int,
++    val maxAp: Int,
++    val maxMana: Int,
++    val abilities: AbilityScores,
++    val flags: Set<Flag>,                 // CantAct, Prone, Flying, Invisible…
++    val resistances: Map<DamageType, Resistance>,
++)
++
++fun Entity.stats(cat: Catalog): Stats
++```
++
++Nothing in the codebase reads `statuses` or `equipment` to answer a numeric
++question. Everything goes through `stats()`. Derivation rules are in
++[03-modifiers-and-status.md](03-modifiers-and-status.md).
++
++**Caching.** `stats()` is pure, so memoise per `(EntityId, stateVersion)` in a
++side table held by the resolver. Do not put a cache field inside `Entity` — it
++would be serialized and could go stale across a save/load.
++
++## Grid and occupancy
++
++Position lives on the entity. The grid is an **index**, rebuilt on demand:
++
++```kotlin
++@Serializable data class GridPos(val col: Int, val row: Int)
++
++data class GameState(
++    val entities: List<Entity>,           // list, not map — see persistence note
++    val map: BattleMap,
++    val turn: TurnState,
++    val rng: RngState,
++    val version: Long = 0,
++) {
++    @Transient
++    val byId: Map<EntityId, Entity> = entities.associateBy { it.id }
++
++    @Transient
++    val occupancy: Map<GridPos, EntityId> =
++        entities.mapNotNull { e -> e.pos?.let { it to e.id } }.toMap()
++}
++```
++
++Two entities are never written to the same tile, because tiles are not written
++to at all. v1's `MovementSystem` has to scan all positions with
++`world.query<PositionComponent>().any { ... }` on every move to detect
++collisions; here the check is a map lookup and cannot desync.
++
++`entities` is a `List` rather than a `Map` because JSON object keys must be
++strings — see [06-persistence.md](06-persistence.md).
++
++## RNG lives in the state
++
++```kotlin
++@Serializable data class RngState(val seed: Long, val calls: Long)
++
++fun RngState.d20(): Pair<RngState, Int>
++fun RngState.roll(dice: DiceSpec): Pair<RngState, RollResult>
++```
++
++Every roll returns a new `RngState` alongside its result. Consequences:
++
++- The same command sequence on the same seed always produces the same outcome —
++  bug reports become reproducible from a command log.
++- Tests are deterministic without mocking anything.
++- Save/load mid-combat cannot re-roll a different result.
++
++Correspondingly, **`kotlin.random.Random` must never be called in
++`:core:rules`.** Add a Konsist or Detekt rule for this once the module exists;
++it is the sort of thing that creeps back in.
++
++## Turn state
++
++```kotlin
++@Serializable data class TurnState(
++    val round: Int,
++    val order: List<EntityId>,          // rolled initiative, stable
++    val activeIndex: Int,
++    val phase: TurnPhase,               // Start, Main, End — not Player/Enemy
++)
++```
++
++Note the difference from v1's `TurnPhase.PlayerPhase / EnemyPhase /
++EnvironmentPhase`. Side-based phases are not D&D turn order, and they make an
++interleaved initiative (goblin, player, goblin) impossible to express. The
++active entity is `order[activeIndex]`; whether a human or an AI answers for it
++is `actor.controller`, not a phase.
++
++## Invariants
++
++Enforced in a `checkInvariants(state)` helper used by tests and debug builds:
++
++1. Every `EntityId` in `turn.order` exists in `entities`.
++2. No two entities with a non-null `pos` share a `GridPos`.
++3. Every `pos` is inside the map bounds and on a walkable tile.
++4. `health.current in 0..stats.maxHp` for all entities with health.
++5. `resources.ap in 0..stats.maxAp`, same for mana.
++6. Every `ActiveStatus.sourceId`, if non-null, refers to an existing entity.
++7. `activeIndex in order.indices` whenever `order` is non-empty.
++
++These become the shared assertion block in the property tests described in
++[09-test-plan.md](09-test-plan.md).
+diff --git a/docs/architecture/03-modifiers-and-status.md b/docs/architecture/03-modifiers-and-status.md
+new file mode 100644
+index 0000000..9c80d84
+--- /dev/null
++++ b/docs/architecture/03-modifiers-and-status.md
+@@ -0,0 +1,193 @@
++# 03 — Modifiers, equipment and status effects
++
++## They are the same mechanism
++
++From the rules' point of view, a ring of protection and a *bless* spell are
++both "a source of modifiers and hooks attached to an entity". Modelling them
++separately means writing every stat calculation twice — and then finding, six
++months later, that armour is counted in one path and the buff in the other.
++
++```kotlin
++interface ModifierSource {
++    val modifiers: List<Modifier>
++    val behavior: BehaviorId?
++}
++
++@Serializable
++sealed interface Modifier {
++    @Serializable data class Add(val stat: Stat, val value: Int) : Modifier
++    @Serializable data class Mul(val stat: Stat, val factor: Float) : Modifier
++    @Serializable data class Override(val stat: Stat, val value: Int) : Modifier
++    @Serializable data class Grant(val flag: Flag) : Modifier
++    @Serializable data class Resist(val type: DamageType, val level: Resistance) : Modifier
++    @Serializable data class Roll(val ctx: RollContext, val side: AdvSide) : Modifier
++}
++```
++
++## Derivation order is fixed
++
++```
++base (archetype)
++  → Add          summed
++  → Mul          multiplied, applied to the Add result
++  → Override     last writer wins, sorted by source priority
++  → clamp        to legal ranges
++```
++
++Sources are collected in a fixed order so `Override` ties resolve
++deterministically:
++
++```kotlin
++fun Entity.stats(cat: Catalog): Stats {
++    val sources: List<ModifierSource> =
++        cat[archetype].innate +
++        equipment.wornInSlotOrder() +          // MainHand, OffHand, Armor, Ring1, Ring2…
++        statuses.sortedWith(compareBy({ it.def.raw }, { it.appliedAtVersion }))
++    …
++}
++```
++
++Never iterate a `Set` or `HashMap` here. Iteration order differences produce
++different `Override` outcomes, which breaks the determinism guarantee from
++[02](02-state-model.md).
++
++## Advantage is not a number
++
++The most common way to get D&D wrong. Advantage does not stack, does not equal
++`+5`, and any single source of disadvantage cancels any number of advantages.
++So collect sources and resolve categorically:
++
++```kotlin
++enum class AdvSide { Advantage, Disadvantage }
++enum class RollMode { Normal, Advantage, Disadvantage }
++
++fun resolveAdvantage(sides: Set<AdvSide>): RollMode = when {
++    AdvSide.Advantage in sides && AdvSide.Disadvantage in sides -> RollMode.Normal
++    AdvSide.Advantage in sides -> RollMode.Advantage
++    AdvSide.Disadvantage in sides -> RollMode.Disadvantage
++    else -> RollMode.Normal
++}
++```
++
++`RollContext` narrows where a modifier applies: `AttackRoll(vs = Faction?)`,
++`SavingThrow(ability)`, `AbilityCheck(skill)`. A `Roll` modifier without a
++context would apply to everything, which is almost never what content wants.
++
++## Status effects: expiry timestamps, not countdowns
++
++A `roundsLeft` counter that every system decrements produces off-by-one bugs,
++because D&D durations attach to *moments*, not to a number of rounds. "Until
++the end of your next turn" and "until the end of the caster's turn" are
++different things, and a shared counter cannot tell them apart.
++
++```kotlin
++@Serializable
++data class ActiveStatus(
++    val def: StatusId,
++    val sourceId: EntityId?,
++    val linkId: LinkId?,                 // concentration group — ends together
++    val stacks: Int = 1,
++    val expiry: Expiry,
++    val saveEnds: SaveSpec? = null,      // repeat save at a given moment
++    val appliedAtVersion: Long,          // tie-break for Override ordering
++) : ModifierSource
++
++@Serializable
++sealed interface Expiry {
++    @Serializable data object Permanent : Expiry
++    @Serializable data class EndOfTurnOf(val who: EntityId, val round: Int) : Expiry
++    @Serializable data class StartOfTurnOf(val who: EntityId, val round: Int) : Expiry
++    @Serializable data class EndOfRound(val round: Int) : Expiry
++    @Serializable data object OnConcentrationLost : Expiry
++}
++```
++
++At each turn boundary the engine asks "which expiries match *this* moment"
++rather than decrementing anything. Extending a duration means writing a new
++`Expiry`, never arithmetic on a counter.
++
++### Stacking policy is per-definition
++
++Declare it once in `StatusDef`, or you will re-litigate it at twenty call
++sites:
++
++```kotlin
++enum class StackPolicy {
++    Refresh,        // reapply → new expiry, stacks stay 1 (most buffs)
++    AddStacks,      // stacks += 1, expiry refreshed (poison, exhaustion)
++    KeepStrongest,  // higher potency wins, weaker is dropped
++    Independent,    // multiple instances coexist (different sources)
++}
++```
++
++### Concentration
++
++`LinkId` groups everything a single concentration effect created — including
++statuses on *other* entities. When concentration breaks, one lookup removes all
++of them:
++
++```kotlin
++fun breakConcentration(state: GameState, link: LinkId): List<Effect>
++```
++
++Rules to encode:
++- One `LinkId` per entity at a time. Starting a new one ends the previous.
++- Damage triggers a CON save at `DC = max(10, damage / 2)`.
++- Falling unconscious or dying breaks it unconditionally.
++
++## Equipment
++
++```kotlin
++@Serializable
++data class Equipment(val slots: Map<Slot, ItemInstance>) {
++    companion object { val EMPTY = Equipment(emptyMap()) }
++}
++
++@Serializable
++data class ItemInstance(
++    val def: ItemId,
++    val enchantment: Int = 0,
++    val charges: Int? = null,
++    val attuned: Boolean = false,
++) : ModifierSource
++
++enum class Slot { MainHand, OffHand, Armor, Helm, Ring1, Ring2, Amulet }
++```
++
++- Two-handed weapons occupy `MainHand` **and** `OffHand`. Model this as a
++  validation rule in `equip()`, not as a special case in the renderer.
++- Inventory is stored separately from `Equipment`; only worn items feed
++  `stats()`.
++- Attunement limit (3) is a validation rule, checked on `equip()`.
++
++## The escape hatch
++
++Pure data cannot express "when you take damage, teleport 3 tiles". Content that
++needs code gets a `BehaviorId` that resolves against a registry:
++
++```kotlin
++fun interface Behavior {
++    /** Returns effects to push. MUST NOT mutate anything. */
++    fun onEvent(ctx: RuleCtx, event: GameEvent): List<Effect>
++}
++
++object BehaviorRegistry { val all: Map<BehaviorId, Behavior> }
++```
++
++Two hard constraints:
++
++1. Behaviors **return effects**, they never mutate state. A behaviour that
++   writes directly would break determinism, replay and preview at once.
++2. Behaviours are keyed by a string that lives in JSON. Content authors pick a
++   behaviour; they do not write one. A missing key is a load-time error, not a
++   runtime crash.
++
++Expect roughly 90% of items and statuses to be pure data.
++
++## Where `Resources` gets its maximum
++
++Closing the loop with [02](02-state-model.md): `Entity.resources.mana` is the
++*current* value; `Stats.maxMana` is derived. A ring granting +1 max mana is
++therefore just `Add(Stat.MaxMana, 1)` with no special path anywhere. The turn
++reset reads `stats().maxAp`, which is exactly why expiry must run before the
++reset — see [04-resolver.md](04-resolver.md#turn-boundaries).
+diff --git a/docs/architecture/04-resolver.md b/docs/architecture/04-resolver.md
+new file mode 100644
+index 0000000..1f741e3
+--- /dev/null
++++ b/docs/architecture/04-resolver.md
+@@ -0,0 +1,236 @@
++# 04 — The resolver: effect stack and decisions
++
++This is the backbone. Everything else plugs into it.
++
++## The requirement that shapes the design
++
++A player triggers an opportunity attack, gets a "use your reaction?" dialog,
++and puts the phone down. Android kills the process. When they come back, the
++half-finished move must continue from exactly where it stopped.
++
++That rules out coroutine suspension, callbacks and continuation lambdas as the
++pause mechanism — none of them survive a process death. The paused state must
++be **plain serializable data**.
++
++## The resolver is itself a data object
++
++```kotlin
++@Serializable
++data class Resolver(
++    val state: GameState,
++    val stack: List<Effect>,                 // LIFO — [0] is next
++    val pending: DecisionRequest? = null,
++    val answers: Map<DecisionId, Decision> = emptyMap(),
++    val emitted: List<GameEvent> = emptyList(),
++    val steps: Int = 0,                      // loop guard
++    val depth: Int = 0,                      // reaction nesting guard
++)
++```
++
++Saving mid-reaction is not a special case: the whole `Resolver` is the
++snapshot. See [06-persistence.md](06-persistence.md).
++
++## Effects never block — they split
++
++The key trick. An effect that needs an answer does not wait. It pushes an `Ask`
++plus a continuation effect that will read the answer later, and returns.
++
++```kotlin
++sealed interface Effect
++
++data class Ask(val request: DecisionRequest) : Effect
++
++data class ResolveReaction(
++    val id: DecisionId,
++    val trigger: GameEvent,
++    val who: EntityId,
++) : Effect
++```
++
++No lambdas in the state, no continuation objects — only data referencing a
++`DecisionId`.
++
++## The loop
++
++```kotlin
++sealed interface StepResult {
++    val resolver: Resolver
++    data class Completed(override val resolver: Resolver) : StepResult
++    data class AwaitingInput(override val resolver: Resolver,
++                             val request: DecisionRequest) : StepResult
++    data class Rejected(override val resolver: Resolver,
++                        val reasons: List<Rejection>) : StepResult
++}
++
++tailrec fun run(r: Resolver, cat: Catalog): StepResult {
++    r.pending?.let { return StepResult.AwaitingInput(r, it) }
++    if (r.stack.isEmpty()) return StepResult.Completed(r)
++    check(r.steps < MAX_STEPS) { "effect loop: ${r.stack.take(5)}" }
++
++    val head = r.stack.first()
++    val rest = r.stack.drop(1)
++
++    if (head is Ask) {
++        return StepResult.AwaitingInput(
++            r.copy(stack = rest, pending = head.request), head.request
++        )
++    }
++
++    val out = handlerFor(head).apply(r.state, head, r.answers, cat)
++    val triggered = collectTriggers(out.state, out.events, r.depth)
++
++    return run(
++        r.copy(
++            state   = out.state,
++            stack   = out.spawn + triggered + rest,   // new work goes to the FRONT
++            emitted = r.emitted + out.events,
++            steps   = r.steps + 1,
++        ),
++        cat,
++    )
++}
++
++fun resume(r: Resolver, id: DecisionId, d: Decision, cat: Catalog): StepResult {
++    require(r.pending?.id == id) { "stale decision answer" }   // double-tap guard
++    return run(r.copy(pending = null, answers = r.answers + (id to d)), cat)
++}
++```
++
++`out.spawn + triggered + rest` is the whole semantics of interruption in one
++line: reactions run first, the remainder of the interrupted action waits
++underneath.
++
++## Self-continuing effects
++
++Movement must not loop inside a handler — a `for` loop cannot be interrupted by
++an opportunity attack. Instead the effect re-pushes itself:
++
++```kotlin
++data class MoveAlong(
++    val who: EntityId,
++    val path: List<GridPos>,
++    val index: Int,
++) : Effect
++
++// handler:
++//   move one step, emit MoveStepped
++//   spawn = if (index + 1 < path.size) listOf(copy(index = index + 1)) else emptyList()
++```
++
++The opportunity attack pushes in front; `MoveAlong(index + 1)` sits below and
++resumes afterwards. The same pattern covers multi-target spells, multiattack
++and chained saves.
++
++## Reaction windows
++
++```kotlin
++fun collectTriggers(s: GameState, events: List<GameEvent>, depth: Int): List<Effect> {
++    if (depth >= MAX_REACTION_DEPTH) return emptyList()
++    return events.flatMap { ev ->
++        s.entities
++            .filter { it.canReactTo(ev, s) }
++            .sortedWith(compareBy({ s.turn.order.indexOf(it.id) }, { it.id.raw }))
++            .map { OfferReaction(ev, it.id, depth + 1) }
++    }
++}
++```
++
++Three things are load-bearing here:
++
++- **Sorting by initiative index then `EntityId`.** Never rely on collection
++  iteration order; that is how identical seeds start producing different
++  results.
++- **Depth limit.** Reactions trigger reactions. Two creatures with *Shield*
++  will loop forever without one.
++- **One reaction per entity per triggering event.** Track
++  `(EntityId, eventId)` pairs in the resolver for the duration of the step.
++
++`OfferReaction` consults the answerer policy *before* pushing an `Ask`,
++otherwise the player gets a dialog on every single movement step.
++
++## Who answers a decision
++
++```kotlin
++sealed interface Answerer {
++    data object HumanUi : Answerer                     // → AwaitingInput
++    data class Ai(val profile: AiProfileId) : Answerer // resolved inline
++    data class Auto(val rule: AutoRule) : Answerer     // e.g. NeverOfferReactions
++}
++```
++
++Only `HumanUi` leaves the loop. A full enemy turn therefore resolves in a
++single `run()` call and yields one event list — which is exactly what the
++animation player consumes.
++
++`Auto` covers a real usability need: a per-reaction toggle ("always use Shield
++when it would change the outcome", "never ask about opportunity attacks").
++
++## Turn boundaries
++
++Order is mandatory, and getting it wrong is silent:
++
++```
++1. resolve expiries matching StartOfTurnOf(active, round)
++2. recompute Stats                         ← after (1), before (3)
++3. reset resources to Stats maxima
++4. tick start-of-turn statuses (regeneration, damage over time)
++5. → Main phase: commands accepted
++6. resolve expiries matching EndOfTurnOf(active, round)
++7. advance activeIndex, wrap → round + 1, EndOfRound expiries
++```
++
++If step 3 runs before step 1, a buff that granted +1 AP and just expired still
++pays out for one extra turn. This is precisely the sort of thing the test suite
++in [09](09-test-plan.md) pins down.
++
++## Effects must re-validate at execution time
++
++Between being pushed and being popped, the target may have died, moved,
++teleported or gone invisible. Every handler re-checks its own preconditions.
++
++Failure emits `Fizzled(effect, reason)` rather than silently doing nothing:
++
++```kotlin
++data class Fizzled(val effect: String, val reason: Rejection) : GameEvent
++```
++
++Silent no-ops are the single worst debugging experience in v1 — `MovementSystem`
++has six separate `return@on` paths, none of which tell the player or the log
++anything. A `Fizzled` event is visible in the battle log, animatable as a
++"blocked" flash, and greppable in a bug report.
++
++## Guard constants
++
++| Constant | Value | Why |
++| --- | --- | --- |
++| `MAX_STEPS` | 10 000 | Effect loop; generous, only trips on real bugs |
++| `MAX_REACTION_DEPTH` | 8 | Reaction chains |
++| `MAX_TARGETS` | 32 | Sanity bound for area effects |
++
++All three throw rather than truncate. A tripped guard is a bug in content or
++rules, and failing loudly in a test beats a frozen UI on a phone.
++
++## Wiring to the outside
++
++```kotlin
++// :ui — BattleViewModel
++fun submit(cmd: Command) = viewModelScope.launch {
++    when (val res = engine.submit(cmd)) {
++        is Rejected -> showRejection(res.reasons)
++        is Completed -> {
++            logical = res.resolver.state
++            play(res.resolver.emitted)
++        }
++        is AwaitingInput -> {
++            logical = res.resolver.state
++            play(res.resolver.emitted)
++            pendingRequest = res.request      // dialog only after animations drain
++        }
++    }
++    save(res.resolver)
++}
++```
++
++The dialog waits for the animation queue. Otherwise you ask "opportunity
++attack?" while the figure is still visibly three tiles away — see
++[07-animation.md](07-animation.md).
+diff --git a/docs/architecture/05-actions-and-effects.md b/docs/architecture/05-actions-and-effects.md
+new file mode 100644
+index 0000000..ddecfa8
+--- /dev/null
++++ b/docs/architecture/05-actions-and-effects.md
+@@ -0,0 +1,191 @@
++# 05 — Actions and effects
++
++An action is a **declaration**. It contains no logic; performing it pushes an
++initial list of effects onto the resolver stack.
++
++## Three questions, one definition
++
++The UI always asks the same three things, and all three must be answered from
++the same source — otherwise the interface eventually shows something different
++from what the engine does. v1 has exactly this defect: `snapshotBattle()`
++computes `attackableTiles` with its own range and line-of-sight logic, while
++`SkillResolverSystem` independently decides whether the skill actually lands.
++
++1. Which actions can I take at all? → cost and requirement check
++2. Where may I target? → targeting
++3. What would happen? → preview
++
++```kotlin
++data class ActionDef(
++    val id: ActionId,
++    val name: String,
++    val cost: Cost,
++    val targeting: Targeting,
++    val requirements: List<Requirement>,
++    val effects: List<EffectTemplate>,
++    val behavior: BehaviorId? = null,
++)
++```
++
++## Action economy is categorical
++
++```kotlin
++sealed interface ActionCost {
++    data object Main : ActionCost              // the action
++    data object Quick : ActionCost             // bonus action
++    data object Reaction : ActionCost
++    data class Movement(val tiles: Int) : ActionCost
++    data object Free : ActionCost
++}
++
++data class Cost(
++    val action: ActionCost,
++    val mana: Int = 0,
++    val charges: ItemId? = null,
++    val hpCost: Int = 0,
++)
++```
++
++`Quick` is **not** a cheaper `Main`. Modelling the economy as a single integer
++pool ("costs 1 AP instead of 2") makes "one bonus action per turn" impossible
++to express, and that constraint is not optional in D&D. `Resources` therefore
++carries `quickUsed: Boolean` separately from `ap`.
++
++## Targeting
++
++```kotlin
++data class Targeting(
++    val mode: TargetMode,          // SelfOnly | SingleEntity | Point | Direction | Path
++    val range: Range,              // Melee | Tiles(n) | Self
++    val shape: Shape,              // Single | Sphere(r) | Cone(len, deg) | Line(len) | Rect(w, h)
++    val filter: TargetFilter,      // faction, alive, hasStatus, notSelf…
++    val requiresLoS: Boolean = true,
++    val maxTargets: Int = 1,
++)
++
++fun legalTargets(state: GameState, caster: EntityId, def: ActionDef, cat: Catalog): Set<GridPos>
++fun affectedBy(state: GameState, def: ActionDef, at: GridPos): List<EntityId>
++```
++
++`legalTargets` feeds the tile highlighting directly. There is no second code
++path for rendering. `affectedBy` drives the area preview when the player hovers
++a tile.
++
++## Effect primitives: keep the vocabulary small
++
++Twelve to fifteen primitives cover a surprising amount of content:
++
++```
++DealDamage   Heal        ApplyStatus     RemoveStatus
++MoveAlong    Push        Teleport        SpendCost
++RollAttack   RollSave    StartConcentration
++SpawnEntity  DestroyEntity   Ask   Composite
++```
++
++Everything else is composition. *Eldritch Blast* is `RollAttack → DealDamage`.
++*Thunderwave* is `RollSave → DealDamage + Push`. If you catch yourself writing
++`CastFireballEffect`, a primitive is cut too coarsely.
++
++## Templates, instances and bindings
++
++`EffectTemplate` is the authored definition; `Effect` is the concrete instance
++on the stack. A context resolves the placeholders in between.
++
++```kotlin
++data class ActionCtx(
++    val caster: EntityId,
++    val targets: List<EntityId>,
++    val point: GridPos?,
++    val slots: Map<SlotKey, SlotValue>,     // intermediate results
++)
++
++sealed interface Ref {
++    data object Caster : Ref
++    data object EachTarget : Ref            // expands to one effect per target
++    data class Slot(val key: SlotKey) : Ref
++}
++
++fun EffectTemplate.instantiate(ctx: ActionCtx, cat: Catalog): List<Effect>
++```
++
++- `EachTarget` expands at instantiation time, **sorted by `EntityId`**. Map
++  iteration order here would break seed determinism.
++- `Slot` chains effects: `RollSave` writes its outcome into a slot, and the
++  following `DealDamage` reads that slot to halve on a success. This is how
++  "half damage on a successful save" stays data rather than code.
++
++## Validation returns reasons, not a boolean
++
++```kotlin
++sealed interface Rejection {
++    data object NotYourTurn : Rejection
++    data object ActionAlreadyUsed : Rejection
++    data object QuickAlreadyUsed : Rejection
++    data class NotEnoughMana(val need: Int, val have: Int) : Rejection
++    data class OutOfRange(val distance: Int, val max: Int) : Rejection
++    data object NoLineOfSight : Rejection
++    data class BlockedByStatus(val status: StatusId) : Rejection
++    data class MissingEquipment(val slot: Slot) : Rejection
++    data object NoLegalTarget : Rejection
++}
++
++fun canPerform(state: GameState, caster: EntityId, def: ActionDef,
++               ctx: ActionCtx, cat: Catalog): List<Rejection>
++```
++
++One function, three consumers: the UI greys out the button *and* shows the
++reason as a tooltip; the AI filters its options; the engine gates execution.
++Returning `Boolean` would force each consumer to reimplement the "why".
++
++## Preview runs through the same machine
++
++Because `GameState` is immutable, previewing is running the resolver and
++throwing the result away.
++
++```kotlin
++sealed interface RngMode {
++    data class Live(val seed: RngState) : RngMode
++    data object Expected : RngMode     // expected values, saves by probability
++}
++
++fun preview(state: GameState, caster: EntityId, actionId: ActionId,
++            ctx: ActionCtx, cat: Catalog): PreviewResult
++```
++
++This structurally rules out the "it said 12 damage and dealt 8" class of bug,
++because the preview *is* the execution with a different RNG mode. And it hands
++the AI its evaluation function for free: enumerate legal actions, run each in
++`Expected` mode, score the resulting event list.
++
++## Execution
++
++```kotlin
++fun perform(state: GameState, caster: EntityId, actionId: ActionId,
++            ctx: ActionCtx, cat: Catalog): StepResult {
++    val def = cat.action(actionId)
++    val rejections = canPerform(state, caster, def, ctx, cat)
++    if (rejections.isNotEmpty()) return StepResult.Rejected(Resolver(state), rejections)
++
++    val initial = buildList {
++        add(SpendCost(caster, def.cost))
++        addAll(def.effects.flatMap { it.instantiate(ctx, cat) })
++    }
++    return run(Resolver(state, stack = initial), cat)
++}
++```
++
++Cost is the **first effect on the stack**, not a mutation applied before the
++loop. Two reasons: a spell interrupted by a counterspell must still have paid,
++and the UI's mana bar animates off the `ResourcesSpent` event — an out-of-band
++deduction would never appear in the event list.
++
++## Content authoring
++
++`ActionDef`, `Archetype`, `ItemDef` and `StatusDef` are JSON under
++`composeResources/files/`, loaded once into a `Catalog` at startup. The existing
++desktop designer (`ui/designer/`) keeps writing that JSON; only the schema and
++the loader change.
++
++The Kotlin DSL in `content/dsl/SkillDsl.kt` stays useful as a *test fixture*
++builder — expressing a one-off action inline in a test is much nicer than
++loading a JSON file. It should not remain the production content path.
+diff --git a/docs/architecture/06-persistence.md b/docs/architecture/06-persistence.md
+new file mode 100644
+index 0000000..167a8c9
+--- /dev/null
++++ b/docs/architecture/06-persistence.md
+@@ -0,0 +1,161 @@
++# 06 — Persistence
++
++## Room stays, but it is a sink, not a source
++
++The tempting design is to keep game state in Room and observe it with a `Flow`.
++It does not work here, for three reasons in increasing severity:
++
++1. **It fights the animation layer.** The UI deliberately renders a state that
++   *lags behind* the logical one. A database flow always emits the newest value,
++   so a figure would appear at its destination before its move animates. You
++   would have to throttle the flow artificially — fighting your own tooling.
++
++2. **Every effect step would cross an IO boundary.** The resolver is a
++   tail-recursive in-memory loop that runs hundreds of steps per turn. Routing
++   each through SQLite is not merely slow; it turns a synchronous pure function
++   into asynchronous state, which discards the determinism guarantee.
++
++3. **`GameState` is not relational.** Sealed hierarchies, polymorphic effects,
++   `Expiry` variants, the resolver stack. Normalising that is weeks of work, and
++   it buys nothing, because we never issue a relational query against it. We
++   never ask "all entities with HP below 5 across all save games".
++
++## The split
++
++```
++GameSession (in memory)          ← single source of truth during play
++   StateFlow<Resolver>
++        │
++        └── SaveRepository ──► Room ──► SQLite   (sink)
++```
++
++Room stores the **serialized resolver as a blob**, plus the metadata we
++genuinely want to query:
++
++```kotlin
++@Entity(tableName = "save_slot")
++data class SaveSlotRow(
++    @PrimaryKey val id: String,
++    val campaignId: String,
++    val schemaVersion: Int,
++    val updatedAt: Long,
++    val label: String,              // "Round 3, the Crypt"
++    val thumbnailPath: String?,
++    val autosave: Boolean,
++    val snapshot: ByteArray,        // kotlinx.serialization JSON, UTF-8
++)
++```
++
++What Room is genuinely good for, and should keep doing: the save slot list,
++campaign progress, settings, unlocked content, run statistics, the existing
++`SeenHintDao`. All of those are queried and sorted.
++
++## Persist the `Resolver`, not just the `GameState`
++
++If the process dies while a reaction dialog is open, the effect stack and
++`pending` must come back with it. Storing only `GameState` loses the
++half-executed turn — the player would resume with a move that stopped in the
++middle and no way to finish it.
++
++This is why `Resolver` is `@Serializable` in [04](04-resolver.md).
++
++## When to write
++
++Not on every event — that is IO during animation. Write at:
++
++- `StepResult.AwaitingInput` (the risky moment)
++- end of turn
++- `onStop()` of the host lifecycle
++- explicit player save
++
++In between, memory is sufficient. Autosaves go to a fixed slot id so they
++overwrite rather than accumulate.
++
++## The catalog does not go in the database
++
++`Archetype`, `ActionDef`, `ItemDef`, `StatusDef` are static content that changes
++only with an app update. They live as JSON in `composeResources/files/` and are
++parsed once into a `Catalog` at startup.
++
++Only put them in the database if mod support or live content updates arrive —
++and then as a second layer that overlays the bundled catalog, not as a
++replacement.
++
++Consequence: snapshots reference `ArchetypeId` and never embed archetype data,
++so balance changes apply to existing saves.
++
++## Serialization gotchas
++
++**Map keys must be strings in JSON.** `Map<EntityId, Entity>` and anything keyed
++by `GridPos` will not round-trip cleanly. Store `List<Entity>` and rebuild the
++index on load. This is why `GameState.entities` is a list and `byId` /
++`occupancy` are `@Transient` — see [02](02-state-model.md).
++
++**Derived fields must be `@Transient`.** Otherwise they are written to disk and
++can be loaded back in a stale, self-contradicting form.
++
++**Polymorphic effects need a stable discriminator.** Use explicit
++`@SerialName("move_along")` on every `Effect`, `GameEvent`, `Modifier` and
++`Expiry` subtype. Class names refactor; serial names must not. Register them in
++a `SerializersModule` in `:data`, not in `:core:model`.
++
++**Use JSON, not a compact binary format.** Snapshots are a few tens of
++kilobytes; the size saving is irrelevant next to being able to open a broken
++save in a text editor and repair it by hand.
++
++## Snapshot versioning
++
++Room migrations do not help with blob *contents*. We need our own chain:
++
++```kotlin
++const val CURRENT_SCHEMA = 3
++
++object SnapshotMigrations {
++    fun migrate(json: JsonElement, from: Int): JsonElement =
++        (from until CURRENT_SCHEMA).fold(json) { acc, v -> steps.getValue(v)(acc) }
++
++    private val steps: Map<Int, (JsonElement) -> JsonElement> = mapOf(
++        1 to ::v1ToV2,   // ...
++        2 to ::v2ToV3,
++    )
++}
++```
++
++Rules:
++- `schemaVersion` is a column, so a slot can be inspected without parsing.
++- Migration steps operate on `JsonElement`, never on the current data classes —
++  otherwise a step breaks the moment the class changes again.
++- Every step gets a golden-file test: a checked-in old snapshot must load.
++  See [09-test-plan.md](09-test-plan.md).
++- Loading a snapshot newer than `CURRENT_SCHEMA` fails loudly rather than
++  guessing.
++
++## The command log bonus
++
++Because RNG lives in the state and the resolver is deterministic, the full
++command sequence is a complete description of a battle — a few kilobytes for an
++entire fight, versus a snapshot per turn.
++
++```kotlin
++@Entity(tableName = "command_log")
++data class CommandLogRow(
++    @PrimaryKey(autoGenerate = true) val seq: Long = 0,
++    val battleId: String,
++    val commandJson: String,
++)
++```
++
++This gives replay, multi-turn undo (replay from the start of the turn with the
++last command dropped) and reproducible bug reports.
++
++**Do not use it as the only persistence.** The moment a rule changes, the same
++log replays to a different result. Snapshot is the truth; the log is an extra.
++Store the initial snapshot plus the log, and validate on replay by comparing a
++state hash at the end.
++
++## Testing hooks
++
++- `GameState` round-trips: `decode(encode(s)) == s` as a property test.
++- `Resolver` mid-decision round-trips, including a non-empty stack.
++- A checked-in corpus of old snapshots under
++  `commonTest/resources/snapshots/v1/…` must load through the migration chain.
+diff --git a/docs/architecture/07-animation.md b/docs/architecture/07-animation.md
+new file mode 100644
+index 0000000..1cfda06
+--- /dev/null
++++ b/docs/architecture/07-animation.md
+@@ -0,0 +1,208 @@
++# 07 — The animation pipeline
++
++Lives entirely in `:ui`. The core knows nothing about it.
++
++## Three states, not two
++
++| State | Owner | Purpose |
++| --- | --- | --- |
++| `logicalState: GameState` | ViewModel | The truth. Always current. |
++| `VisualWorld` | Director | What the screen shows. Lags behind on purpose. |
++| `Resolver` | GameSession | Includes the pending stack; persisted. |
++
++`VisualWorld` contains **no rules data**. It has no HP maximum, no mana cost, no
++faction logic — only what is needed to draw.
++
++```kotlin
++@Stable
++class VisualEntity(pos: Offset, hp: Float) {
++    val pos    = Animatable(pos, Offset.VectorConverter)   // tile coords as Float
++    val hp     = Animatable(hp)
++    val scale  = Animatable(1f)
++    val alpha  = Animatable(1f)
++    var facing by mutableStateOf(Facing.South)
++    var clip   by mutableStateOf(Clip.Idle)                 // Idle/Walk/Attack/Hurt/Die
++}
++
++class VisualWorld {
++    val entities = mutableStateMapOf<EntityId, VisualEntity>()
++    val overlays = mutableStateListOf<Overlay>()            // projectiles, numbers, areas
++    val camera   = Animatable(Offset.Zero, Offset.VectorConverter)
++}
++```
++
++`pos` is `Offset`, not `GridPos`: mid-move a figure is at `(3.4, 5.0)`, which
++does not exist in the rules model. That is the whole reason for a separate
++visual layer.
++
++Note what changed from v1: `AnimationEvent` there carries pre-computed
++normalised canvas floats (`fromNormX`) produced inside game logic, with the
++collector holding mutable `gridCols` / `gridRows` that the ViewModel writes to.
++Coordinates convert at **render** time now, from `GridPos`.
++
++## The Director translates events into beats
++
++One place decides timing. Nothing else in the codebase knows how long anything
++takes.
++
++```kotlin
++sealed interface Timing {
++    data object Blocking : Timing   // queue waits for it
++    data object Parallel : Timing   // starts, queue continues
++    data object Instant  : Timing   // no time at all
++}
++
++data class Beat(
++    val timing: Timing,
++    val play: suspend (VisualWorld) -> Unit,
++)
++
++fun choreograph(event: GameEvent, cat: Catalog): List<Beat> = when (event) {
++    is MoveStepped -> listOf(
++        Beat(Blocking) { it.walk(event.who, event.to, 180.ms) }
++    )
++    is AttackRolled -> listOf(
++        Beat(Blocking) { it.attackAnim(event.attacker, event.target) },
++        Beat(Parallel) { it.showRoll(event) },              // dice readout
++    )
++    is DamageTaken -> listOf(
++        Beat(Parallel) { it.floatNumber(event.who, event.amount, event.type) },
++        Beat(Blocking) { it.hurtFlash(event.who, 250.ms) },
++        Beat(Parallel) { it.entities[event.who]?.hp?.animateTo(event.remaining.toFloat()) },
++    )
++    is ResourcesSpent -> listOf(Beat(Instant) { it.hud(event) })
++    is Died           -> listOf(Beat(Blocking) { it.deathFade(event.who) })
++    is Fizzled        -> listOf(Beat(Parallel) { it.blockedFlash(event) })
++    is StatusApplied  -> listOf(Beat(Parallel) { it.statusPop(event.who, event.status) })
++    else -> emptyList()
++}
++```
++
++Adding a new game event means adding a `when` branch here. Neither the engine
++nor any composable changes.
++
++`Parallel` beats are what make it feel alive: the damage number is still
++floating while the next step begins.
++
++### Correlating rolls with animations
++
++v1 needs a `pendingProjectile` field in `AnimationEventCollector` to hold a
++travel animation until a later `DamageEvent` or `MissEvent` reveals whether it
++hit — and that hack breaks for multi-target skills, because
++`UseSkillOnTargets` emits N `SkillUsedEvent`s that all overwrite the single
++pending slot.
++
++In v2 there is nothing to correlate: `AttackRolled` carries `hit`, the roll, the
++modifier and the target AC. The director reads one event and knows everything.
++Delete the concept.
++
++## The player
++
++```kotlin
++class AnimationPlayer(private val world: VisualWorld) {
++    private val queue = Channel<Beat>(Channel.UNLIMITED)
++    val isPlaying = MutableStateFlow(false)
++    var speed: Float = 1f            // 0f → snap instantly
++
++    suspend fun run() = coroutineScope {
++        for (beat in queue) {
++            isPlaying.value = true
++            when (beat.timing) {
++                Timing.Instant  -> beat.play(world)
++                Timing.Parallel -> launch { beat.play(world) }
++                Timing.Blocking -> beat.play(world)
++            }
++            if (queue.isEmpty) isPlaying.value = false
++        }
++    }
++
++    fun enqueue(beats: List<Beat>) = beats.forEach { queue.trySend(it) }
++    suspend fun awaitDrained() { isPlaying.first { !it } }
++}
++```
++
++## Reconciliation is the safety net
++
++The most important function in this document. When the queue drains, the visual
++world is checked against the logical one:
++
++```kotlin
++suspend fun settle(logical: GameState) {
++    logical.entities.forEach { e ->
++        val v = world.entities.getOrPut(e.id) {
++            VisualEntity(e.pos.toOffset(), (e.health?.current ?: 0).toFloat())
++        }
++        e.pos?.toOffset()?.let { if (v.pos.value != it) v.pos.snapTo(it) }
++        e.health?.let { if (v.hp.value != it.current.toFloat()) v.hp.snapTo(it.current.toFloat()) }
++        v.alpha.snapTo(1f)
++    }
++    world.entities.keys.retainAll(logical.byId.keys)
++}
++```
++
++With this, a forgotten or cancelled beat is a one-frame cosmetic glitch instead
++of a sprite that is permanently in the wrong place. Without it you spend days
++chasing ghost figures. Call it after every drain, unconditionally.
++
++## Skip and speed from day one
++
++If the player taps during an animation, it should complete instantly, not be
++ignored:
++
++```kotlin
++fun skipAll() {
++    playerJob.cancel()
++    scope.launch { settle(logicalState) }
++}
++```
++
++All durations must go through a single scale factor so that `speed = 0f` turns
++every `animateTo` into a `snapTo`. That is both the "fast" setting and the way
++UI tests run without waiting. Retrofitting this later is impossible once
++durations are hard-coded at call sites.
++
++## Compose rules
++
++**Do not recompose per frame.** Use the lambda form of `graphicsLayer`, which
++runs in the draw phase:
++
++```kotlin
++Box(
++    Modifier.graphicsLayer {
++        translationX = visual.pos.value.x * tilePx
++        translationY = visual.pos.value.y * tilePx
++        alpha = visual.alpha.value
++    }
++)
++```
++
++**The grid is one `Canvas`, not 400 composables.** Tiles, highlights, fog of
++war and range overlays are drawn in `drawBehind`. Only entities get their own
++layer, because only they need independent animation. On a 44×32 map — which
++`Island_Prison.json` already is — a composable per tile is not viable on a
++phone.
++
++**The camera follows only when it must.** Animate it when the active entity
++leaves a comfortable inner rectangle; continuous centring is nauseating.
++
++## Ordering with the decision dialog
++
++```kotlin
++player.enqueue(events.flatMap { choreograph(it, catalog) })
++player.awaitDrained()
++player.settle(logical)
++pendingRequest = res.request      // only now
++```
++
++Otherwise the reaction prompt appears while the figure is still visibly mid-move.
++
++## Input during playback
++
++Discard, do not buffer. Queued taps in a tactics game produce moves the player
++no longer wants. Gate on `isPlaying`, and offer skip as the escape valve.
++
++## Process death
++
++Animations are not persisted. On restore, load the `Resolver`, then call
++`settle()` with no animation. Half-played beats are lost, which is correct: the
++snapshot is the truth, the animation was only presentation.
+diff --git a/docs/architecture/08-migration-from-poc.md b/docs/architecture/08-migration-from-poc.md
+new file mode 100644
+index 0000000..795f905
+--- /dev/null
++++ b/docs/architecture/08-migration-from-poc.md
+@@ -0,0 +1,183 @@
++# 08 — What v1 got stuck on, and what replaces it
++
++Written against the state of `main` at the time this branch was created. This
++is not a criticism of the PoC — it did its job, which was to find these walls.
++
++## The twelve issues
++
++### 1. Mutable `World`, no state snapshots
++
++`ecs/core/World.kt` holds `HashMap`-backed component stores mutated in place.
++There is no "before" to compare against and no way to copy the state cheaply.
++
++Blocks: undo, replay, save mid-action, action preview, AI lookahead.
++Every one of those is a feature we want.
++
++**→** Immutable `GameState` + reducer ([02](02-state-model.md)).
++
++### 2. Systems register handlers in `init` and mutate inside them
++
++`MovementSystem`, `CombatSystem` etc. subscribe in their constructors and do
++their work inside the callback; `update()` is `= Unit` for several of them. The
++control flow is invisible — you cannot read the code and know what happens in
++what order.
++
++Worse, the ordering is *load-bearing and implicit*. From
++`AnimationEventCollector`:
++
++> `// Unit movement: registered BEFORE MovementSystem so pre-move position is still in world`
++
++The correctness of the animation depends on constructor call order in
++`BattleSystemFactory`. Nothing enforces it and nothing fails if it changes.
++
++**→** Explicit effect stack; order is data you can print
++([04](04-resolver.md)).
++
++### 3. Silent rejection
++
++`MovementSystem` has six `return@on` paths: dead entity, no MP, no position,
++out of range, unwalkable tile, occupied tile, insufficient MP for terrain cost.
++All of them do nothing, log nothing and tell the player nothing.
++
++**→** `canPerform(): List<Rejection>` before execution, `Fizzled(effect,
++reason)` events during ([05](05-actions-and-effects.md)).
++
++### 4. The `pendingProjectile` correlation hack
++
++`AnimationEventCollector` holds a single nullable `pendingProjectile` because
++`SkillUsedEvent` does not know whether the attack hit; it waits for a following
++`DamageEvent`, `HealEvent` or `MissEvent`.
++
++This is broken today for `PlayerAction.UseSkillOnTargets`, which emits N
++`SkillUsedEvent`s into a one-slot field — only the last survives.
++
++**→** `AttackRolled` carries `hit`, roll, modifier and target AC. Nothing to
++correlate ([07](07-animation.md)).
++
++### 5. No reactions, no interruption
++
++`GameLoop.runPlayerTurn()` emits, runs the phase's systems, flushes and
++returns. There is no mechanism to pause mid-action and ask a *different* entity
++for input. Opportunity attacks, counterspell, shield and readied actions are
++all unimplementable.
++
++**→** `StepResult.AwaitingInput` + serializable resolver ([04](04-resolver.md)).
++
++### 6. Canvas coordinates baked into logic events
++
++`AnimationEvent.UnitMove` carries `fromNormX: Float` etc., computed inside
++`AnimationEventCollector` via `gridToNormX()`. The collector holds mutable
++`gridCols` / `gridRows` that `BattleViewModel` writes to whenever the tile map
++changes.
++
++Game logic should not know a canvas exists, and a mutable field poked from
++outside is a race waiting for a second caller.
++
++**→** Events carry `GridPos`; conversion happens at render time
++([07](07-animation.md)).
++
++### 7. Single player character is baked into the model
++
++`GameLoop.getActivePlayer()` and `snapshotBattle()` both do
++`.filter { it.faction == PLAYER }.firstOrNull()`. A party of two is not a
++feature to add — it is a data model change.
++
++**→** `TurnState.order` with `activeIndex`; `Controller` decides who answers
++([02](02-state-model.md)).
++
++### 8. Side phases instead of initiative
++
++`TurnPhase.PlayerPhase / EnemyPhase / EnvironmentPhase` cannot express
++"goblin, player, goblin" ordering, which is what D&D initiative actually
++produces.
++
++**→** `TurnPhase` becomes `Start / Main / End` *within* one entity's turn; the
++order across entities is `TurnState.order`.
++
++### 9. Stats stored, not derived
++
++`StatsComponent` is a stored component and `ConditionsComponent` is separate. A
++condition that should change AC has nowhere correct to write, so it either
++mutates the stored stats (unrecoverable) or is ignored.
++
++**→** `Stats` derived from archetype + equipment + statuses on read
++([03](03-modifiers-and-status.md)).
++
++### 10. Preview and execution are separate implementations
++
++`snapshotBattle()` computes `attackableTiles` with its own range check,
++`hasLineOfSight` and mana comparison. `SkillResolverSystem` decides
++independently whether the skill resolves. Two implementations of one rule; they
++will drift.
++
++Same story for `reachableTiles`, which reimplements the movement legality rules
++that `MovementSystem` also owns.
++
++**→** `legalTargets()` and `canPerform()` are the single source; preview runs
++the real resolver in `RngMode.Expected` ([05](05-actions-and-effects.md)).
++
++### 11. No RNG in state
++
++Dice come from ambient randomness. Battles cannot be reproduced, tests need
++mocking, and a mid-combat save/load can re-roll a different result.
++
++**→** `RngState` in `GameState`; every roll returns a new one
++([02](02-state-model.md)).
++
++### 12. One module, no enforced boundary
++
++Everything is in `:composeApp`. `AnimationEventCollector` sitting in
++`game/animation/` while computing view coordinates is the symptom.
++
++**→** `:core:model` / `:core:rules` as Compose-free KMP modules
++([01](01-modules.md)).
++
++## What is worth keeping as-is
++
++Not everything needs replacing. These port over with little or no change:
++
++| Keep | Notes |
++| --- | --- |
++| `game/pathfinding/AStarPathfinder.kt` | Pure function already. Move to `:core:rules`, swap `PositionComponent` for `GridPos`. |
++| `game/pathfinding/LineOfSight.kt` | Same. `computeVisibleTiles` becomes a rules query used by both FoW and targeting. |
++| `content/map/TileMap.kt`, `TileType.kt` | Good shape. Becomes `BattleMap` in `:core:model`. |
++| The map JSON and the designer | Format is fine. Only the action/enemy schema changes. |
++| `content/dsl/*` | Demote to test fixtures; excellent for that. |
++| `data/db/*`, `SeenHintDao` | Room usage is already sensible for metadata. |
++| `game/hint/*`, overworld, navigation | Untouched by this rewrite. |
++| `BattleTileCache` | Rendering concern, unaffected. |
++
++The rewrite is scoped to the combat core. The overworld, campaign, designer and
++asset pipeline are out of scope.
++
++## Migration order
++
++Each step leaves `main` playable.
++
++1. **Modules.** Create `:core:model` and `:core:rules`, empty, wired into
++   `settings.gradle.kts`. No dependents.
++2. **Model + tests.** `GameState`, `Entity`, `Stats`, `RngState`,
++   `checkInvariants`. Tests first — see [09](09-test-plan.md).
++3. **Resolver + tests.** Effect stack, `MoveAlong`, `DealDamage`, `Ask`,
++   reaction collection. Still no UI.
++4. **Actions + catalog.** `ActionDef`, targeting, `canPerform`, preview.
++   Port two or three real skills from `content/definitions/Skills.kt`.
++5. **Port pathfinding and LoS** into `:core:rules`.
++6. **Persistence.** `Resolver` serialization, `SaveSlotRow`, migration harness.
++7. **Second battle screen** behind a debug flag, new engine, new Director.
++   Both engines coexist and can be compared side by side.
++8. **Content migration.** Convert enemy and skill JSON to the new schema; update
++   the designer's writers.
++9. **Delete** `ecs/`, `game/systems/`, `game/loop/`, `game/animation/`, the old
++   `BattleScreen` path.
++
++Steps 2–4 are pure Kotlin with no emulator in the loop, which is why they are
++fast. Step 7 is the point where this stops being a rewrite with nothing to show.
++
++## A note on the name `ecs`
++
++The new design is not an entity-component-system: there are no systems
++iterating component arrays, and components are typed nullable fields rather
++than a dynamic map. Keeping the `ecs` package name would mislead every future
++reader, including us. New packages are `core.model` / `core.rules`
++([01](01-modules.md#package-naming)).
+diff --git a/docs/architecture/09-test-plan.md b/docs/architecture/09-test-plan.md
+new file mode 100644
+index 0000000..4f05ebe
+--- /dev/null
++++ b/docs/architecture/09-test-plan.md
+@@ -0,0 +1,230 @@
++# 09 — Test plan
++
++Written before the engine, so the engine is built to satisfy it. This is the
++implementation contract for the next step.
++
++## Why the tests can be good here
++
++Because `:core:rules` is pure, every test in this plan is a plain JVM unit test
++with no emulator, no Robolectric, no coroutine test dispatcher, no mocks. They
++run in milliseconds. `./gradlew :core:rules:desktopTest` is the inner loop.
++
++The v1 tests (`CombatSystemTest`, `ConditionTickSystemTest`, …) each build a
++`World`, register a system and assert on mutated components. They are fine as
++far as they go, but they test one system at a time in isolation — none of them
++can express "a move interrupted by an opportunity attack that breaks
++concentration", because v1 cannot do that at all.
++
++## Layers
++
++```
++1  Pure unit        dice, stats derivation, expiry matching, targeting geometry
++2  Effect handler   one effect, one state transition
++3  Resolver         multi-effect sequences, reactions, decisions
++4  Scenario         full turns, hand-written encounters, golden event lists
++5  Property         invariants over randomised command sequences
++6  Serialization    round-trip and migration of checked-in snapshots
++```
++
++## Fixtures
++
++A small DSL so scenarios read like the rules they encode. This is where
++`content/dsl/` gets a second life.
++
++```kotlin
++fun scenario(block: ScenarioBuilder.() -> Unit): Scenario
++
++val s = scenario {
++    map(10, 10)
++    seed(42)
++    entity("lyra")  { at(2, 5); archetype("wizard"); hp(18); mana(9); ap(2) }
++    entity("gobA")  { at(5, 5); archetype("goblin"); faction(ENEMY) }
++    entity("gobB")  { at(7, 6); archetype("goblin"); faction(ENEMY) }
++    status("lyra", "bless", concentration = true)
++    initiative("lyra", "gobA", "gobB")
++}
++```
++
++Rules for fixtures:
++- Named ids (`"lyra"`) resolve to `EntityId`s; tests never write raw numbers.
++- Every scenario is seeded. No test may depend on ambient randomness.
++- `checkInvariants()` runs automatically after every scenario step.
++
++## Layer 1 — pure units
++
++**Dice and RNG**
++- Same seed, same sequence, across two `RngState` instances.
++- `RngState` advances on every roll (no accidental reuse).
++- Advantage takes the higher of two rolls; disadvantage the lower.
++- `resolveAdvantage`: adv + dis = normal, adv + adv + dis = normal, multiple
++  adv = advantage. This is the table from [03](03-modifiers-and-status.md).
++
++**Stats derivation**
++- Order: `Add` then `Mul` then `Override`. A test with all three on one stat.
++- Two `Override`s resolve deterministically by source order, not by set
++  iteration.
++- Removing a status recomputes `maxHp`; current HP clamps but does not silently
++  heal.
++- A ring granting `Add(MaxMana, 1)` raises the reset ceiling and nothing else.
++
++**Expiry matching**
++- `EndOfTurnOf(who, round)` fires at that entity's end of turn, not at the
++  round end.
++- `StartOfTurnOf` at round N does not fire at round N+1 (stale expiry is
++  cleaned, not re-fired).
++- `OnConcentrationLost` fires for every status sharing the `LinkId`, including
++  ones on other entities.
++
++**Targeting geometry**
++- `Sphere`, `Cone`, `Line`, `Rect` against hand-drawn expected tile sets.
++- `requiresLoS` excludes tiles behind a wall, using the ported
++  `hasLineOfSight`.
++- `legalTargets` and `affectedBy` agree: every target returned is inside the
++  affected set for that point.
++
++## Layer 2 — effect handlers
++
++One test per primitive, each asserting on (new state, emitted events, spawned
++effects):
++
++- `DealDamage` reduces HP, emits `DamageTaken`, clamps at 0, emits `Died` at 0.
++- `DealDamage` respects resistance and immunity from `Stats`.
++- `SpendCost` deducts mana and marks `quickUsed`; fails with `NotEnoughMana`.
++- `MoveAlong` moves one tile and re-pushes itself with `index + 1`.
++- `ApplyStatus` honours each `StackPolicy` (four tests).
++- `StartConcentration` ends any previous link on the same caster.
++- Every handler re-validates: a handler given a dead target emits `Fizzled`
++  rather than throwing or silently passing.
++
++That last one gets a generic test that iterates all registered handlers.
++
++## Layer 3 — resolver
++
++This layer is where v1 had nothing.
++
++- **Ordering.** `spawn + triggered + rest`: an effect that spawns two children
++  runs them before the rest of the stack, in order.
++- **Interruption.** `MoveAlong` over four tiles, an opportunity attack on step
++  two, movement resumes and finishes on the correct tile.
++- **Pause and resume.** `run()` returns `AwaitingInput`; `resume()` with the
++  answer completes; the combined event list matches an uninterrupted run plus
++  the reaction events.
++- **Stale answers.** `resume()` with a `DecisionId` that is not `pending`
++  throws. (Guards the double-tap case.)
++- **AI answers inline.** A decision with `Controller.Ai` never returns
++  `AwaitingInput`.
++- **Reaction ordering** follows initiative index then `EntityId`, verified by
++  constructing entities in reverse order.
++- **One reaction per entity per event.**
++- **Depth guard.** Two entities with a mutually triggering reaction hit
++  `MAX_REACTION_DEPTH` and throw rather than hang.
++- **Loop guard.** A deliberately self-spawning effect trips `MAX_STEPS`.
++
++## Layer 4 — scenarios
++
++The worked example from the design discussion, encoded verbatim, is the
++flagship test:
++
++> Round 3. Lyra is concentrating on *bless*, has a staff +1 and a ring. She
++> moves four tiles past goblin A, takes the opportunity attack, fails the
++> concentration save, then casts *web* on both goblins; A saves, B is
++> restrained.
++
++Asserted as a **golden event list** — the exact ordered sequence:
++
++```
++TurnStarted(lyra, 3)
++StatusExpired(lyra, hasted)
++ResourcesReset(lyra, ap=2, mana=9)          ← 9, not 10: hasted expired first
++MoveStepped(lyra, (2,5)->(3,5))
++MoveStepped(lyra, (3,5)->(4,5))
++ReactionTriggered(gobA, opportunity_attack)
++AttackRolled(gobA -> lyra, d20=14, mod=+4, ac=15, hit=true)
++DamageTaken(lyra, 5, slashing)
++ConcentrationCheckRolled(lyra, dc=10, roll=8, success=false)
++ConcentrationBroken(lyra, L1)
++StatusExpired(ally1, bless)
++MoveStepped(lyra, (4,5)->(4,6))
++MoveStepped(lyra, (4,6)->(5,6))
++ActionStarted(lyra, web)
++ResourcesSpent(lyra, ap=1, mana=3)
++ConcentrationStarted(lyra, L2)
++SaveRolled(gobA, DEX, d20=17, mod=+2, dc=14, success=true)
++SaveRolled(gobB, DEX, d20=6,  mod=+2, dc=14, success=false)
++StatusApplied(gobB, restrained, OnConcentrationLost(L2))
++StatusExpired(gobA, marked)
++TurnEnded(lyra)
++```
++
++Golden lists are the right tool here because **event order is the contract**
++the animation layer depends on. A refactor that produces the same final state
++in a different order is a breaking change, and only this kind of test catches
++it.
++
++Other scenarios worth encoding early:
++- Turn boundary order: buff granting +1 AP expires at start of turn → reset
++  gives base AP, not base + 1. (Issue found while walking through the example.)
++- Concentration transfer: casting a second concentration spell ends the first
++  and removes its statuses from all entities.
++- Death mid-action: a multi-target spell where target 1 dies before target 2
++  resolves; target 2 still resolves, no crash.
++- Preview equals execution: run `preview()` in `Expected` mode and the real
++  action on a fixed seed; assert the damage range from the preview contains the
++  actual result.
++
++## Layer 5 — properties
++
++Randomised command sequences, invariants from
++[02](02-state-model.md#invariants) checked after every step:
++
++- No two entities share a tile, ever.
++- HP, AP and mana stay inside their derived bounds.
++- No entity in `turn.order` is missing from `entities`.
++- The resolver always terminates in `Completed`, `AwaitingInput` or `Rejected`
++  — never throws on a *legal* command.
++- **Determinism**: the same seed and command sequence produce byte-identical
++  final states across two independent runs.
++- **Rejection soundness**: if `canPerform` returns empty, `perform` does not
++  return `Rejected`. And the converse — a non-empty rejection list means the
++  state is unchanged.
++
++The last pair is the highest-value property in the suite: it is what keeps the
++UI's greyed-out buttons honest.
++
++## Layer 6 — serialization
++
++- `GameState` round-trips: `decode(encode(s)) == s`, as a property over
++  generated states.
++- `Resolver` round-trips **with a non-empty stack and a pending decision** —
++  the process-death case from [06](06-persistence.md).
++- Every `Effect`, `GameEvent`, `Modifier` and `Expiry` subtype has an explicit
++  `@SerialName`. Enforced by a reflection test that fails on a missing
++  annotation, so a new subtype cannot be added without one.
++- Golden snapshots: files under
++  `core/rules/src/commonTest/resources/snapshots/` load through
++  `SnapshotMigrations` and produce the expected state. One file per historical
++  schema version, added whenever `CURRENT_SCHEMA` increments.
++
++## Order of implementation
++
++Follow this and each step has a green suite before the next begins:
++
++1. Fixture DSL + `checkInvariants` (test infrastructure first)
++2. `RngState` and dice — layer 1
++3. `Stats` derivation and expiry — layer 1
++4. Effect handlers for `DealDamage`, `MoveAlong`, `SpendCost`, `ApplyStatus` — layer 2
++5. Resolver loop, `Ask`, `resume` — layer 3
++6. Reaction collection and guards — layer 3
++7. Targeting and `canPerform` — layer 1 + 2
++8. The flagship scenario — layer 4
++9. Properties — layer 5
++10. Serialization — layer 6
++
++## Coverage targets
++
++Not a percentage. Two concrete rules:
++
++- Every `Rejection` variant is produced by at least one test. An unreachable
++  rejection is dead code or a missing check.
++- Every `GameEvent` variant appears in at least one golden list. An event no
++  test produces is an event the director will never be exercised against.
+diff --git a/docs/architecture/README.md b/docs/architecture/README.md
+new file mode 100644
+index 0000000..09d9080
+--- /dev/null
++++ b/docs/architecture/README.md
+@@ -0,0 +1,123 @@
++# PocketQuest — Core Architecture v2
++
++This directory is the design reference for the rewrite of the combat core.
++It is written **before** the implementation on purpose: the v1 proof of concept
++(`ecs/`, `game/systems/`, `game/loop/`) works, but it hit a set of structural
++walls that cannot be fixed incrementally. See
++[08-migration-from-poc.md](08-migration-from-poc.md) for the concrete list.
++
++Read in order:
++
++| Doc | Topic |
++| --- | --- |
++| [01-modules.md](01-modules.md) | Gradle modules, dependency rules, what may import what |
++| [02-state-model.md](02-state-model.md) | `GameState`, `Entity`, derived stats |
++| [03-modifiers-and-status.md](03-modifiers-and-status.md) | Equipment and status effects as one mechanism |
++| [04-resolver.md](04-resolver.md) | The effect stack, reactions, decision handling |
++| [05-actions-and-effects.md](05-actions-and-effects.md) | Actions as data, targeting, preview |
++| [06-persistence.md](06-persistence.md) | Snapshots, Room's actual role, versioning |
++| [07-animation.md](07-animation.md) | Director, beats, reconciliation |
++| [08-migration-from-poc.md](08-migration-from-poc.md) | v1 problems → v2 answers, migration order |
++| [09-test-plan.md](09-test-plan.md) | What we test and how, before writing engine code |
++
++---
++
++## The five principles
++
++Everything in these documents follows from these. When a design question comes
++up that is not covered here, resolve it by asking which principle applies.
++
++### 1. The rules engine knows nothing about time, Compose, or IO
++
++`:core:rules` is a pure function library. No coroutines, no `Flow`, no
++`androidx.*`, no clock, no file access. It takes a state and a command and
++returns a new state plus a list of events. This is enforced by the module
++graph, not by discipline — see [01-modules.md](01-modules.md).
++
++### 2. State is immutable; the engine is a reducer
++
++`GameState` is an immutable `data class`. Every transition produces a new
++instance. This buys undo, replay, save/load, AI lookahead and trivial tests in
++one move. A mutable `World` cannot do any of these, which is the single
++biggest limitation of v1.
++
++### 3. Animation is driven by events, not by diffing states
++
++The engine emits an ordered list of `GameEvent`s describing *what happened, in
++what order*. Diffing "before" and "after" loses causality: you can see that HP
++dropped, but not why, by whom, or in which order relative to a move. The event
++list is the animation script.
++
++### 4. Nothing derivable is stored
++
++`maxHp`, `armorClass`, `speed`, and the grid occupancy map are all functions of
++other state. Storing them creates a second source of truth that will drift.
++Position lives on the entity; the grid is an index built on read.
++
++### 5. One code path per question
++
++The UI asks "which tiles can I target?", the AI asks "what would this action
++do?", and the engine asks "is this legal?". All three go through the *same*
++functions (`legalTargets`, `canPerform`, the resolver in preview mode). Two
++implementations of the same rule will diverge — v1 already has this bug, where
++`snapshotBattle` reimplements targeting separately from `SkillResolverSystem`.
++
++---
++
++## The pipeline, end to end
++
++```
++  User taps a tile
++        │
++        ▼
++  Command (data)                       :ui
++        │
++        ▼
++  canPerform() ──► List<Rejection>     :core:rules   (no state change)
++        │ ok
++        ▼
++  Resolver loop over an effect stack   :core:rules   (pure, deterministic)
++        │
++        ├──► StepResult.AwaitingInput ──► decision dialog ──► resume()
++        │
++        ▼
++  StepResult.Completed(state, events)
++        │
++        ├──► GameState  ──► SaveRepository ──► Room     :data
++        │
++        └──► List<GameEvent>
++                  │
++                  ▼
++             choreograph()  ──► List<Beat>              :ui  (Director)
++                  │
++                  ▼
++             AnimationPlayer ──► VisualWorld ──► Compose :ui
++                  │
++                  ▼
++             settle(logicalState)     ← self-healing reconciliation
++```
++
++Note what is *not* in this diagram: the database is a sink, never a source
++during play. Compose never reads `GameState` directly for entity positions —
++it reads `VisualWorld`, which lags behind on purpose.
++
++---
++
++## Vocabulary
++
++These words have exactly one meaning in this codebase. Using them loosely is
++how the v1 `AnimationEvent` / `GameEvent` confusion happened.
++
++| Term | Meaning |
++| --- | --- |
++| **Command** | A player or AI *intent*. May be rejected. `MoveTo`, `UseAction`. |
++| **Effect** | One atomic rules operation on the stack. `DealDamage`, `MoveAlong`. |
++| **GameEvent** | A record that something *did* happen. Past tense. Never rejected. |
++| **Beat** | A unit of animation with a timing mode. Produced from a `GameEvent`. |
++| **Decision** | An answer to a `DecisionRequest` the engine paused for. |
++| **Archetype** | Static per-kind data (a goblin's base stats). Never mutated. |
++| **Entity** | A runtime instance with position, current HP, statuses. |
++| **Stats** | A derived, flattened snapshot of an entity's effective numbers. |
++
++Tense is the quick test: commands and effects are imperative
++(`DealDamage`), events are past tense (`DamageTaken`).
+-- 
+2.43.0
+

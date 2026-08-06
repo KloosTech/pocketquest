@@ -1,0 +1,26 @@
+[
+    {
+        "kind": "Player",
+        "id": "e1230ec359e14bb0a464cbe1243b88ac",
+        "name": "Wizard",
+        "pos": {
+            "x": 0.5,
+            "y": 0.3290598290598291
+        },
+        "stats": {
+            "strength": 6,
+            "dexterity": 8,
+            "constitution": 10,
+            "intelligence": 14,
+            "wisdom": 12,
+            "charisma": 10,
+            "amorClass": 8
+        },
+        "resources": {
+            "health": {
+                "current": 8,
+                "max": 8
+            }
+        }
+    }
+]
