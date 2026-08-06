@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 data class Health(val current: Int, val temp: Int = 0)
 
 @Serializable
-data class Resources(val ap: Int, val mana: Int, val quickUsed: Boolean = false)
+data class Resources(val ap: Int, val mana: Int, val quickUsed: Boolean = false, val reactionUsed: Boolean = false)
 
 /**
  * Player and enemy differ ONLY in actor.faction/actor.controller, never in

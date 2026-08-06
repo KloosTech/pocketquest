@@ -60,6 +60,8 @@ data class ActionDef(
     val cost: Cost,
     val targeting: Targeting,
     val effects: List<EffectTemplate>,
+    /** Only meaningful when cost.action is Reaction — which GameEvent kind offers this reaction. */
+    val reactionTrigger: ReactionTrigger? = null,
 )
 
 data class PreviewResult(val state: GameState, val events: List<GameEvent>)

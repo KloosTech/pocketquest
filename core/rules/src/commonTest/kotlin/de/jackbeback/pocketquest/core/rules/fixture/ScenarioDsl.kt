@@ -28,6 +28,8 @@ import de.jackbeback.pocketquest.core.model.ItemInstance
 import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Modifier
 import de.jackbeback.pocketquest.core.model.Range
+import de.jackbeback.pocketquest.core.model.ReactionTrigger
+import de.jackbeback.pocketquest.core.model.ReactionTriggerKind
 import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.Shape
@@ -172,6 +174,7 @@ class ArchetypeBuilder(private val name: String) {
     var mana: Int = 0
     private var abilityScores = AbilityScores(10, 10, 10, 10, 10, 10)
     private val innate = mutableListOf<Modifier>()
+    private val actionIds = mutableListOf<ActionId>()
 
     fun abilities(str: Int = 10, dex: Int = 10, con: Int = 10, int: Int = 10, wis: Int = 10, cha: Int = 10) {
         abilityScores = AbilityScores(str, dex, con, int, wis, cha)
@@ -179,6 +182,10 @@ class ArchetypeBuilder(private val name: String) {
 
     fun modifier(m: Modifier) {
         innate += m
+    }
+
+    fun actions(vararg names: String) {
+        actionIds += names.map { ActionId(it) }
     }
 
     fun build(): Archetype = Archetype(
@@ -190,6 +197,7 @@ class ArchetypeBuilder(private val name: String) {
         speedTiles = speed,
         baseMaxAp = ap,
         baseMaxMana = mana,
+        actions = actionIds.toList(),
         innateModifiers = innate.toList(),
     )
 }
@@ -269,6 +277,7 @@ class ActionDefBuilder(private val name: String) {
     private var cost: Cost = Cost(ActionCost.Main)
     private var targeting: Targeting = Targeting(TargetMode.SelfOnly, Range.SelfRange, Shape.Single)
     private val effectTemplates = mutableListOf<EffectTemplate>()
+    private var reactionTrigger: ReactionTrigger? = null
 
     fun cost(action: ActionCost, mana: Int = 0) {
         cost = Cost(action, mana)
@@ -289,5 +298,9 @@ class ActionDefBuilder(private val name: String) {
         effectTemplates += template
     }
 
-    fun build(): ActionDef = ActionDef(ActionId(name), name, cost, targeting, effectTemplates.toList())
+    fun reactionTrigger(kind: ReactionTriggerKind) {
+        reactionTrigger = ReactionTrigger(kind)
+    }
+
+    fun build(): ActionDef = ActionDef(ActionId(name), name, cost, targeting, effectTemplates.toList(), reactionTrigger)
 }

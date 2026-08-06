@@ -21,8 +21,12 @@ enum class RngMode { Live, Expected }
 
 /**
  * The whole snapshot needed to resume mid-decision after process death —
- * see docs/04-resolver.md. No `depth` field yet: that guards reaction
- * nesting, which doesn't exist until a later pass.
+ * see docs/04-resolver.md. `depth` guards reaction nesting: rather than
+ * tracking depth per individual effect on a flat stack, it's a single
+ * resolver-wide counter bumped once per wave of newly-offered reactions —
+ * a simplification of doc04's per-OfferReaction depth field, still
+ * sufficient to stop a mutual-reaction loop. `reactedTo` is "already
+ * offered a reaction to this event" for the life of the run() call.
  */
 @Serializable
 data class Resolver(
@@ -32,6 +36,8 @@ data class Resolver(
     val answers: Map<DecisionId, Decision> = emptyMap(),
     val emitted: List<GameEvent> = emptyList(),
     val steps: Int = 0,
+    val depth: Int = 0,
+    val reactedTo: Set<ReactedKey> = emptySet(),
 )
 
 sealed interface StepResult {
@@ -57,12 +63,20 @@ tailrec fun run(r: Resolver, cat: Catalog, mode: RngMode = RngMode.Live): StepRe
     }
 
     val out = applyEffect(r.state, head, r.answers, cat, mode)
+    val (triggered, reacted) = collectTriggers(out.state, out.events, r.depth, cat, r.reactedTo)
+    // triggered goes BEFORE spawn, not after: doc04's prose is explicit ("the opportunity
+    // attack pushes in front; MoveAlong(index+1) sits below and resumes afterwards") even
+    // though doc04's own shown snippet literally has `spawn + triggered + rest` — that
+    // ordering would run a self-continuing effect's own next step before the reaction it
+    // just triggered, contradicting the stated intent. Following the prose here.
     return run(
         r.copy(
             state = out.state,
-            stack = out.spawn + rest,
+            stack = triggered + out.spawn + rest,
             emitted = r.emitted + out.events,
             steps = r.steps + 1,
+            depth = if (triggered.isNotEmpty()) r.depth + 1 else r.depth,
+            reactedTo = reacted,
         ),
         cat,
         mode,

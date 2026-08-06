@@ -11,5 +11,6 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class DecisionRequest(val id: DecisionId)
 
+/** `accept` defaults true so pass-2/3 tests that only cared about "the answer arrived" didn't need updating. */
 @Serializable
-data class Decision(val id: DecisionId)
+data class Decision(val id: DecisionId, val accept: Boolean = true)

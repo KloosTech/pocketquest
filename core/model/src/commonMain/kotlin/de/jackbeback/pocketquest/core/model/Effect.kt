@@ -34,7 +34,13 @@ sealed interface Effect {
      * so this primitive stands alone until actions arrive.
      */
     @Serializable @SerialName("spendCost")
-    data class SpendCost(val who: EntityId, val ap: Int = 0, val mana: Int = 0, val markQuickUsed: Boolean = false) : Effect
+    data class SpendCost(
+        val who: EntityId,
+        val ap: Int = 0,
+        val mana: Int = 0,
+        val markQuickUsed: Boolean = false,
+        val markReactionUsed: Boolean = false,
+    ) : Effect
 
     @Serializable @SerialName("applyStatus")
     data class ApplyStatus(
@@ -67,4 +73,12 @@ sealed interface Effect {
         val onSuccess: List<Effect> = emptyList(),
         val onFail: List<Effect> = emptyList(),
     ) : Effect
+
+    /** Consults the reactor's Answerer before pushing an Ask — see docs/04-resolver.md's collectTriggers. */
+    @Serializable @SerialName("offerReaction")
+    data class OfferReaction(val trigger: GameEvent, val who: EntityId, val actionId: ActionId) : Effect
+
+    /** The continuation pushed alongside Ask when a human must decide; reads the answer and either spawns the reaction's effects or does nothing. */
+    @Serializable @SerialName("resolveReaction")
+    data class ResolveReaction(val decisionId: DecisionId, val trigger: GameEvent, val who: EntityId, val actionId: ActionId) : Effect
 }

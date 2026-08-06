@@ -2,10 +2,13 @@ package de.jackbeback.pocketquest.core.rules.resolver
 
 import de.jackbeback.pocketquest.core.model.Ability
 import de.jackbeback.pocketquest.core.model.AbilityScores
+import de.jackbeback.pocketquest.core.model.ActionCtx
+import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.ActiveStatus
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Decision
 import de.jackbeback.pocketquest.core.model.DecisionId
+import de.jackbeback.pocketquest.core.model.DecisionRequest
 import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.Entity
@@ -18,6 +21,7 @@ import de.jackbeback.pocketquest.core.model.Resistance
 import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.rules.abilityModifier
+import de.jackbeback.pocketquest.core.rules.action.instantiate
 import de.jackbeback.pocketquest.core.rules.d20
 import de.jackbeback.pocketquest.core.rules.resolveAdvantage
 import de.jackbeback.pocketquest.core.rules.roll
@@ -47,6 +51,8 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.ApplyStatus -> applyStatus(state, effect, cat)
         is Effect.RollAttack -> rollAttack(state, effect, cat, mode)
         is Effect.RollSave -> rollSave(state, effect, cat, mode)
+        is Effect.OfferReaction -> offerReaction(state, effect, cat)
+        is Effect.ResolveReaction -> resolveReaction(state, effect, answers, cat)
     }
 
 /**
@@ -131,6 +137,7 @@ private fun spendCost(state: GameState, effect: Effect.SpendCost): HandlerOutcom
                 ap = current.ap - effect.ap,
                 mana = current.mana - effect.mana,
                 quickUsed = current.quickUsed || effect.markQuickUsed,
+                reactionUsed = current.reactionUsed || effect.markReactionUsed,
             ),
         )
     }
@@ -229,3 +236,35 @@ private fun AbilityScores.forAbility(ability: Ability): Int =
         Ability.Wis -> wis
         Ability.Cha -> cha
     }
+
+private fun offerReaction(state: GameState, effect: Effect.OfferReaction, cat: Catalog): HandlerOutcome {
+    val reactor = state.byId[effect.who] ?: return HandlerOutcome(state)
+    return when (answererFor(reactor)) {
+        Answerer.HumanUi -> {
+            val decisionId = DecisionId(state.nextDecisionId)
+            val nextState = state.copy(nextDecisionId = state.nextDecisionId + 1)
+            val request = DecisionRequest(decisionId)
+            HandlerOutcome(
+                nextState,
+                spawn = listOf(Effect.Ask(request), Effect.ResolveReaction(decisionId, effect.trigger, effect.who, effect.actionId)),
+            )
+        }
+        // Placeholder policy pending real :core:ai (doc01: AI is "a consumer of the resolver, not
+        // a special case inside it") — AI always accepts an available reaction. Proves the resolver
+        // mechanism (inline resolution, never AwaitingInput for AI) without inventing AI judgement.
+        is Answerer.Ai -> acceptReaction(state, effect.who, effect.actionId, effect.trigger, cat)
+    }
+}
+
+private fun resolveReaction(state: GameState, effect: Effect.ResolveReaction, answers: Map<DecisionId, Decision>, cat: Catalog): HandlerOutcome {
+    val accept = answers[effect.decisionId]?.accept ?: false
+    return if (accept) acceptReaction(state, effect.who, effect.actionId, effect.trigger, cat) else HandlerOutcome(state)
+}
+
+private fun acceptReaction(state: GameState, who: EntityId, actionId: ActionId, trigger: GameEvent, cat: Catalog): HandlerOutcome {
+    val def = cat.actionDef(actionId)
+    val ctx = ActionCtx(who, targetsFor(trigger))
+    val spend = Effect.SpendCost(who, mana = def.cost.mana, markReactionUsed = true)
+    val instantiated = def.effects.flatMap { it.instantiate(ctx, cat) }
+    return HandlerOutcome(state, spawn = listOf(spend) + instantiated)
+}
