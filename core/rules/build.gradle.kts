@@ -32,6 +32,12 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
+            implementation(libs.kotlinx.serialization.json)
+        }
+        val desktopTest by getting {
+            dependencies {
+                implementation(libs.kotlin.reflect)
+            }
         }
     }
 }

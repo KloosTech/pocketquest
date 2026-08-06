@@ -68,7 +68,7 @@ class ConcentrationTest {
         val link = LinkId(1)
         val state = linked(s.state, s.id("caster"), s.id("ally"), link)
 
-        val out = applyEffect(state, Effect.DealDamage(s.id("caster"), amount = 12, type = DamageType.Fire), emptyMap(), s.catalog)
+        val out = applyEffect(state, Effect.DealDamage(s.id("caster"), amount = 12, damageType = DamageType.Fire), emptyMap(), s.catalog)
         assertEquals(listOf(Effect.ConcentrationCheck(s.id("caster"), dc = 10)), out.spawn) // max(10, 12/2) = 10
     }
 
@@ -78,14 +78,14 @@ class ConcentrationTest {
         val link = LinkId(1)
         val state = linked(s.state, s.id("caster"), s.id("ally"), link)
 
-        val out = applyEffect(state, Effect.DealDamage(s.id("caster"), amount = 30, type = DamageType.Fire), emptyMap(), s.catalog)
+        val out = applyEffect(state, Effect.DealDamage(s.id("caster"), amount = 30, damageType = DamageType.Fire), emptyMap(), s.catalog)
         assertEquals(listOf(Effect.ConcentrationCheck(s.id("caster"), dc = 15)), out.spawn) // max(10, 30/2) = 15
     }
 
     @Test
     fun damageOnANonConcentratingEntityNeverSpawnsAConcentrationCheck() {
         val s = scenarioWithLinkedStatus()
-        val out = applyEffect(s.state, Effect.DealDamage(s.id("caster"), amount = 12, type = DamageType.Fire), emptyMap(), s.catalog)
+        val out = applyEffect(s.state, Effect.DealDamage(s.id("caster"), amount = 12, damageType = DamageType.Fire), emptyMap(), s.catalog)
         assertTrue(out.spawn.isEmpty())
     }
 
@@ -95,7 +95,7 @@ class ConcentrationTest {
         val link = LinkId(1)
         val state = linked(s.state.copy(entities = s.state.entities.map { if (it.id == s.id("caster")) it.copy(health = it.health!!.copy(current = 5)) else it }), s.id("caster"), s.id("ally"), link)
 
-        val out = applyEffect(state, Effect.DealDamage(s.id("caster"), amount = 999, type = DamageType.Fire), emptyMap(), s.catalog)
+        val out = applyEffect(state, Effect.DealDamage(s.id("caster"), amount = 999, damageType = DamageType.Fire), emptyMap(), s.catalog)
         assertTrue(out.spawn.isEmpty(), "death breaks concentration directly, no ConcentrationCheck roll")
         assertNull(out.state.byId.getValue(s.id("caster")).concentrating)
         assertTrue(out.state.byId.getValue(s.id("ally")).statuses.none { it.linkId == link })

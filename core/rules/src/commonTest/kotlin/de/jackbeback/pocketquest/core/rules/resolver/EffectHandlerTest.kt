@@ -28,7 +28,7 @@ class EffectHandlerTest {
             archetype("dummy") { hp = 20 }
             entity("target") { archetype("dummy"); at(0, 0); hp(20) }
         }
-        val effect = Effect.DealDamage(s.id("target"), amount = 7, type = DamageType.Fire)
+        val effect = Effect.DealDamage(s.id("target"), amount = 7, damageType = DamageType.Fire)
         val out = applyEffect(s.state, effect, emptyMap(), s.catalog)
 
         assertEquals(13, out.state.byId.getValue(s.id("target")).health!!.current)
@@ -41,7 +41,7 @@ class EffectHandlerTest {
             archetype("dummy") { hp = 20 }
             entity("target") { archetype("dummy"); at(0, 0); hp(5) }
         }
-        val effect = Effect.DealDamage(s.id("target"), amount = 999, type = DamageType.Fire)
+        val effect = Effect.DealDamage(s.id("target"), amount = 999, damageType = DamageType.Fire)
         val out = applyEffect(s.state, effect, emptyMap(), s.catalog)
 
         assertEquals(0, out.state.byId.getValue(s.id("target")).health!!.current)

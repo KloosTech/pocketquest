@@ -21,7 +21,7 @@ sealed interface Modifier {
     @Serializable @SerialName("mul") data class Mul(val stat: Stat, val factor: Float) : Modifier
     @Serializable @SerialName("override") data class Override(val stat: Stat, val value: Int) : Modifier
     @Serializable @SerialName("grant") data class Grant(val flag: Flag) : Modifier
-    @Serializable @SerialName("resist") data class Resist(val type: DamageType, val level: Resistance) : Modifier
+    @Serializable @SerialName("resist") data class Resist(val damageType: DamageType, val level: Resistance) : Modifier
     @Serializable @SerialName("roll") data class Roll(val ctx: RollContext, val side: AdvSide) : Modifier
 }
 

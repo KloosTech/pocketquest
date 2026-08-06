@@ -20,7 +20,7 @@ sealed interface Effect {
     data class DealDamage(
         val target: EntityId,
         val amount: Int,
-        val type: DamageType,
+        val damageType: DamageType,
         val source: EntityId? = null,
     ) : Effect
 

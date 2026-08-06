@@ -26,7 +26,7 @@ data class Cost(val action: ActionCost, val mana: Int = 0, val charges: ItemId? 
 @Serializable
 sealed interface EffectTemplate {
     @Serializable @SerialName("dealDamage")
-    data class DealDamage(val target: Ref, val amount: Int, val type: DamageType) : EffectTemplate
+    data class DealDamage(val target: Ref, val amount: Int, val damageType: DamageType) : EffectTemplate
 
     @Serializable @SerialName("applyStatus")
     data class ApplyStatus(val target: Ref, val status: StatusId, val stacks: Int = 1, val expiry: Expiry) : EffectTemplate

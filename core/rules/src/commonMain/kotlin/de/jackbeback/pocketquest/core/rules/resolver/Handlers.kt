@@ -98,7 +98,7 @@ private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog
     val health = target.health ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
     if (health.current <= 0) return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
-    val resistance = target.stats(cat).resistances[effect.type] ?: Resistance.None
+    val resistance = target.stats(cat).resistances[effect.damageType] ?: Resistance.None
     val finalAmount = when (resistance) {
         Resistance.Immune -> 0
         Resistance.Resistant -> effect.amount / 2
@@ -109,7 +109,7 @@ private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog
     var newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
 
     val events = mutableListOf<GameEvent>()
-    events += GameEvent.DamageTaken(target.id, finalAmount, effect.type)
+    events += GameEvent.DamageTaken(target.id, finalAmount, effect.damageType)
     if (newCurrent == 0) events += GameEvent.Died(target.id)
 
     // Damage triggers a CON save (or breaks unconditionally on death) for whichever entity is

@@ -18,7 +18,7 @@ private fun resolveRef(ref: Ref, ctx: ActionCtx): List<EntityId> = when (ref) {
 /** Resolves every [Ref] placeholder into a concrete [Effect]. `EachTarget` expands to one effect per target. */
 fun EffectTemplate.instantiate(ctx: ActionCtx, cat: Catalog): List<Effect> = when (this) {
     is EffectTemplate.DealDamage ->
-        resolveRef(target, ctx).map { Effect.DealDamage(it, amount, type) }
+        resolveRef(target, ctx).map { Effect.DealDamage(it, amount, damageType) }
 
     is EffectTemplate.ApplyStatus ->
         resolveRef(target, ctx).map { Effect.ApplyStatus(it, status, stacks, expiry) }

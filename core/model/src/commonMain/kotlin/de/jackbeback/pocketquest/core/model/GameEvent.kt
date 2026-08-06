@@ -6,7 +6,7 @@ import kotlinx.serialization.Serializable
 /** Only the events pass 2's handlers actually emit — see [Effect]. */
 @Serializable
 sealed interface GameEvent {
-    @Serializable @SerialName("damageTaken") data class DamageTaken(val target: EntityId, val amount: Int, val type: DamageType) : GameEvent
+    @Serializable @SerialName("damageTaken") data class DamageTaken(val target: EntityId, val amount: Int, val damageType: DamageType) : GameEvent
     @Serializable @SerialName("died") data class Died(val target: EntityId) : GameEvent
     @Serializable @SerialName("moveStepped") data class MoveStepped(val who: EntityId, val from: GridPos, val to: GridPos) : GameEvent
     @Serializable @SerialName("resourcesSpent") data class ResourcesSpent(val who: EntityId, val ap: Int, val mana: Int) : GameEvent

@@ -83,9 +83,9 @@ fun Entity.stats(cat: Catalog): Stats {
 
     val resistances = mutableMapOf<DamageType, Resistance>()
     for (om in ordered) (om.modifier as? Modifier.Resist)?.let {
-        val current = resistances[it.type]
+        val current = resistances[it.damageType]
         if (current == null || it.level.protectiveness() > current.protectiveness()) {
-            resistances[it.type] = it.level
+            resistances[it.damageType] = it.level
         }
     }
 

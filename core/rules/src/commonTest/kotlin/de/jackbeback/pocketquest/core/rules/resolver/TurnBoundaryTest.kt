@@ -161,8 +161,8 @@ class TurnBoundaryTest {
             statusDef("regen") {
                 // Ref.Caster should resolve to the status's original source (healer), not the
                 // ticking entity (hero) — and Ref.EachTarget should resolve to hero, the ticking entity.
-                onTurnStart(EffectTemplate.DealDamage(Ref.Caster, amount = 1, type = DamageType.Fire))
-                onTurnStart(EffectTemplate.DealDamage(Ref.EachTarget, amount = 2, type = DamageType.Poison))
+                onTurnStart(EffectTemplate.DealDamage(Ref.Caster, amount = 1, damageType = DamageType.Fire))
+                onTurnStart(EffectTemplate.DealDamage(Ref.EachTarget, amount = 2, damageType = DamageType.Poison))
             }
         }
         val state = withStatus(s, "hero", "regen", Expiry.Permanent, source = "healer")
