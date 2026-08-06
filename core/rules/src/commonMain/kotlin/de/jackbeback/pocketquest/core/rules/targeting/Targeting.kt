@@ -9,6 +9,9 @@ import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.TargetFilter
 import de.jackbeback.pocketquest.core.model.TargetMode
 
+/** Sanity bound for area effects (docs/04-resolver.md's guard constants table) — a candidate list this large is misconfigured content, not a case to silently truncate. */
+const val MAX_TARGETS = 32
+
 internal fun matchesFilter(entity: Entity, caster: EntityId, filter: TargetFilter): Boolean {
     if (filter.excludeSelf && entity.id == caster) return false
     if (filter.faction != null && entity.actor?.faction != filter.faction) return false
@@ -48,10 +51,11 @@ fun affectedBy(state: GameState, def: ActionDef, caster: EntityId, at: GridPos):
     val targeting = def.targeting
 
     val tiles = tilesInShape(origin, at, targeting.shape, state.map)
-    return tiles.mapNotNull { pos -> state.occupancy[pos]?.let { state.byId[it] } }
+    val candidates = tiles.mapNotNull { pos -> state.occupancy[pos]?.let { state.byId[it] } }
         .filter { matchesFilter(it, caster, targeting.filter) }
         .filter { !targeting.requiresLoS || hasLineOfSight(origin, it.pos!!, state.map) }
         .sortedBy { it.id.raw } // deterministic — EachTarget expansion depends on this order
-        .take(targeting.maxTargets)
-        .map { it.id }
+
+    check(candidates.size <= MAX_TARGETS) { "affectedBy matched ${candidates.size} candidates for ${def.id.raw}, exceeding MAX_TARGETS=$MAX_TARGETS — misconfigured content, not a case to truncate" }
+    return candidates.take(targeting.maxTargets).map { it.id }
 }

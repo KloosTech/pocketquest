@@ -369,4 +369,93 @@ class EffectHandlerTest {
             assertIs<Rejection.TargetMissing>(fizzled.reason)
         }
     }
+
+    // --- Heal ---
+
+    @Test
+    fun healRestoresHpAndEmitsHealed() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(10) }
+        }
+        val out = applyEffect(s.state, Effect.Heal(s.id("target"), amount = 7), emptyMap(), s.catalog)
+        assertEquals(17, out.state.byId.getValue(s.id("target")).health!!.current)
+        assertEquals(listOf(GameEvent.Healed(s.id("target"), 7, null)), out.events)
+    }
+
+    @Test
+    fun healClampsAtDerivedMaxHpAndReportsOnlyTheActualAmountHealed() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(18) }
+        }
+        val out = applyEffect(s.state, Effect.Heal(s.id("target"), amount = 10), emptyMap(), s.catalog)
+        assertEquals(20, out.state.byId.getValue(s.id("target")).health!!.current)
+        assertEquals(2, (out.events.single() as GameEvent.Healed).amount, "overheal must report what actually landed, not the raw amount")
+    }
+
+    @Test
+    fun healOnIndestructibleTargetFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("wall") { archetype("dummy"); at(0, 0) } // no hp() -> health == null
+        }
+        val out = applyEffect(s.state, Effect.Heal(s.id("wall"), amount = 5), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    // --- RemoveStatus ---
+
+    @Test
+    fun removeStatusStripsItAndEmitsStatusExpired() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            statusDef("burning") {}
+            entity("target") { archetype("dummy"); at(0, 0); hp(10) }
+            status("target", "burning")
+        }
+        val out = applyEffect(s.state, Effect.RemoveStatus(s.id("target"), StatusId("burning")), emptyMap(), s.catalog)
+        assertTrue(out.state.byId.getValue(s.id("target")).statuses.isEmpty())
+        assertEquals(listOf(GameEvent.StatusExpired(s.id("target"), StatusId("burning"))), out.events)
+    }
+
+    @Test
+    fun removeStatusNotPresentIsASilentNoOpNotAFizzle() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(10) }
+        }
+        val out = applyEffect(s.state, Effect.RemoveStatus(s.id("target"), StatusId("neverApplied")), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertTrue(out.events.isEmpty(), "a status that was never there isn't a precondition failure")
+    }
+
+    @Test
+    fun removeStatusOnMissingTargetFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(10) }
+        }
+        val out = applyEffect(s.state, Effect.RemoveStatus(EntityId(999), StatusId("burning")), emptyMap(), s.catalog)
+        assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    // --- Composite ---
+
+    @Test
+    fun compositeUnpacksIntoItsEffectsWithNoStateChangeOrEventOfItsOwn() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(10) }
+        }
+        val inner = listOf(
+            Effect.DealDamage(s.id("target"), 3, DamageType.Fire),
+            Effect.Heal(s.id("target"), 1),
+        )
+        val out = applyEffect(s.state, Effect.Composite(inner), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state, "Composite itself must not change state")
+        assertTrue(out.events.isEmpty(), "Composite itself must not emit an event")
+        assertEquals(inner, out.spawn)
+    }
 }

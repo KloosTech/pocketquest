@@ -93,4 +93,16 @@ sealed interface Effect {
     /** Auto-spawned by DealDamage when its target is concentrating — never authored directly. */
     @Serializable @SerialName("concentrationCheck")
     data class ConcentrationCheck(val who: EntityId, val dc: Int) : Effect
+
+    /** DealDamage's inverse — clamps at derived maxHp rather than 0. */
+    @Serializable @SerialName("heal")
+    data class Heal(val target: EntityId, val amount: Int, val source: EntityId? = null) : Effect
+
+    /** No-op (not a Fizzled precondition failure) if the status isn't present — mirrors ApplyStatus's KeepStrongest drop case. */
+    @Serializable @SerialName("removeStatus")
+    data class RemoveStatus(val target: EntityId, val status: StatusId) : Effect
+
+    /** Pure authoring convenience: unpacks into its effects with no state change or event of its own. */
+    @Serializable @SerialName("composite")
+    data class Composite(val effects: List<Effect>) : Effect
 }

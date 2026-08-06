@@ -13,7 +13,7 @@ import kotlinx.serialization.Serializable
 enum class ReactionTriggerKind {
     MoveStepped, DamageTaken, Died, StatusApplied, StatusExpired, AttackRolled, SaveRolled,
     ResourcesSpent, Fizzled, TurnStarted, TurnEnded, ConcentrationStarted, ConcentrationBroken, ConcentrationCheckRolled,
-    ResourcesReset, ReactionTriggered, ActionStarted,
+    ResourcesReset, ReactionTriggered, ActionStarted, Healed,
 }
 
 @Serializable

@@ -131,6 +131,9 @@ class SerializationRoundTripTest {
             Effect.EndTurn(who),
             Effect.StartConcentration(who, LinkId(1)),
             Effect.ConcentrationCheck(who, 10),
+            Effect.Heal(who, 5),
+            Effect.RemoveStatus(who, StatusId("x")),
+            Effect.Composite(listOf(Effect.Heal(who, 1), Effect.DealDamage(who, 1, DamageType.Fire))),
         )
         for (effect in samples) {
             val encoded = json.encodeToString(Effect.serializer(), effect)

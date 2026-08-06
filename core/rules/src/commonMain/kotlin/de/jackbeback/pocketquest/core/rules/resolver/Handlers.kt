@@ -60,6 +60,9 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.EndTurn -> endTurn(state, effect, cat)
         is Effect.StartConcentration -> startConcentration(state, effect)
         is Effect.ConcentrationCheck -> concentrationCheck(state, effect, cat, mode)
+        is Effect.Heal -> heal(state, effect, cat)
+        is Effect.RemoveStatus -> removeStatus(state, effect)
+        is Effect.Composite -> HandlerOutcome(state, spawn = effect.effects)
     }
 
 /**
@@ -92,6 +95,25 @@ private fun GameState.withEntity(id: EntityId, transform: (Entity) -> Entity): G
 
 private fun fizzle(state: GameState, effect: Effect, reason: Rejection): HandlerOutcome =
     HandlerOutcome(state, events = listOf(GameEvent.Fizzled(effect::class.simpleName ?: "Effect", reason)))
+
+private fun heal(state: GameState, effect: Effect.Heal, cat: Catalog): HandlerOutcome {
+    val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    val health = target.health ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+
+    val maxHp = target.stats(cat).maxHp
+    val newCurrent = (health.current + effect.amount).coerceAtMost(maxHp)
+    val newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
+    val actualHealed = newCurrent - health.current
+    return HandlerOutcome(newState, listOf(GameEvent.Healed(target.id, actualHealed, effect.source)))
+}
+
+private fun removeStatus(state: GameState, effect: Effect.RemoveStatus): HandlerOutcome {
+    val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    if (target.statuses.none { it.def == effect.status }) return HandlerOutcome(state) // already absent — not a precondition failure
+
+    val newState = state.withEntity(target.id) { it.copy(statuses = it.statuses.filterNot { s -> s.def == effect.status }) }
+    return HandlerOutcome(newState, listOf(GameEvent.StatusExpired(target.id, effect.status)))
+}
 
 private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog): HandlerOutcome {
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))

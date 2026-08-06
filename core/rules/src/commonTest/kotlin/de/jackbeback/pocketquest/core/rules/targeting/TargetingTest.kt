@@ -11,6 +11,7 @@ import de.jackbeback.pocketquest.core.model.Targeting
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
@@ -164,6 +165,25 @@ class TargetingTest {
         for (tile in legalTargets(s.state, s.id("hero"), def, s.catalog)) {
             val occupant = s.state.occupancy[tile]
             assertTrue(occupant != null && occupant in affectedBy(s.state, def, s.id("hero"), tile), "legal tile $tile must hit its own occupant")
+        }
+    }
+
+    // --- MAX_TARGETS guard ---
+
+    @Test
+    fun affectedByThrowsRatherThanSilentlyTruncatingWhenCandidatesExceedMaxTargets() {
+        val s = scenario {
+            map(60, 60)
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            // MAX_TARGETS+1 entities in a row, all within a generous blast radius of the center point.
+            for (i in 0..MAX_TARGETS) {
+                entity("e$i") { archetype("dummy"); at(i, 25); hp(10) }
+            }
+        }
+        val def = actionDefWith(Targeting(TargetMode.Point, Range.Tiles(60), Shape.Sphere(radius = 40), maxTargets = 999))
+        assertFailsWith<IllegalStateException> {
+            affectedBy(s.state, def, s.id("hero"), GridPos(MAX_TARGETS / 2, 25))
         }
     }
 

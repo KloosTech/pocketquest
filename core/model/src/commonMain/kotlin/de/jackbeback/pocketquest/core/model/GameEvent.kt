@@ -22,6 +22,7 @@ sealed interface GameEvent {
     @Serializable @SerialName("concentrationStarted") data class ConcentrationStarted(val who: EntityId, val linkId: LinkId) : GameEvent
     @Serializable @SerialName("concentrationBroken") data class ConcentrationBroken(val who: EntityId, val linkId: LinkId) : GameEvent
     @Serializable @SerialName("concentrationCheckRolled") data class ConcentrationCheckRolled(val who: EntityId, val dc: Int, val roll: Int, val mod: Int, val success: Boolean) : GameEvent
+    @Serializable @SerialName("healed") data class Healed(val target: EntityId, val amount: Int, val source: EntityId? = null) : GameEvent
 
     /** Emitted instead of throwing/silently no-opping when a handler's re-validation fails — see docs/04-resolver.md. */
     @Serializable @SerialName("fizzled") data class Fizzled(val effect: String, val reason: Rejection) : GameEvent
