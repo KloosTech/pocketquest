@@ -190,5 +190,5 @@ fun main() {
     db.close()
 
     log.forEach(::println)
-    runDesktopApp(log)
+    runDesktopApp(state, log)
 }
