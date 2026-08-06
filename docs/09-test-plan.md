@@ -102,8 +102,9 @@ That last one gets a generic test that iterates all registered handlers.
 
 This layer is where v1 had nothing.
 
-- **Ordering.** `spawn + triggered + rest`: an effect that spawns two children
-  runs them before the rest of the stack, in order.
+- **Ordering.** `triggered + spawn + rest`: an effect that spawns two children
+  runs them before the rest of the stack, in order — and any reaction the
+  effect's own events triggered runs before even that.
 - **Interruption.** `MoveAlong` over four tiles, an opportunity attack on step
   two, movement resumes and finishes on the correct tile.
 - **Pause and resume.** `run()` returns `AwaitingInput`; `resume()` with the

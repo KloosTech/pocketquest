@@ -82,7 +82,7 @@ tailrec fun run(r: Resolver, cat: Catalog): StepResult {
     return run(
         r.copy(
             state   = out.state,
-            stack   = out.spawn + triggered + rest,   // new work goes to the FRONT
+            stack   = triggered + out.spawn + rest,   // new work goes to the FRONT
             emitted = r.emitted + out.events,
             steps   = r.steps + 1,
         ),
@@ -96,9 +96,11 @@ fun resume(r: Resolver, id: DecisionId, d: Decision, cat: Catalog): StepResult {
 }
 ```
 
-`out.spawn + triggered + rest` is the whole semantics of interruption in one
-line: reactions run first, the remainder of the interrupted action waits
-underneath.
+`triggered + out.spawn + rest` is the whole semantics of interruption in one
+line: reactions run first, the remainder of the interrupted action —
+including a self-continuing effect's own next step, which lives in
+`out.spawn` — waits underneath. Get this order backwards and a movement's
+next step runs before the opportunity attack it just triggered.
 
 ## Self-continuing effects
 
