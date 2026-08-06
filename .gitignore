@@ -19,3 +19,6 @@ captures
 
 # v1: the old PoC, kept locally as reference only, never tracked here
 /v1/
+
+# runtime artifacts of :app:run's demo pipeline, not source
+/app/pocketquest-demo.db*
