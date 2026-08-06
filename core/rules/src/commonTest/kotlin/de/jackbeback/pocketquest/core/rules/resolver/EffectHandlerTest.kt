@@ -78,6 +78,41 @@ class EffectHandlerTest {
         assertIs<Rejection.TargetMissing>(fizzled.reason)
     }
 
+    @Test
+    fun dealDamageOnIndestructibleTargetFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("wall") { archetype("dummy"); at(0, 0) } // no hp() -> health == null
+        }
+        val out = applyEffect(s.state, Effect.DealDamage(s.id("wall"), 5, DamageType.Fire), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
+        assertIs<Rejection.TargetMissing>(fizzled.reason)
+    }
+
+    @Test
+    fun dealDamageOnAlreadyDeadTargetFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("corpse") { archetype("dummy"); at(0, 0); hp(0) }
+        }
+        val out = applyEffect(s.state, Effect.DealDamage(s.id("corpse"), 5, DamageType.Fire), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state, "damage must re-validate the target is still alive, not just present")
+        val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
+        assertIs<Rejection.TargetMissing>(fizzled.reason)
+    }
+
+    @Test
+    fun dealDamageDoublesOnVulnerable() {
+        val s = scenario {
+            archetype("dummy") { hp = 20; modifier(Modifier.Resist(DamageType.Fire, Resistance.Vulnerable)) }
+            entity("target") { archetype("dummy"); at(0, 0); hp(20) }
+        }
+        val out = applyEffect(s.state, Effect.DealDamage(s.id("target"), 6, DamageType.Fire), emptyMap(), s.catalog)
+        assertEquals(8, out.state.byId.getValue(s.id("target")).health!!.current) // 20 - 12
+        assertEquals(12, (out.events.single() as GameEvent.DamageTaken).amount)
+    }
+
     // --- MoveAlong ---
 
     @Test
@@ -121,6 +156,44 @@ class EffectHandlerTest {
         assertTrue(out.spawn.isEmpty())
     }
 
+    @Test
+    fun moveAlongOntoNonWalkableTileFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val blockedState = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(1, 0))))
+        val out = applyEffect(blockedState, Effect.MoveAlong(s.id("hero"), listOf(GridPos(1, 0))), emptyMap(), s.catalog)
+
+        assertEquals(GridPos(0, 0), out.state.byId.getValue(s.id("hero")).pos)
+        val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
+        assertEquals(Rejection.Blocked(GridPos(1, 0)), fizzled.reason)
+    }
+
+    @Test
+    fun moveAlongOnEntityWithNoPositionFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("reserve") { archetype("dummy"); hp(10) } // no at() -> pos == null
+        }
+        val out = applyEffect(s.state, Effect.MoveAlong(s.id("reserve"), listOf(GridPos(1, 0))), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
+        assertIs<Rejection.TargetMissing>(fizzled.reason)
+    }
+
+    @Test
+    fun moveAlongWithIndexPastPathEndIsANoOp() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.MoveAlong(s.id("hero"), listOf(GridPos(1, 0)), index = 5), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertTrue(out.events.isEmpty())
+        assertTrue(out.spawn.isEmpty())
+    }
+
     // --- SpendCost ---
 
     @Test
@@ -149,6 +222,31 @@ class EffectHandlerTest {
         assertEquals(s.state, out.state)
         val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
         assertEquals(Rejection.NotEnoughMana(need = 5, have = 2), fizzled.reason)
+    }
+
+    @Test
+    fun spendCostFailsWithNotEnoughAp() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 1; mana = 5 }
+            entity("hero") { archetype("dummy"); at(0, 0); ap(1); mana(5) }
+        }
+        val out = applyEffect(s.state, Effect.SpendCost(s.id("hero"), ap = 2), emptyMap(), s.catalog)
+
+        assertEquals(s.state, out.state)
+        val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
+        assertEquals(Rejection.NotEnoughAp(need = 2, have = 1), fizzled.reason)
+    }
+
+    @Test
+    fun spendCostOnEntityWithNoResourcesFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("puppet") { archetype("dummy"); at(0, 0); hp(10) } // no ap()/mana() -> resources == null
+        }
+        val out = applyEffect(s.state, Effect.SpendCost(s.id("puppet"), ap = 1), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        val fizzled = assertIs<GameEvent.Fizzled>(out.events.single())
+        assertIs<Rejection.TargetMissing>(fizzled.reason)
     }
 
     // --- ApplyStatus: one test per StackPolicy ---

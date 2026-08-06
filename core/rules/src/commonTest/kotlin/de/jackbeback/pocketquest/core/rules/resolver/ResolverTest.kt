@@ -59,6 +59,24 @@ class ResolverTest {
     }
 
     @Test
+    fun spawnedContinuationRunsBeforeAlreadyQueuedWork() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 3; mana = 3 }
+            entity("hero") { archetype("dummy"); at(0, 0); ap(3); mana(3) }
+        }
+        // MoveAlong re-pushes itself (spawn); SpendCost is already queued behind it (rest).
+        // If spawn didn't go to the FRONT, SpendCost would run between the two move steps.
+        val move = Effect.MoveAlong(s.id("hero"), listOf(GridPos(1, 0), GridPos(2, 0)))
+        val spend = Effect.SpendCost(s.id("hero"), ap = 1)
+
+        val result = run(Resolver(s.state, stack = listOf(move, spend)), s.catalog)
+        val completed = assertIs<StepResult.Completed>(result)
+
+        val eventTypes = completed.resolver.emitted.map { it::class.simpleName }
+        assertEquals(listOf("MoveStepped", "MoveStepped", "ResourcesSpent"), eventTypes)
+    }
+
+    @Test
     fun resumeWithStaleDecisionIdThrows() {
         val s = bareScenario()
         val request = DecisionRequest(DecisionId(1))
