@@ -13,11 +13,13 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -122,6 +124,63 @@ private fun InkButton(label: String, modifier: Modifier = Modifier, onClick: () 
 }
 
 /**
+ * doc15: "who acts next, always visible" — pinned above the board, never scrolls away. One token
+ * per `state.turn.order` entry (true interleaved initiative, not side-based phases — every actor,
+ * not just the party, belongs here), the active one ringed. No tap-to-inspect yet (doc15's
+ * Inspect state isn't built), so these tokens are read-only for now.
+ */
+@Composable
+private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier.fillMaxWidth().height(56.dp).background(PAPER_SHEET).padding(horizontal = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val activeId = state.turn.order.getOrNull(state.turn.activeIndex)
+        state.turn.order.forEach { id ->
+            val entity = state.byId[id] ?: return@forEach
+            // Nothing removes a dead entity from turn.order yet (doc17 3.1's DestroyEntity is
+            // unimplemented) — endTurn already skips its turn, so this strip just needs to render
+            // that visually instead of showing a dead entity as a normal live token.
+            val alive = (entity.health?.current ?: 1) > 0
+            Box(
+                modifier = Modifier.padding(end = 10.dp).size(32.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                if (id == activeId) {
+                    Box(Modifier.size(32.dp).border(2.dp, INK, CircleShape))
+                }
+                Box(Modifier.size(22.dp).background((colors[id] ?: Color.Gray).copy(alpha = if (alive) 1f else 0.3f), CircleShape))
+            }
+        }
+    }
+}
+
+/**
+ * doc15: "3 portraits, HP/mana, controller" — reads live `GameState`, not `RunState` (invariant 8
+ * in doc11: `PartyMember.hp` is stale by design mid-encounter). Controller toggle (doc15's
+ * AI/manual flip) is deferred — nothing in the demo catalog needs a party member ever AI-driven.
+ */
+@Composable
+private fun PartyBar(state: GameState, catalog: Catalog, modifier: Modifier = Modifier) {
+    val party = state.entities.filter { it.actor?.faction == Faction.Player }
+    Row(
+        modifier = modifier.fillMaxWidth().height(64.dp).background(PAPER_SHEET).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        party.forEach { entity ->
+            val s = entity.stats(catalog)
+            Column(modifier = Modifier.padding(end = 16.dp)) {
+                BasicText(catalog.archetype(entity.archetype).name, style = TextStyle(color = INK, fontSize = 12.sp))
+                BasicText("HP ${entity.health?.current}/${s.maxHp}", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
+                entity.resources?.let {
+                    BasicText("Mana ${it.mana}/${s.maxMana}", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
+                }
+            }
+        }
+    }
+}
+
+/**
  * doc07: "the grid is one Canvas, not 400 composables." Grid lines and
  * blocked tiles come from [BattleMap] (static for the battle); token
  * positions/HP/scale/alpha come from [VisualWorld] (animated). [legalTiles]
@@ -218,11 +277,9 @@ private fun DrawScope.drawOverlay(overlay: Overlay) {
  * runs to completion automatically via [runAiTurns] with the same perform()/EndTurn calls a human
  * action uses, so there is exactly one code path for "an entity acted," not two.
  *
- * Layout is doc15's portrait anatomy, first slice: board on top, a bottom sheet pinned below it.
- * Only the Peek state exists so far (name/HP/AP/mana + action bar) — Inspect (tap an entity/tile)
- * and Prompt (StepResult.AwaitingInput) are deferred; the turn-order strip and party bar (which
- * only earn their keep once there is more than one party member or true interleaved initiative to
- * show) are too.
+ * Layout is doc15's portrait anatomy: turn-order strip pinned at top, board in the middle, party
+ * bar, then the bottom sheet. Bottom sheet only has the Peek state so far (name/HP/AP/mana +
+ * action bar) — Inspect (tap an entity/tile) and Prompt (StepResult.AwaitingInput) are deferred.
  */
 @Composable
 fun App(initialState: GameState, catalog: Catalog) {
@@ -282,6 +339,7 @@ fun App(initialState: GameState, catalog: Catalog) {
     val isHumanTurn = active?.actor?.controller is Controller.Human
 
     Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
+        TurnOrderStrip(state, colors)
         Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
             Board(
                 map = state.map,
@@ -299,6 +357,7 @@ fun App(initialState: GameState, catalog: Catalog) {
                 },
             )
         }
+        PartyBar(state, catalog)
 
         // Bottom sheet — Peek state only (doc15). Rounded top corners + a darker paper tone read
         // as a distinct surface sitting over the board, per doc16's "sheet sits in the ink
