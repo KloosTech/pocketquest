@@ -46,4 +46,7 @@ sealed interface GameEvent {
 
     /** Emitted instead of throwing/silently no-opping when a handler's re-validation fails — see docs/04-resolver.md. */
     @Serializable @SerialName("fizzled") data class Fizzled(val effect: String, val reason: Rejection) : GameEvent
+
+    /** doc17-engine-gaps.md 3.1: [Effect.Teleport]'s own event, distinct from [MoveStepped] — an instant blink, not a walked step. */
+    @Serializable @SerialName("teleported") data class Teleported(val who: EntityId, val from: GridPos, val to: GridPos) : GameEvent
 }

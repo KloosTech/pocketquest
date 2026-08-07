@@ -28,6 +28,7 @@ private const val MOVE_STEP_MS = 180
 private const val REACTION_MARKER_MS = 150
 private const val REDIRECT_ARC_HOLD_MS = 500L
 private const val FIZZLE_FLASH_HOLD_MS = 400L
+private const val TELEPORT_BLINK_MS = 300
 
 /**
  * doc07's choreograph(): "adding a new game event means adding a when
@@ -55,6 +56,11 @@ private const val FIZZLE_FLASH_HOLD_MS = 400L
 fun choreograph(event: GameEvent): List<Beat> = when (event) {
     is GameEvent.MoveStepped -> listOf(
         Beat(Timing.Blocking) { world -> world.walk(event.who, event.to) },
+    )
+    // doc17-engine-gaps.md 3.1: a blink, not a walk — fade out, snap to the destination (no tween
+    // across the intervening tiles, since nothing was actually crossed), fade back in.
+    is GameEvent.Teleported -> listOf(
+        Beat(Timing.Blocking) { world -> world.blink(event.who, event.to) },
     )
     is GameEvent.AttackRolled -> listOf(
         Beat(Timing.Blocking) { world -> world.pulse(event.attacker, 1.3f, ATTACK_PULSE_MS) },
@@ -109,6 +115,15 @@ fun VisualWorld.scaled(ms: Int): Int = if (speed <= 0f) 0 else (ms / speed).toIn
 private suspend fun VisualWorld.walk(id: EntityId, to: GridPos) {
     val v = entities[id] ?: return
     v.pos.animateTo(to.toOffset(tilePx), tween(scaled(MOVE_STEP_MS)))
+}
+
+private suspend fun VisualWorld.blink(id: EntityId, to: GridPos) {
+    val v = entities[id] ?: return
+    val restingAlpha = v.alpha.value // usually 1f, but DOWNED_ALPHA for a downed entity — restore that, not a hardcoded 1f
+    val half = scaled(TELEPORT_BLINK_MS) / 2
+    v.alpha.animateTo(0f, tween(half))
+    v.pos.snapTo(to.toOffset(tilePx)) // no tween across the intervening tiles — nothing was crossed
+    v.alpha.animateTo(restingAlpha, tween(half))
 }
 
 private suspend fun VisualWorld.pulse(id: EntityId, factor: Float, ms: Int) {

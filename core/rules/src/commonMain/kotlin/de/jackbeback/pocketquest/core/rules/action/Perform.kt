@@ -45,7 +45,7 @@ private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId,
         markQuickUsed = def.cost.action == ActionCost.Quick,
     )
     val moveEffect = if (path != null) listOf(Effect.MoveAlong(caster, path)) else emptyList()
-    return listOf(spendCost) + moveEffect + def.effects.flatMap { it.instantiate(ctx, cat) }
+    return listOf(spendCost) + moveEffect + def.effects.flatMap { it.instantiate(state, ctx, cat) }
 }
 
 /**

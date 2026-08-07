@@ -5,6 +5,8 @@ import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.EffectTemplate
 import de.jackbeback.pocketquest.core.model.EntityId
+import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Ref
 import de.jackbeback.pocketquest.core.model.SlotValue
 
@@ -15,8 +17,12 @@ private fun resolveRef(ref: Ref, ctx: ActionCtx): List<EntityId> = when (ref) {
     is Ref.Slot -> listOfNotNull((ctx.slots[ref.key] as? SlotValue.EntitySlot)?.value)
 }
 
-/** Resolves every [Ref] placeholder into a concrete [Effect]. `EachTarget` expands to one effect per target. */
-fun EffectTemplate.instantiate(ctx: ActionCtx, cat: Catalog): List<Effect> = when (this) {
+/**
+ * Resolves every [Ref] placeholder into a concrete [Effect]. `EachTarget` expands to one effect per
+ * target. Takes [state] — [EffectTemplate.Push] is the first template that needs board geometry
+ * (positions) rather than just entity ids/slots, to compute "away from" as a direction.
+ */
+fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): List<Effect> = when (this) {
     is EffectTemplate.DealDamage ->
         resolveRef(target, ctx).map { Effect.DealDamage(it, amount, damageType, tags = tags) }
 
@@ -39,8 +45,26 @@ fun EffectTemplate.instantiate(ctx: ActionCtx, cat: Catalog): List<Effect> = whe
                 ability = ability,
                 dc = dc,
                 advantage = advantage,
-                onSuccess = onSuccess.flatMap { it.instantiate(scopedCtx, cat) },
-                onFail = onFail.flatMap { it.instantiate(scopedCtx, cat) },
+                onSuccess = onSuccess.flatMap { it.instantiate(state, scopedCtx, cat) },
+                onFail = onFail.flatMap { it.instantiate(state, scopedCtx, cat) },
             )
         }
+
+    is EffectTemplate.Push -> {
+        val awayFromPos = resolveRef(awayFrom, ctx).firstOrNull()?.let { state.byId[it]?.pos }
+        if (awayFromPos == null) {
+            emptyList()
+        } else {
+            // The raw (unnormalized) delta is fine to pass straight through — Effect.Push's own
+            // handler clamps each component to -1..1 before using it, so there's no need to
+            // duplicate that normalization here.
+            resolveRef(target, ctx).mapNotNull { targetId ->
+                val targetPos = state.byId[targetId]?.pos ?: return@mapNotNull null
+                Effect.Push(targetId, GridPos(targetPos.col - awayFromPos.col, targetPos.row - awayFromPos.row), distance)
+            }
+        }
+    }
+
+    is EffectTemplate.Teleport ->
+        ctx.point?.let { destination -> resolveRef(who, ctx).map { Effect.Teleport(it, destination) } } ?: emptyList()
 }

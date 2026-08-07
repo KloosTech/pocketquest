@@ -73,6 +73,7 @@ fun GameEvent.kind(): ReactionTriggerKind = when (this) {
     is GameEvent.Downed -> ReactionTriggerKind.Downed
     is GameEvent.Revived -> ReactionTriggerKind.Revived
     is GameEvent.DamageRedirected -> ReactionTriggerKind.DamageRedirected
+    is GameEvent.Teleported -> ReactionTriggerKind.Teleported
 }
 
 /** Which entities this event's reaction naturally concerns — feeds the reaction's ActionCtx.targets. */
@@ -99,6 +100,7 @@ internal fun targetsFor(event: GameEvent): List<EntityId> = when (event) {
     is GameEvent.Downed -> listOf(event.target)
     is GameEvent.Revived -> listOf(event.target)
     is GameEvent.DamageRedirected -> listOf(event.from, event.to)
+    is GameEvent.Teleported -> listOf(event.who)
 }
 
 /**

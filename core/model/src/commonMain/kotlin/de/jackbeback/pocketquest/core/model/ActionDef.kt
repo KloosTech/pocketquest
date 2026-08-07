@@ -51,6 +51,14 @@ sealed interface EffectTemplate {
         val onSuccess: List<EffectTemplate> = emptyList(),
         val onFail: List<EffectTemplate> = emptyList(),
     ) : EffectTemplate
+
+    /** doc17-engine-gaps.md 3.1: [direction] is computed at instantiate() time as [target] minus [awayFrom]'s position, not authored directly — "push away from me" is the actual content-authoring shape (doc05's Thunderwave example), a raw vector isn't. */
+    @Serializable @SerialName("push")
+    data class Push(val target: Ref, val awayFrom: Ref, val distance: Int) : EffectTemplate
+
+    /** doc17-engine-gaps.md 3.1: the destination is the action's own targeted point (`ActionCtx.point`) — a Point-targeted teleport action's whole reason for existing, not a separate ref/slot. */
+    @Serializable @SerialName("teleport")
+    data class Teleport(val who: Ref) : EffectTemplate
 }
 
 /** A pure declaration — no logic. Performing it pushes SpendCost then its instantiated effects onto the resolver stack. */

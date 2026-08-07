@@ -41,6 +41,29 @@ sealed interface Effect {
     data class MoveAlong(val who: EntityId, val path: List<GridPos>, val index: Int = 0) : Effect
 
     /**
+     * doc17-engine-gaps.md 3.1 / doc05's effect vocabulary. Deliberately does NOT reimplement
+     * partial-move-then-stop-at-the-first-blocked-tile logic — it computes the [distance]-tile path
+     * in [direction] and spawns [MoveAlong] with it, reusing that primitive's already-correct
+     * blocked-tile fizzle-without-continuation behavior wholesale (doc05's own warning against
+     * cutting primitives too coarsely: Push composes with MoveAlong rather than duplicating it).
+     * [direction] is normalized to a single-tile step (each component clamped to -1..1) before use,
+     * so passing something other than a true unit vector can't silently multiply the push distance.
+     */
+    @Serializable @SerialName("push")
+    data class Push(val target: EntityId, val direction: GridPos, val distance: Int) : Effect
+
+    /**
+     * doc17-engine-gaps.md 3.1 / doc05. Instant, unlike [MoveAlong] — one handler call, no
+     * self-continuation, no intermediate tiles — so it gets its own [GameEvent.Teleported] rather
+     * than reusing [GameEvent.MoveStepped]: a teleport should animate as a blink, not a walk, and
+     * (per real-world TTRPG precedent, not an oversight) does not provoke the kind of reaction
+     * [GameEvent.MoveStepped]'s "left my reach" geometry check exists for — discontinuous movement
+     * was never in reach to begin with.
+     */
+    @Serializable @SerialName("teleport")
+    data class Teleport(val who: EntityId, val to: GridPos) : Effect
+
+    /**
      * Deliberately not built from docs/05's Cost/ActionCost — that needs
      * ActionDef, which doesn't exist yet. Amounts are spelled out directly
      * so this primitive stands alone until actions arrive.

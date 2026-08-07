@@ -206,6 +206,125 @@ class EffectHandlerTest {
         assertTrue(out.spawn.isEmpty())
     }
 
+    // --- Push ---
+
+    @Test
+    fun pushSpawnsAMoveAlongWithTheComputedPath() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.Push(s.id("hero"), direction = GridPos(1, 0), distance = 3), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state, "push itself moves nothing — it only spawns the MoveAlong that will")
+        assertEquals(
+            listOf(Effect.MoveAlong(s.id("hero"), listOf(GridPos(1, 0), GridPos(2, 0), GridPos(3, 0)))),
+            out.spawn,
+        )
+    }
+
+    @Test
+    fun pushNormalizesADirectionThatIsNotAUnitVector() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        // A raw (5, -5) delta must clamp to a (1, -1) unit step, not push 5x as far.
+        val out = applyEffect(s.state, Effect.Push(s.id("hero"), direction = GridPos(5, -5), distance = 2), emptyMap(), s.catalog)
+        assertEquals(
+            listOf(Effect.MoveAlong(s.id("hero"), listOf(GridPos(1, -1), GridPos(2, -2)))),
+            out.spawn,
+        )
+    }
+
+    @Test
+    fun pushStopsAtTheFirstBlockedTileAcrossResolverSteps() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+            entity("wall") { archetype("dummy"); at(2, 0) }
+        }
+        // Push spawns Effect.MoveAlong rather than moving directly — this drives that spawned
+        // effect to completion by hand, the same way a real resolver run would, proving the
+        // "stop at the first blocked tile, keep whatever ground was already covered" behavior is
+        // MoveAlong's own (already-tested) responsibility, not reimplemented here.
+        val first = applyEffect(s.state, Effect.Push(s.id("hero"), direction = GridPos(1, 0), distance = 3), emptyMap(), s.catalog)
+        val moveAlong = assertIs<Effect.MoveAlong>(first.spawn.single())
+        var working = first.state
+        var current: Effect = moveAlong
+        val events = mutableListOf<GameEvent>()
+        while (true) {
+            val step = applyEffect(working, current, emptyMap(), s.catalog)
+            working = step.state
+            events += step.events
+            current = step.spawn.singleOrNull() ?: break
+        }
+        assertEquals(GridPos(1, 0), working.byId.getValue(s.id("hero")).pos, "stopped one tile short of the wall at (2,0)")
+        assertTrue(events.any { it is GameEvent.Fizzled })
+    }
+
+    @Test
+    fun pushOnMissingTargetFizzles() {
+        val s = scenario { archetype("dummy") { hp = 10 } }
+        val out = applyEffect(s.state, Effect.Push(EntityId(999), direction = GridPos(1, 0), distance = 2), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    @Test
+    fun pushWithZeroDistanceIsANoOp() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.Push(s.id("hero"), direction = GridPos(1, 0), distance = 0), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertTrue(out.events.isEmpty())
+        assertTrue(out.spawn.isEmpty())
+    }
+
+    // --- Teleport ---
+
+    @Test
+    fun teleportMovesInstantlyAndEmitsTeleported() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.Teleport(s.id("hero"), GridPos(5, 5)), emptyMap(), s.catalog)
+        assertEquals(GridPos(5, 5), out.state.byId.getValue(s.id("hero")).pos)
+        assertEquals(listOf(GameEvent.Teleported(s.id("hero"), GridPos(0, 0), GridPos(5, 5))), out.events)
+    }
+
+    @Test
+    fun teleportOntoAnOccupiedTileFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+            entity("blocker") { archetype("dummy"); at(5, 5) }
+        }
+        val out = applyEffect(s.state, Effect.Teleport(s.id("hero"), GridPos(5, 5)), emptyMap(), s.catalog)
+        assertEquals(GridPos(0, 0), out.state.byId.getValue(s.id("hero")).pos)
+        assertEquals(Rejection.Blocked(GridPos(5, 5)), (out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    @Test
+    fun teleportOntoAWallFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val blockedState = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(5, 5))))
+        val out = applyEffect(blockedState, Effect.Teleport(s.id("hero"), GridPos(5, 5)), emptyMap(), s.catalog)
+        assertEquals(Rejection.Blocked(GridPos(5, 5)), (out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    @Test
+    fun teleportOnMissingWhoFizzles() {
+        val s = scenario { archetype("dummy") { hp = 10 } }
+        val out = applyEffect(s.state, Effect.Teleport(EntityId(999), GridPos(1, 1)), emptyMap(), s.catalog)
+        assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
+    }
+
     // --- SpendCost ---
 
     @Test

@@ -17,6 +17,7 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.HealStep
 import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Rejection
@@ -71,6 +72,8 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.RemoveStatus -> removeStatus(state, effect)
         is Effect.Composite -> HandlerOutcome(state, spawn = effect.effects)
         is Effect.RefillMana -> refillMana(state, effect, cat)
+        is Effect.Push -> push(state, effect)
+        is Effect.Teleport -> teleport(state, effect)
     }
 
 /**
@@ -353,6 +356,40 @@ private fun moveAlong(state: GameState, effect: Effect.MoveAlong): HandlerOutcom
     return HandlerOutcome(newState, listOf(GameEvent.MoveStepped(who.id, from, to)), spawn)
 }
 
+/**
+ * doc17-engine-gaps.md 3.1: composes with [Effect.MoveAlong] rather than reimplementing its
+ * blocked-tile fizzle-without-continuation behavior — see [Effect.Push]'s own doc comment. This
+ * handler's only job is building the [distance]-tile path in [direction]; MoveAlong (dispatched
+ * separately, across however many resolver steps it takes) does the actual moving, stopping at
+ * whatever tile it first can't enter.
+ */
+private fun push(state: GameState, effect: Effect.Push): HandlerOutcome {
+    val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    val from = target.pos ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    if (effect.distance <= 0) return HandlerOutcome(state)
+
+    val stepCol = effect.direction.col.coerceIn(-1, 1)
+    val stepRow = effect.direction.row.coerceIn(-1, 1)
+    val path = (1..effect.distance).map { step -> GridPos(from.col + stepCol * step, from.row + stepRow * step) }
+    return HandlerOutcome(state, spawn = listOf(Effect.MoveAlong(effect.target, path)))
+}
+
+/**
+ * doc17-engine-gaps.md 3.1: instant, single-step — unlike [moveAlong] there is no path and no
+ * self-continuation, and re-validation covers exactly what a manual move would (walkable,
+ * unoccupied) via the same [Rejection.Blocked] a blocked [Effect.MoveAlong] step uses.
+ */
+private fun teleport(state: GameState, effect: Effect.Teleport): HandlerOutcome {
+    val who = state.byId[effect.who] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
+    val from = who.pos ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
+    if (!state.map.isWalkable(effect.to) || state.occupancy.containsKey(effect.to)) {
+        return fizzle(state, effect, Rejection.Blocked(effect.to))
+    }
+
+    val newState = state.withEntity(who.id) { it.copy(pos = effect.to) }
+    return HandlerOutcome(newState, listOf(GameEvent.Teleported(who.id, from, effect.to)))
+}
+
 private fun spendCost(state: GameState, effect: Effect.SpendCost): HandlerOutcome {
     val who = state.byId[effect.who] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
     val resources = who.resources ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
@@ -525,7 +562,7 @@ private fun acceptReaction(state: GameState, who: EntityId, actionId: ActionId, 
     if (available < def.cost.mana) return fizzle(state, spend, Rejection.NotEnoughMana(def.cost.mana, available))
 
     val ctx = ActionCtx(who, targetsFor(trigger))
-    val instantiated = def.effects.flatMap { it.instantiate(ctx, cat) }
+    val instantiated = def.effects.flatMap { it.instantiate(state, ctx, cat) }
     return HandlerOutcome(state, spawn = listOf(spend) + instantiated)
 }
 
@@ -672,7 +709,7 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
             emptyList()
         } else {
             val ctx = ActionCtx(caster = status.sourceId ?: nextActiveId, targets = listOf(nextActiveId))
-            def.onTurnStart.flatMap { it.instantiate(ctx, cat) }
+            def.onTurnStart.flatMap { it.instantiate(working, ctx, cat) }
         }
     }
 
