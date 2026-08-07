@@ -39,14 +39,16 @@ class ReconciliationTest {
 
     /**
      * KNOWN_ISSUES.md #2a — settle() used to snapTo(1f) unconditionally, resurrecting a dead
-     * entity's alpha every single drain regardless of whether its Died beat ever ran.
+     * entity's alpha every single drain regardless of whether its Died beat ever ran. Pinned at
+     * [DOWNED_ALPHA], not 0 — doc15/doc10's "Downed, not dead": still on the board, revivable, not
+     * fully invisible (pass 34, once Downed got its own visual).
      */
     @Test
     fun settleFadesADeadEntityEvenIfNoDeathBeatEverRan() = runTest {
         val s = state(entity(deadId, GridPos(0, 0), hp = 0))
         val world = VisualWorld(s, TILE_PX)
         world.settle(s)
-        assertEquals(0f, world.entities.getValue(deadId).alpha.value)
+        assertEquals(DOWNED_ALPHA, world.entities.getValue(deadId).alpha.value)
     }
 
     @Test

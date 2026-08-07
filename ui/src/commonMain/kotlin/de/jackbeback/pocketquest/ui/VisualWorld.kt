@@ -9,6 +9,12 @@ import androidx.compose.ui.geometry.Offset
 import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.GridPos
+
+/** doc15/doc10: "Downed, not dead" — a 0-HP entity is still on the board, revivable, so it stays
+ * visible at reduced contrast rather than fading to fully invisible (which today's engine would
+ * otherwise make indistinguishable from "actually removed," a state nothing produces yet). */
+const val DOWNED_ALPHA = 0.35f
 
 /**
  * doc07: contains no rules data — no HP maximum, no faction, only what is
@@ -29,6 +35,20 @@ class VisualEntity(pos: Offset, hp: Float) {
 data class Overlay(val id: Long, val entityId: EntityId, val amount: Int, val damageType: DamageType?, val pos: Offset)
 
 /**
+ * doc15's "things the engine emits that need a visual": a redirect arc
+ * (`DamageRedirected`) and a blocked-tile flash (`Fizzled` when the reason is
+ * `Rejection.Blocked` — the only Rejection variant that carries a tile at
+ * all; other reasons get the existing log line only, not a flash with
+ * nowhere to draw it).
+ */
+sealed interface Marker {
+    data class Arc(val from: Offset, val to: Offset) : Marker
+    data class TileFlash(val pos: GridPos) : Marker
+}
+
+data class MarkerOverlay(val id: Long, val marker: Marker)
+
+/**
  * doc07's VisualWorld, adapted. `speed` lives here (not on [AnimationPlayer]) so every [Beat]'s
  * `play` lambda — whose signature doc07 fixes to `suspend (VisualWorld) -> Unit` — can read the
  * single scale factor doc07 requires ("all durations must go through a single scale factor")
@@ -37,6 +57,7 @@ data class Overlay(val id: Long, val entityId: EntityId, val amount: Int, val da
 class VisualWorld(initial: GameState, val tilePx: Float) {
     val entities = mutableStateMapOf<EntityId, VisualEntity>()
     val overlays = mutableStateListOf<Overlay>()
+    val markers = mutableStateListOf<MarkerOverlay>()
 
     /**
      * World-px point (same unscaled space [VisualEntity.pos] lives in) centered in the viewport.
@@ -52,6 +73,7 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
     var speed: Float = 1f
 
     private var nextOverlayId = 0L
+    private var nextMarkerId = 0L
 
     init {
         // doc02: pos == null means "not on the map" (reserve, dead) — nothing to draw at any
@@ -70,5 +92,15 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
 
     fun removeOverlay(id: Long) {
         overlays.removeAll { it.id == id }
+    }
+
+    fun addMarker(marker: Marker): Long {
+        val id = nextMarkerId++
+        markers += MarkerOverlay(id, marker)
+        return id
+    }
+
+    fun removeMarker(id: Long) {
+        markers.removeAll { it.id == id }
     }
 }

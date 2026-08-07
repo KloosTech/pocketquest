@@ -307,6 +307,9 @@ private fun Board(
         world.overlays.forEach { overlay ->
             drawOverlay(overlay, camera, zoom)
         }
+        world.markers.forEach { marker ->
+            drawMarker(marker.marker, camera, zoom)
+        }
     }
 }
 
@@ -373,6 +376,24 @@ private fun DrawScope.drawOverlay(overlay: Overlay, camera: Offset, zoom: Float)
     val screenPos = worldToScreen(overlay.pos, camera, zoom, size)
     val screenTile = TILE_PX * zoom
     drawRect(color = color, topLeft = screenPos + Offset(screenTile * 0.3f, -screenTile * 0.6f), size = Size(screenTile * 0.25f, screenTile * 0.25f))
+}
+
+/** doc15: "an arc from the original target to the tank" (DamageRedirected) / "a blocked flash on the affected tile" (Fizzled, Rejection.Blocked). */
+private fun DrawScope.drawMarker(marker: Marker, camera: Offset, zoom: Float) {
+    when (marker) {
+        is Marker.Arc -> drawLine(
+            color = INK,
+            start = worldToScreen(marker.from, camera, zoom, size),
+            end = worldToScreen(marker.to, camera, zoom, size),
+            strokeWidth = 3f,
+            pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 6f)),
+        )
+        is Marker.TileFlash -> drawRect(
+            color = Color(0xFFB71C1C).copy(alpha = 0.35f),
+            topLeft = worldToScreen(Offset(marker.pos.col * TILE_PX, marker.pos.row * TILE_PX), camera, zoom, size),
+            size = Size(TILE_PX * zoom, TILE_PX * zoom),
+        )
+    }
 }
 
 /**

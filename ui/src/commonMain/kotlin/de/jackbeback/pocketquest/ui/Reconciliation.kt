@@ -8,12 +8,16 @@ import de.jackbeback.pocketquest.core.model.GameState
  * of a token permanently in the wrong place.
  *
  * Forces alpha from `health.current` rather than leaving it alone: a beat
- * fading a dead entity to 0 might have been skipped or cancelled mid-flight,
- * and doc07's whole point is that settle() restores the correct final state
+ * fading a dead entity might have been skipped or cancelled mid-flight, and
+ * doc07's whole point is that settle() restores the correct final state
  * regardless of what beats did or didn't finish — snapping every entity's
  * alpha back to 1 unconditionally would resurrect a corpse the very next
  * time this runs (found in KNOWN_ISSUES.md #2, never exercised before
- * since the demo scenario never produced a Died event).
+ * since the demo scenario never produced a Died event). Rests at
+ * [DOWNED_ALPHA], not 0 — doc15/doc10: "Downed, not dead," a 0-HP entity is
+ * still on the board, revivable, not gone; nothing removes an entity from
+ * the board at all yet (doc17 3.1's DestroyEntity is unimplemented), so
+ * fading fully invisible would misrepresent state that's still fully live.
  *
  * A `pos == null` entity (doc02: reserve, dead — "not on the map") gets no
  * VisualEntity at all — see [VisualWorld]'s init block for the equivalent
@@ -33,7 +37,7 @@ suspend fun VisualWorld.settle(logical: GameState) {
         e.health?.let { if (v.hp.value != it.current.toFloat()) v.hp.snapTo(it.current.toFloat()) }
 
         val alive = (e.health?.current ?: 1) > 0
-        v.alpha.snapTo(if (alive) 1f else 0f)
+        v.alpha.snapTo(if (alive) 1f else DOWNED_ALPHA)
         v.scale.snapTo(1f)
     }
     entities.keys.retainAll(logical.entities.filter { it.pos != null }.map { it.id }.toSet())
