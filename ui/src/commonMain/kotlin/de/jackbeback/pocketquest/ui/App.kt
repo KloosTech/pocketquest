@@ -2,17 +2,23 @@ package de.jackbeback.pocketquest.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -22,13 +28,18 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.core.ai.chooseAction
 import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionId
@@ -47,6 +58,7 @@ import de.jackbeback.pocketquest.core.rules.action.preview
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
+import de.jackbeback.pocketquest.core.rules.stat.stats
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
 import kotlinx.coroutines.launch
@@ -61,9 +73,20 @@ private const val TILE_PX = 48f
  * dropped — found by empirical isolation (a plain fixed-size Canvas elsewhere in the same window
  * received clicks correctly; the same Canvas under `weight(1f)` never did). Root cause not fully
  * understood (a Compose Desktop/Skiko quirk in this environment, not this codebase's logic), but
- * the fix is real: give the board's Canvas a concrete size.
+ * the fix is real: give the board's Canvas a concrete size. Only the Canvas itself may never carry
+ * `weight()` — an ancestor container using `weight()` to claim leftover vertical space is fine,
+ * since the bug was about `weight()` and pointer input sharing the same node, not about weight
+ * appearing anywhere in the tree.
  */
 private val TILE_DP = 40.dp
+
+// doc16's "ink register" — hand-inked black on parchment, not a Material default. Flat placeholder
+// constants for now, not a real theming system: there's exactly one screen and no second consumer
+// yet to justify one.
+private val PAPER = Color(0xFFF4ECD8)
+private val PAPER_SHEET = Color(0xFFE7D9B8)
+private val INK = Color(0xFF2B241C)
+private val INK_FAINT = Color(0xFF9A8764)
 
 private fun colorFor(faction: Faction?): Color = when (faction) {
     Faction.Player -> Color(0xFF2196F3)
@@ -82,6 +105,20 @@ private sealed interface Selection {
     data object None : Selection
     data class ActionPicked(val actionId: ActionId, val legal: Set<GridPos>) : Selection
     data class TargetPicked(val actionId: ActionId, val ctx: ActionCtx, val preview: PreviewResult) : Selection
+}
+
+/** doc15's "ink register" button — a bordered box, not a Material default. */
+@Composable
+private fun InkButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Box(
+        modifier = modifier
+            .border(1.dp, INK)
+            .background(PAPER)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+    ) {
+        BasicText(label, style = TextStyle(color = INK, fontSize = 14.sp))
+    }
 }
 
 /**
@@ -135,26 +172,31 @@ private fun DrawScope.drawGrid(map: BattleMap) {
     val height = map.height * TILE_PX
     for (col in 0..map.width) {
         val x = col * TILE_PX
-        drawLine(Color.DarkGray, Offset(x, 0f), Offset(x, height))
+        drawLine(INK_FAINT, Offset(x, 0f), Offset(x, height))
     }
     for (row in 0..map.height) {
         val y = row * TILE_PX
-        drawLine(Color.DarkGray, Offset(0f, y), Offset(width, y))
+        drawLine(INK_FAINT, Offset(0f, y), Offset(width, y))
     }
     map.walls.forEach { pos ->
         drawRect(
-            color = Color.Black,
+            color = INK,
             topLeft = Offset(pos.col * TILE_PX, pos.row * TILE_PX),
             size = Size(TILE_PX, TILE_PX),
         )
     }
 }
 
+/** doc16: "Reachable — dotted ink outline, 8% warm tint" — a faint fill plus a dashed ink border, not a flat color fill. */
 private fun DrawScope.drawHighlight(pos: GridPos) {
+    val topLeft = Offset(pos.col * TILE_PX, pos.row * TILE_PX)
+    val size = Size(TILE_PX, TILE_PX)
+    drawRect(color = INK.copy(alpha = 0.08f), topLeft = topLeft, size = size)
     drawRect(
-        color = Color(0x552E7D32),
-        topLeft = Offset(pos.col * TILE_PX, pos.row * TILE_PX),
-        size = Size(TILE_PX, TILE_PX),
+        color = INK,
+        topLeft = topLeft,
+        size = size,
+        style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))),
     )
 }
 
@@ -175,6 +217,12 @@ private fun DrawScope.drawOverlay(overlay: Overlay) {
  * anticipated), and the player-input loop. A human's turn drives through [Selection]; an AI turn
  * runs to completion automatically via [runAiTurns] with the same perform()/EndTurn calls a human
  * action uses, so there is exactly one code path for "an entity acted," not two.
+ *
+ * Layout is doc15's portrait anatomy, first slice: board on top, a bottom sheet pinned below it.
+ * Only the Peek state exists so far (name/HP/AP/mana + action bar) — Inspect (tap an entity/tile)
+ * and Prompt (StepResult.AwaitingInput) are deferred; the turn-order strip and party bar (which
+ * only earn their keep once there is more than one party member or true interleaved initiative to
+ * show) are too.
  */
 @Composable
 fun App(initialState: GameState, catalog: Catalog) {
@@ -184,6 +232,7 @@ fun App(initialState: GameState, catalog: Catalog) {
     val colors = remember(initialState) { initialState.entities.associate { it.id to colorFor(it.actor?.faction) } }
     val log = remember { mutableStateListOf<String>() }
     var selection by remember { mutableStateOf<Selection>(Selection.None) }
+    var sheetExpanded by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) { player.run() }
@@ -232,74 +281,123 @@ fun App(initialState: GameState, catalog: Catalog) {
     val active = activeId?.let { state.byId[it] }
     val isHumanTurn = active?.actor?.controller is Controller.Human
 
-    Row(modifier = Modifier.fillMaxSize().background(Color.White)) {
-        Board(
-            map = state.map,
-            world = world,
-            colors = colors,
-            legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
-            modifier = Modifier.size(TILE_DP * state.map.width, TILE_DP * state.map.height).padding(16.dp),
-            onTileTap = tap@{ pos ->
-                val picked = selection as? Selection.ActionPicked ?: return@tap
-                if (pos !in picked.legal) return@tap
-                val def = catalog.actionDef(picked.actionId)
-                val targets = affectedBy(state, def, activeId!!, pos)
-                val ctx = ActionCtx(activeId, targets, point = pos)
-                selection = Selection.TargetPicked(picked.actionId, ctx, preview(state, activeId, picked.actionId, ctx, catalog))
-            },
-        )
-        Column(modifier = Modifier.weight(1f)) {
+    Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+            Board(
+                map = state.map,
+                world = world,
+                colors = colors,
+                legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
+                modifier = Modifier.size(TILE_DP * state.map.width, TILE_DP * state.map.height),
+                onTileTap = tap@{ pos ->
+                    val picked = selection as? Selection.ActionPicked ?: return@tap
+                    if (pos !in picked.legal) return@tap
+                    val def = catalog.actionDef(picked.actionId)
+                    val targets = affectedBy(state, def, activeId!!, pos)
+                    val ctx = ActionCtx(activeId, targets, point = pos)
+                    selection = Selection.TargetPicked(picked.actionId, ctx, preview(state, activeId, picked.actionId, ctx, catalog))
+                },
+            )
+        }
+
+        // Bottom sheet — Peek state only (doc15). Rounded top corners + a darker paper tone read
+        // as a distinct surface sitting over the board, per doc16's "sheet sits in the ink
+        // register" instruction. doc15: "dismissible only to half-height, never fully" — collapsed
+        // still shows the header line, just hides the action bar/log so more board is visible. A
+        // tap-to-toggle handle for now, not a drag gesture (velocity tracking/snap points are real
+        // work, deferred).
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(PAPER_SHEET, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .padding(16.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                    ) { sheetExpanded = !sheetExpanded },
+                contentAlignment = Alignment.Center,
+            ) {
+                BasicText(if (sheetExpanded) "▾" else "▴", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
+            }
+            Spacer(modifier = Modifier.size(4.dp))
+
+            if (active != null) {
+                val s = active.stats(catalog)
+                BasicText(
+                    "${catalog.archetype(active.archetype).name} — HP ${active.health?.current}/${s.maxHp}" +
+                        (active.resources?.let { " · AP ${it.ap}/${s.maxAp} · Mana ${it.mana}/${s.maxMana}" } ?: ""),
+                    style = TextStyle(color = INK, fontSize = 16.sp),
+                )
+            }
+
+            if (!sheetExpanded) return@Column
+            Spacer(modifier = Modifier.size(12.dp))
+
             if (!isHumanTurn) {
-                BasicText("Enemy turn…", modifier = Modifier.padding(16.dp))
+                BasicText("Enemy turn…", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
             } else {
                 when (val sel = selection) {
                     is Selection.None -> {
                         val archetype = catalog.archetype(active.archetype)
-                        archetype.actions.forEach { actionId ->
-                            BasicText(
-                                actionId.raw,
-                                modifier = Modifier.padding(8.dp).clickable {
-                                    val def = catalog.actionDef(actionId)
-                                    selection = if (def.targeting.mode == TargetMode.SelfOnly) {
-                                        val ctx = ActionCtx(activeId, listOf(activeId), point = active.pos)
-                                        Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
-                                    } else {
-                                        Selection.ActionPicked(actionId, legalTargets(state, activeId, def, catalog))
+                        Row {
+                            archetype.actions.forEach { actionId ->
+                                InkButton(
+                                    actionId.raw,
+                                    modifier = Modifier.padding(end = 8.dp),
+                                    onClick = {
+                                        val def = catalog.actionDef(actionId)
+                                        selection = if (def.targeting.mode == TargetMode.SelfOnly) {
+                                            val ctx = ActionCtx(activeId, listOf(activeId), point = active.pos)
+                                            Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
+                                        } else {
+                                            Selection.ActionPicked(actionId, legalTargets(state, activeId, def, catalog))
+                                        }
+                                    },
+                                )
+                            }
+                            InkButton(
+                                "End Turn",
+                                onClick = {
+                                    scope.launch {
+                                        endTurn(activeId)
+                                        runAiTurns()
                                     }
                                 },
                             )
                         }
-                        BasicText(
-                            "End Turn",
-                            modifier = Modifier.padding(8.dp).clickable {
-                                scope.launch {
-                                    endTurn(activeId)
-                                    runAiTurns()
-                                }
-                            },
-                        )
                     }
                     is Selection.ActionPicked -> {
-                        BasicText("${sel.actionId.raw}: pick a highlighted tile", modifier = Modifier.padding(8.dp))
-                        BasicText("Cancel", modifier = Modifier.padding(8.dp).clickable { selection = Selection.None })
+                        BasicText("${sel.actionId.raw}: pick a highlighted tile", style = TextStyle(color = INK, fontSize = 14.sp))
+                        Spacer(modifier = Modifier.size(8.dp))
+                        InkButton("Cancel", onClick = { selection = Selection.None })
                     }
                     is Selection.TargetPicked -> {
-                        BasicText("${sel.actionId.raw} expects ${sel.preview.events.size} events", modifier = Modifier.padding(8.dp))
-                        BasicText(
-                            "Confirm",
-                            modifier = Modifier.padding(8.dp).clickable {
-                                scope.launch {
-                                    applyStep(perform(state, activeId, sel.actionId, sel.ctx, catalog))
-                                    selection = Selection.None
-                                }
-                            },
-                        )
-                        BasicText("Cancel", modifier = Modifier.padding(8.dp).clickable { selection = Selection.None })
+                        BasicText("${sel.actionId.raw} expects ${sel.preview.events.size} events", style = TextStyle(color = INK, fontSize = 14.sp))
+                        Spacer(modifier = Modifier.size(8.dp))
+                        Row {
+                            InkButton(
+                                "Confirm",
+                                modifier = Modifier.padding(end = 8.dp),
+                                onClick = {
+                                    scope.launch {
+                                        applyStep(perform(state, activeId, sel.actionId, sel.ctx, catalog))
+                                        selection = Selection.None
+                                    }
+                                },
+                            )
+                            InkButton("Cancel", onClick = { selection = Selection.None })
+                        }
                     }
                 }
             }
-            LazyColumn(modifier = Modifier.padding(horizontal = 16.dp)) {
-                items(log) { line -> BasicText(line) }
+
+            Spacer(modifier = Modifier.size(12.dp))
+            LazyColumn(modifier = Modifier.heightIn(max = 120.dp)) {
+                items(log) { line -> BasicText(line, style = TextStyle(color = INK_FAINT, fontSize = 11.sp)) }
             }
         }
     }
