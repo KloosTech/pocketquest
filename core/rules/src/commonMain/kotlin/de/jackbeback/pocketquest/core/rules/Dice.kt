@@ -3,6 +3,7 @@ package de.jackbeback.pocketquest.core.rules
 import de.jackbeback.pocketquest.core.model.AdvSide
 import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.RngState
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.RollResult
 import kotlin.random.Random
@@ -53,3 +54,16 @@ fun resolveAdvantage(sides: Set<AdvSide>): RollMode = when {
 
 /** D&D ability modifier: floor((score - 10) / 2). */
 fun abilityModifier(score: Int): Int = if (score >= 10) (score - 10) / 2 else -((10 - score + 1) / 2)
+
+/**
+ * Whether a granted [RollContext] (from `Modifier.Roll`, via `Stats.rollGrants`) applies to the
+ * actual roll being made. `this` is the granted context — e.g. `AttackRoll(vs = Enemy)` — `actual`
+ * is the one built at the roll site from the real target/ability. `AttackRoll(vs = null)` means
+ * "any attack roll"; a non-null `vs` only matches an attack against that specific faction.
+ * `SavingThrow`/`AbilityCheck` have no such wildcard — they match by exact ability/skill.
+ */
+fun RollContext.matches(actual: RollContext): Boolean = when (this) {
+    is RollContext.AttackRoll -> actual is RollContext.AttackRoll && (vs == null || vs == actual.vs)
+    is RollContext.SavingThrow -> actual is RollContext.SavingThrow && ability == actual.ability
+    is RollContext.AbilityCheck -> actual is RollContext.AbilityCheck && skill == actual.skill
+}

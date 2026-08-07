@@ -19,6 +19,7 @@ import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Resistance
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.TurnPhase
@@ -262,7 +263,14 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
     if ((target.health?.current ?: 0) <= 0) return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
     val ac = target.stats(cat).armorClass
-    val advantageMode = resolveAdvantage(effect.advantage)
+    // Advantage/disadvantage granted via Modifier.Roll (KNOWN_ISSUES.md #11) is the attacker's
+    // own — self-referential, never the target's — merged with whatever the action itself
+    // explicitly specifies, then resolved through the same cancellation rule as always.
+    val derivedAdvantage = attacker.stats(cat).rollGrants
+        .filter { it.ctx.matches(RollContext.AttackRoll(vs = target.actor?.faction)) }
+        .map { it.side }
+        .toSet()
+    val advantageMode = resolveAdvantage(effect.advantage + derivedAdvantage)
     val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
     val total = rollValue + effect.attackBonus
     val hit = total >= ac
@@ -285,9 +293,14 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
 private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mode: RngMode): HandlerOutcome {
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
-    val score = target.stats(cat).abilities.forAbility(effect.ability)
+    val targetStats = target.stats(cat)
+    val score = targetStats.abilities.forAbility(effect.ability)
     val mod = abilityModifier(score)
-    val advantageMode = resolveAdvantage(effect.advantage)
+    val derivedAdvantage = targetStats.rollGrants
+        .filter { it.ctx.matches(RollContext.SavingThrow(effect.ability)) }
+        .map { it.side }
+        .toSet()
+    val advantageMode = resolveAdvantage(effect.advantage + derivedAdvantage)
     val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
     val success = rollValue + mod >= effect.dc
 
@@ -403,9 +416,17 @@ private fun concentrationCheck(state: GameState, effect: Effect.ConcentrationChe
     val who = state.byId[effect.who] ?: return HandlerOutcome(state)
     val linkId = who.concentrating ?: return HandlerOutcome(state) // already broken by something else this step
 
-    val conScore = who.stats(cat).abilities.con
+    val whoStats = who.stats(cat)
+    val conScore = whoStats.abilities.con
     val mod = abilityModifier(conScore)
-    val (rollValue, afterRoll) = rollD20(state, mode, RollMode.Normal)
+    // A concentration check is a CON saving throw in all but name — no explicit per-effect
+    // advantage field exists here (ConcentrationCheck never had one), but a granted "advantage on
+    // CON saves" must still apply, or it stays silently inert specifically for this roll.
+    val derivedAdvantage = whoStats.rollGrants
+        .filter { it.ctx.matches(RollContext.SavingThrow(Ability.Con)) }
+        .map { it.side }
+        .toSet()
+    val (rollValue, afterRoll) = rollD20(state, mode, resolveAdvantage(derivedAdvantage))
     val success = rollValue + mod >= effect.dc
 
     val events = mutableListOf<GameEvent>(GameEvent.ConcentrationCheckRolled(who.id, effect.dc, rollValue, mod, success))

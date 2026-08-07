@@ -1,6 +1,8 @@
 package de.jackbeback.pocketquest.core.rules.stat
 
+import de.jackbeback.pocketquest.core.model.AdvSide
 import de.jackbeback.pocketquest.core.model.Modifier
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.Slot
 import de.jackbeback.pocketquest.core.model.Stat
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
@@ -93,5 +95,34 @@ class StatsDerivationTest {
             status("hero", "poisonStack", stacks = 3)
         }
         assertEquals(10 - 3, s.entity("hero").stats(s.catalog).armorClass)
+    }
+
+    // --- Modifier.Roll -> Stats.rollGrants — KNOWN_ISSUES.md #11 ---
+
+    @Test
+    fun statusGrantingRollAppearsInStatsRollGrants() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            statusDef("blessed") { modifier(Modifier.Roll(RollContext.AttackRoll(vs = null), AdvSide.Advantage)) }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            status("hero", "blessed")
+        }
+        assertEquals(
+            listOf(Modifier.Roll(RollContext.AttackRoll(vs = null), AdvSide.Advantage)),
+            s.entity("hero").stats(s.catalog).rollGrants,
+        )
+    }
+
+    @Test
+    fun rollGrantsAreNotScaledByStatusStacks() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            statusDef("blessed") { modifier(Modifier.Roll(RollContext.AttackRoll(vs = null), AdvSide.Advantage)) }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            status("hero", "blessed", stacks = 3)
+        }
+        // A boolean grant stacked 3x is still just "granted" once — matches the existing rule that
+        // Mul/Override/Grant/Resist (everything but Add) apply once regardless of stack count.
+        assertEquals(1, s.entity("hero").stats(s.catalog).rollGrants.size)
     }
 }

@@ -23,4 +23,11 @@ data class Stats(
     val abilities: AbilityScores,
     val flags: Set<Flag>,
     val resistances: Map<DamageType, Resistance>,
+    /**
+     * Every `Modifier.Roll` contributed by an equipped/innate/active source, unresolved — matching
+     * a grant's `RollContext` against the actual roll being made (e.g. "advantage vs Enemy" against
+     * a specific attack's real target) is a :core:rules concern (`RollContext.matches`), not
+     * something `Stats` itself decides. See KNOWN_ISSUES.md #11.
+     */
+    val rollGrants: List<Modifier.Roll> = emptyList(),
 )

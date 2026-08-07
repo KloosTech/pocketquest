@@ -1,11 +1,16 @@
 package de.jackbeback.pocketquest.core.rules
 
+import de.jackbeback.pocketquest.core.model.Ability
 import de.jackbeback.pocketquest.core.model.AdvSide
 import de.jackbeback.pocketquest.core.model.DiceSpec
+import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.RngState
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
+import de.jackbeback.pocketquest.core.model.Skill
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
@@ -72,5 +77,43 @@ class DiceTest {
         assertEquals(4, result.rolls.size)
         assertTrue(result.rolls.all { it in 1..6 })
         assertEquals(result.rolls.sum() + 3, result.total)
+    }
+
+    // --- RollContext.matches() — KNOWN_ISSUES.md #11 ---
+
+    @Test
+    fun attackRollWithNullVsMatchesAnyFaction() {
+        val granted = RollContext.AttackRoll(vs = null)
+        assertTrue(granted.matches(RollContext.AttackRoll(vs = Faction.Enemy)))
+        assertTrue(granted.matches(RollContext.AttackRoll(vs = Faction.Player)))
+        assertTrue(granted.matches(RollContext.AttackRoll(vs = null)))
+    }
+
+    @Test
+    fun attackRollWithASpecificVsOnlyMatchesThatFaction() {
+        val granted = RollContext.AttackRoll(vs = Faction.Enemy)
+        assertTrue(granted.matches(RollContext.AttackRoll(vs = Faction.Enemy)))
+        assertFalse(granted.matches(RollContext.AttackRoll(vs = Faction.Player)))
+        assertFalse(granted.matches(RollContext.AttackRoll(vs = null)), "a wildcard actual roll isn't a match for a specific grant")
+    }
+
+    @Test
+    fun savingThrowMatchesOnlyTheSameAbility() {
+        val granted = RollContext.SavingThrow(Ability.Dex)
+        assertTrue(granted.matches(RollContext.SavingThrow(Ability.Dex)))
+        assertFalse(granted.matches(RollContext.SavingThrow(Ability.Con)))
+    }
+
+    @Test
+    fun abilityCheckMatchesOnlyTheSameSkill() {
+        val granted = RollContext.AbilityCheck(Skill.Stealth)
+        assertTrue(granted.matches(RollContext.AbilityCheck(Skill.Stealth)))
+        assertFalse(granted.matches(RollContext.AbilityCheck(Skill.Perception)))
+    }
+
+    @Test
+    fun differentRollContextKindsNeverMatch() {
+        assertFalse(RollContext.AttackRoll(vs = null).matches(RollContext.SavingThrow(Ability.Dex)))
+        assertFalse(RollContext.SavingThrow(Ability.Dex).matches(RollContext.AbilityCheck(Skill.Stealth)))
     }
 }

@@ -89,7 +89,12 @@ fun Entity.stats(cat: Catalog): Stats {
         }
     }
 
-    return work.toStats(flags, resistances)
+    // Unresolved on purpose — matching a grant's RollContext against an actual roll (e.g.
+    // "advantage vs Enemy" against a specific attack's real target) happens at the roll site via
+    // RollContext.matches(), not here. See KNOWN_ISSUES.md #11.
+    val rollGrants = ordered.mapNotNull { it.modifier as? Modifier.Roll }
+
+    return work.toStats(flags, resistances, rollGrants)
 }
 
 private fun Resistance.protectiveness(): Int = when (this) {
@@ -136,7 +141,7 @@ private class WorkingStats(
     fun add(stat: Stat, value: Int) = set(stat, get(stat) + value)
     fun mul(stat: Stat, factor: Float) = set(stat, (get(stat) * factor).toInt())
 
-    fun toStats(flags: Set<Flag>, resistances: Map<DamageType, Resistance>): Stats = Stats(
+    fun toStats(flags: Set<Flag>, resistances: Map<DamageType, Resistance>, rollGrants: List<Modifier.Roll>): Stats = Stats(
         maxHp = maxHp.coerceAtLeast(1),
         armorClass = armorClass.coerceAtLeast(0),
         speedTiles = speedTiles.coerceAtLeast(0),
@@ -145,5 +150,6 @@ private class WorkingStats(
         abilities = AbilityScores(str, dex, con, int, wis, cha),
         flags = flags,
         resistances = resistances,
+        rollGrants = rollGrants,
     )
 }

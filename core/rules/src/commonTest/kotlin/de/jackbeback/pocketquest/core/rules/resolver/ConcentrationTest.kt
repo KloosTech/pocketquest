@@ -1,11 +1,15 @@
 package de.jackbeback.pocketquest.core.rules.resolver
 
+import de.jackbeback.pocketquest.core.model.Ability
 import de.jackbeback.pocketquest.core.model.ActiveStatus
+import de.jackbeback.pocketquest.core.model.AdvSide
 import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.LinkId
+import de.jackbeback.pocketquest.core.model.Modifier
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import kotlin.test.Test
@@ -138,5 +142,36 @@ class ConcentrationTest {
         val out = applyEffect(s.state, Effect.ConcentrationCheck(s.id("caster"), dc = 10), emptyMap(), s.catalog)
         assertEquals(s.state, out.state)
         assertTrue(out.events.isEmpty())
+    }
+
+    // --- KNOWN_ISSUES.md #11: advantage granted via Modifier.Roll must apply to concentration checks too ---
+
+    @Test
+    fun concentrationCheckHonorsAdvantageGrantedViaModifierRoll() {
+        val s = scenario {
+            archetype("caster") { hp = 50; abilities(con = 10) } // mod 0: normal roll 11, advantage roll 14
+            archetype("ally") { hp = 20 }
+            entity("caster") { archetype("caster"); at(0, 0); hp(50) }
+            entity("ally") { archetype("ally"); at(1, 0); hp(20) }
+            statusDef("bless") {}
+            statusDef("steady") { modifier(Modifier.Roll(RollContext.SavingThrow(Ability.Con), AdvSide.Advantage)) }
+        }
+        val link = LinkId(1)
+        val linkedState = linked(s.state, s.id("caster"), s.id("ally"), link)
+        val withBuff = linkedState.copy(
+            entities = linkedState.entities.map {
+                if (it.id == s.id("caster")) {
+                    it.copy(statuses = it.statuses + ActiveStatus(StatusId("steady"), sourceId = null, linkId = null, expiry = Expiry.Permanent, appliedAtVersion = 0))
+                } else {
+                    it
+                }
+            },
+        )
+
+        // dc 13: normal (11+0) fails, advantage (14+0) succeeds — only passes if the grant was actually applied.
+        val out = applyEffect(withBuff, Effect.ConcentrationCheck(s.id("caster"), dc = 13), emptyMap(), s.catalog, RngMode.Expected)
+        val rolled = out.events.single { it is GameEvent.ConcentrationCheckRolled } as GameEvent.ConcentrationCheckRolled
+        assertEquals(14, rolled.roll)
+        assertTrue(rolled.success)
     }
 }

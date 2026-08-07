@@ -7,8 +7,11 @@ import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Expiry
+import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameEvent
+import de.jackbeback.pocketquest.core.model.Modifier
 import de.jackbeback.pocketquest.core.model.Rejection
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import kotlin.test.Test
@@ -219,5 +222,88 @@ class RollEffectTest {
         assertEquals(11, d20For(emptySet()), "Normal: E[X]=10.5 -> 11")
         assertEquals(14, d20For(setOf(AdvSide.Advantage)), "Advantage: E[max(X,Y)]=13.825 -> 14, not always 10.5")
         assertEquals(7, d20For(setOf(AdvSide.Disadvantage)), "Disadvantage: E[min(X,Y)]=7.175 -> 7, not always 10.5")
+    }
+
+    // --- KNOWN_ISSUES.md #11: Modifier.Roll actually influencing real rolls ---
+
+    @Test
+    fun rollAttackHonorsAdvantageGrantedViaModifierRollWhenFactionMatches() {
+        val s = scenario {
+            archetype("attacker") { hp = 10 }
+            archetype("target") { hp = 10; ac = 5 }
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("target"); at(1, 0); hp(10); faction(Faction.Enemy) }
+            statusDef("hunter") { modifier(Modifier.Roll(RollContext.AttackRoll(vs = Faction.Enemy), AdvSide.Advantage)) }
+            status("hero", "hunter")
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, damage = DiceSpec(1, 4, 0), damageType = DamageType.Fire)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+        val rolled = out.events.single() as GameEvent.AttackRolled
+        assertEquals(14, rolled.d20, "advantage vs Enemy must apply since the target is Enemy")
+    }
+
+    @Test
+    fun rollAttackDoesNotApplyAFactionScopedGrantAgainstTheWrongFaction() {
+        val s = scenario {
+            archetype("attacker") { hp = 10 }
+            archetype("target") { hp = 10; ac = 5 }
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("neutralGuy") { archetype("target"); at(1, 0); hp(10); faction(Faction.Neutral) }
+            statusDef("hunter") { modifier(Modifier.Roll(RollContext.AttackRoll(vs = Faction.Enemy), AdvSide.Advantage)) }
+            status("hero", "hunter")
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("neutralGuy"), attackBonus = 0, damage = DiceSpec(1, 4, 0), damageType = DamageType.Fire)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+        val rolled = out.events.single() as GameEvent.AttackRolled
+        assertEquals(11, rolled.d20, "the grant is scoped to Enemy targets, not Neutral ones")
+    }
+
+    @Test
+    fun rollAttackUnionsDerivedAndExplicitAdvantageBeforeCancellation() {
+        val s = scenario {
+            archetype("attacker") { hp = 10 }
+            archetype("target") { hp = 10; ac = 5 }
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("target"); at(1, 0); hp(10); faction(Faction.Enemy) }
+            statusDef("hunter") { modifier(Modifier.Roll(RollContext.AttackRoll(vs = null), AdvSide.Advantage)) }
+            status("hero", "hunter")
+        }
+        // Explicit disadvantage authored on the effect itself + derived advantage from the status
+        // must cancel to Normal, same as two explicit AdvSides would.
+        val effect = Effect.RollAttack(
+            s.id("hero"), s.id("goblin"), attackBonus = 0,
+            advantage = setOf(AdvSide.Disadvantage), damage = DiceSpec(1, 4, 0), damageType = DamageType.Fire,
+        )
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+        val rolled = out.events.single() as GameEvent.AttackRolled
+        assertEquals(11, rolled.d20)
+    }
+
+    @Test
+    fun rollSaveHonorsAdvantageGrantedViaModifierRoll() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20) }
+            statusDef("evasive") { modifier(Modifier.Roll(RollContext.SavingThrow(Ability.Dex), AdvSide.Advantage)) }
+            status("hero", "evasive")
+        }
+        val effect = Effect.RollSave(s.id("hero"), Ability.Dex, dc = 20)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, RngMode.Expected)
+        val rolled = out.events.single() as GameEvent.SaveRolled
+        assertEquals(14, rolled.d20)
+    }
+
+    @Test
+    fun rollSaveIgnoresAGrantForADifferentAbility() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20) }
+            statusDef("evasive") { modifier(Modifier.Roll(RollContext.SavingThrow(Ability.Dex), AdvSide.Advantage)) }
+            status("hero", "evasive")
+        }
+        val effect = Effect.RollSave(s.id("hero"), Ability.Con, dc = 20) // grant is for Dex, this save is Con
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, RngMode.Expected)
+        val rolled = out.events.single() as GameEvent.SaveRolled
+        assertEquals(11, rolled.d20)
     }
 }

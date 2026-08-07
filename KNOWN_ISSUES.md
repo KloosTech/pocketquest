@@ -20,7 +20,7 @@ below. Its Tier 0 list maps onto #1-#11 almost exactly:
 | #8 (`answererFor` null-controller stall) | 0.7 | Fixed |
 | #9 (`Fizzled` uses `class.simpleName`) | 0.8 | Fixed |
 | #10 (Expected-mode contradictions) | 0.9 | Fixed |
-| #11 (`Modifier.Roll` dead code) | 0.10 | Open — needs a design pass, see below |
+| #11 (`Modifier.Roll` dead code) | 0.10 | Fixed |
 
 Status legend:
 
@@ -502,7 +502,36 @@ form) instead of hardcoding `10.5` regardless of `advantage`.
 
 ## 11. `Modifier.Roll` is fully dead code
 
-**Status: Confirmed** (doc17 0.10).
+**Status: Fixed** — after a design discussion, see below for the shape
+agreed on. `Stats` gained `rollGrants: List<Modifier.Roll>`, populated by
+a sixth filter pass in `stats()` (unscaled by status stacks, like every
+non-`Add` modifier). `RollContext.matches(actual)` (`:core:rules`,
+next to `resolveAdvantage`) matches a granted context against the real
+roll: `AttackRoll(vs = null)` matches any target's faction,
+`AttackRoll(vs = Enemy)` only an `Enemy` target; `SavingThrow`/
+`AbilityCheck` match by exact ability/skill. `rollAttack` checks the
+**attacker's** own stats (self-referential — a status makes the wearer
+better at rolling, never worse for whoever they're rolling against);
+`rollSave` and `concentrationCheck` check the saving entity's. Derived
+advantage unions with the effect's own explicit `advantage: Set<AdvSide>`
+before going through the existing `resolveAdvantage()`, so an explicit
+Disadvantage and a derived Advantage still cancel to Normal exactly like
+two explicit `AdvSide`s would. `concentrationCheck` — a CON save in all
+but name, with no `advantage` field of its own — now honors a granted
+"advantage on CON saves" too, or it would have stayed silently half-fixed.
+`RollContext.AbilityCheck` stays unresolved on the *consuming* end (no
+skill-check effect/handler exists anywhere in the engine yet — verified,
+zero references outside the model) but is now collected into
+`rollGrants` like the other two, ready for whenever one is added.
+
+Regression tests: `DiceTest` (6 tests on `RollContext.matches` itself),
+`StatsDerivationTest.statusGrantingRollAppearsInStatsRollGrants` /
+`...rollGrantsAreNotScaledByStatusStacks`, `RollEffectTest` (5 tests:
+faction-matched/unmatched attack advantage, derived+explicit
+cancellation, ability-matched/unmatched save advantage), and
+`ConcentrationTest.concentrationCheckHonorsAdvantageGrantedViaModifierRoll`.
+
+**Status (original finding): Confirmed** (doc17 0.10).
 
 `Modifier.Roll(ctx: RollContext, side: AdvSide)` and `RollContext`
 (`Modifier.kt`) are modeled, `@Serializable`, and round-trip through
