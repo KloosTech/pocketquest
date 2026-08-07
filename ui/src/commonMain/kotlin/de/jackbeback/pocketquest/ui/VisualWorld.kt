@@ -29,18 +29,24 @@ class VisualEntity(pos: Offset, hp: Float) {
 data class Overlay(val id: Long, val entityId: EntityId, val amount: Int, val damageType: DamageType?, val pos: Offset)
 
 /**
- * doc07's VisualWorld, adapted: `camera` is omitted — nothing pans on a
- * board this small (10x10 in the demo); add an `Animatable<Offset>` camera
- * when a board bigger than the viewport needs one. `speed` lives here
- * (not on [AnimationPlayer]) so every [Beat]'s `play` lambda — whose
- * signature doc07 fixes to `suspend (VisualWorld) -> Unit` — can read the
- * single scale factor doc07 requires ("all durations must go through a
- * single scale factor") without needing an extra parameter threaded
- * through every call site.
+ * doc07's VisualWorld, adapted. `speed` lives here (not on [AnimationPlayer]) so every [Beat]'s
+ * `play` lambda — whose signature doc07 fixes to `suspend (VisualWorld) -> Unit` — can read the
+ * single scale factor doc07 requires ("all durations must go through a single scale factor")
+ * without needing an extra parameter threaded through every call site.
  */
 class VisualWorld(initial: GameState, val tilePx: Float) {
     val entities = mutableStateMapOf<EntityId, VisualEntity>()
     val overlays = mutableStateListOf<Overlay>()
+
+    /**
+     * World-px point (same unscaled space [VisualEntity.pos] lives in) centered in the viewport.
+     * Manual pan writes via `snapTo` (tracks the pointer 1:1, no lag); doc15's auto-follow and the
+     * "center on active" button write via `animateTo`. Starts centered on the map, not (0,0).
+     */
+    val camera = Animatable(Offset(initial.map.width * tilePx / 2f, initial.map.height * tilePx / 2f), Offset.VectorConverter)
+
+    /** doc16: "integer scale factors" keep pixel art crisp — snapped steps only, see [de.jackbeback.pocketquest.ui.MIN_ZOOM]/[MAX_ZOOM]. */
+    val zoom = Animatable(1f)
 
     /** 1f = normal speed, 0f = every animateTo becomes a snapTo (doc07's "fast" setting and skip). */
     var speed: Float = 1f

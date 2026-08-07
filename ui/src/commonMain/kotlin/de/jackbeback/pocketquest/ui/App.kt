@@ -6,8 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +31,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -38,9 +41,11 @@ import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.toSize
 import de.jackbeback.pocketquest.core.ai.chooseAction
 import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionId
@@ -64,23 +69,21 @@ import de.jackbeback.pocketquest.core.rules.stat.stats
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 private const val TILE_PX = 48f
 
-/**
- * Layout size per tile, in dp — deliberately a separate unit from [TILE_PX] (the raw pixel unit
- * [DrawScope]/pointer-offset math uses inside the Canvas). Board's Canvas must be given an
- * explicit size rather than `Modifier.weight(1f)`: a Row-weighted Canvas drew fine but its
- * pointer-input hit-test bounds silently didn't match its rendered bounds, so every tap on it was
- * dropped — found by empirical isolation (a plain fixed-size Canvas elsewhere in the same window
- * received clicks correctly; the same Canvas under `weight(1f)` never did). Root cause not fully
- * understood (a Compose Desktop/Skiko quirk in this environment, not this codebase's logic), but
- * the fix is real: give the board's Canvas a concrete size. Only the Canvas itself may never carry
- * `weight()` — an ancestor container using `weight()` to claim leftover vertical space is fine,
- * since the bug was about `weight()` and pointer input sharing the same node, not about weight
- * appearing anywhere in the tree.
- */
-private val TILE_DP = 40.dp
+/** doc16: "integer scale factors" keep pixel art crisp — pan/zoom snaps to these steps, never a free/fractional value. */
+const val MIN_ZOOM = 1
+const val MAX_ZOOM = 4
+
+/** doc15's "comfortable inner rectangle" — the active entity may roam this middle fraction of the viewport before the camera nudges to keep it in view. */
+private const val CAMERA_DEAD_ZONE_MARGIN = 0.2f
+
+/** How much of the viewport an AI actor+target pair must fit within (screen px, at current zoom) before the camera frames both instead of prioritising the target — doc15's "if they do not both fit, prioritise the target." */
+private const val AI_FRAME_FIT_FRACTION = 0.7f
+
 
 // doc16's "ink register" — hand-inked black on parchment, not a Material default. Flat placeholder
 // constants for now, not a real theming system: there's exactly one screen and no second consumer
@@ -127,14 +130,17 @@ private fun InkButton(label: String, modifier: Modifier = Modifier, onClick: () 
  * doc15: "who acts next, always visible" — pinned above the board, never scrolls away. One token
  * per `state.turn.order` entry (true interleaved initiative, not side-based phases — every actor,
  * not just the party, belongs here), the active one ringed. No tap-to-inspect yet (doc15's
- * Inspect state isn't built), so these tokens are read-only for now.
+ * Inspect state isn't built), so these tokens are read-only for now. [onCenterOnActive] is doc15's
+ * Camera section's own explicit ask: "a 'centre on active' button in the turn strip for when the
+ * player has panned away."
  */
 @Composable
-private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, modifier: Modifier = Modifier) {
+private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, onCenterOnActive: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth().height(56.dp).background(PAPER_SHEET).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        InkButton("⌖", modifier = Modifier.padding(end = 10.dp), onClick = onCenterOnActive)
         val activeId = state.turn.order.getOrNull(state.turn.activeIndex)
         state.turn.order.forEach { id ->
             val entity = state.byId[id] ?: return@forEach
@@ -220,9 +226,15 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
 /**
  * doc07: "the grid is one Canvas, not 400 composables." Grid lines and
  * blocked tiles come from [BattleMap] (static for the battle); token
- * positions/HP/scale/alpha come from [VisualWorld] (animated). [legalTiles]
- * highlights doc15's "Reachable"/targeting mode; taps only matter while
- * something is selected — [onTileTap] is a no-op otherwise.
+ * positions/HP/scale/alpha come from [VisualWorld] (animated), as is
+ * `world.camera`/`world.zoom` — doc15's "pan + zoom, culled to viewport."
+ * [legalTiles] highlights doc15's "Reachable"/targeting mode; taps only
+ * matter while something is selected — [onTileTap] is a no-op otherwise.
+ *
+ * [canPan] is doc15's Camera rule: "never moves while the player is in
+ * ActionSelected or TargetPicked" — a drag gesture during target-picking is
+ * ambiguous with trying to tap a highlighted tile precisely, so manual
+ * pan/zoom is disabled entirely in those states, not just auto-follow.
  */
 @Composable
 private fun Board(
@@ -230,17 +242,43 @@ private fun Board(
     world: VisualWorld,
     colors: Map<EntityId, Color>,
     legalTiles: Set<GridPos>,
+    canPan: Boolean,
     onTileTap: (GridPos) -> Unit,
+    onViewportSizeChanged: (Size) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val scope = rememberCoroutineScope()
     // detectTapGestures's double-tap disambiguation wait never resolved a tap to onTap in this
     // environment (confirmed empirically — zero taps registered across many real clicks, while a
     // plain Modifier.clickable fired reliably every time). clickable's own tap recognition works,
     // so it drives the actual click; a separate lightweight down-position tracker (no gesture
-    // disambiguation, just "where was the last press") supplies the tile coordinate.
+    // disambiguation, just "where was the last press") supplies the screen coordinate, converted
+    // through the current camera/zoom to a world position and then a tile.
     var lastPressPos by remember { mutableStateOf(Offset.Zero) }
+    // clickable's onClick lambda has no DrawScope/PointerInputScope receiver, so it can't read a
+    // Canvas-local `size` the way the draw calls below do — the viewport size has to be captured
+    // into ordinary Compose state via onSizeChanged instead.
+    var viewportSize by remember { mutableStateOf(Size.Zero) }
     Canvas(
         modifier = modifier
+            .onSizeChanged {
+                viewportSize = it.toSize()
+                onViewportSizeChanged(viewportSize)
+            }
+            // Single-finger drag pans, two-finger pinch zooms — detectTransformGestures already
+            // gates both behind its own touch-slop, so a plain tap below that threshold never
+            // consumes the down/up pair and clickable (below) still sees and fires it normally.
+            // Zoom snaps to MIN_ZOOM..MAX_ZOOM integer steps every frame of the pinch rather than
+            // free-floating then settling — doc15's own acknowledged "feel stiffer" tradeoff for
+            // snapped steps, not a missing feature.
+            .pointerInput(canPan) {
+                if (!canPan) return@pointerInput
+                detectTransformGestures { _, pan, zoomChange, _ ->
+                    val steppedZoom = (world.zoom.targetValue * zoomChange).roundToInt().coerceIn(MIN_ZOOM, MAX_ZOOM)
+                    scope.launch { world.zoom.snapTo(steppedZoom.toFloat()) }
+                    scope.launch { world.camera.snapTo(world.camera.value - pan / world.zoom.targetValue) }
+                }
+            }
             .pointerInput(Unit) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
@@ -250,61 +288,91 @@ private fun Board(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-            ) { onTileTap(lastPressPos.toGridPos(TILE_PX)) },
+            ) {
+                val worldPos = screenToWorld(lastPressPos, world.camera.targetValue, world.zoom.targetValue, viewportSize)
+                onTileTap(worldPos.toGridPos(TILE_PX))
+            }
+            .scrollWheelZoom(canPan) { direction ->
+                val next = (world.zoom.targetValue.roundToInt() + direction).coerceIn(MIN_ZOOM, MAX_ZOOM)
+                scope.launch { world.zoom.animateTo(next.toFloat()) }
+            },
     ) {
-        drawGrid(map)
-        legalTiles.forEach { pos -> drawHighlight(pos) }
+        val camera = world.camera.value
+        val zoom = world.zoom.value
+        drawGrid(map, camera, zoom)
+        legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
         world.entities.forEach { (id, entity) ->
-            drawEntity(entity, colors[id] ?: Color.Gray)
+            drawEntity(entity, colors[id] ?: Color.Gray, camera, zoom)
         }
         world.overlays.forEach { overlay ->
-            drawOverlay(overlay)
+            drawOverlay(overlay, camera, zoom)
         }
     }
 }
 
-private fun DrawScope.drawGrid(map: BattleMap) {
-    val width = map.width * TILE_PX
-    val height = map.height * TILE_PX
-    for (col in 0..map.width) {
-        val x = col * TILE_PX
-        drawLine(INK_FAINT, Offset(x, 0f), Offset(x, height))
+/** doc15: "cull to the viewport — draw only visible tiles plus one row of margin." */
+private fun visibleTileBounds(map: BattleMap, camera: Offset, zoom: Float, viewport: Size): Pair<IntRange, IntRange> {
+    val topLeftWorld = screenToWorld(Offset.Zero, camera, zoom, viewport)
+    val bottomRightWorld = screenToWorld(Offset(viewport.width, viewport.height), camera, zoom, viewport)
+    val cols = ((topLeftWorld.x / TILE_PX).toInt() - 1).coerceAtLeast(0)..((bottomRightWorld.x / TILE_PX).toInt() + 1).coerceAtMost(map.width - 1)
+    val rows = ((topLeftWorld.y / TILE_PX).toInt() - 1).coerceAtLeast(0)..((bottomRightWorld.y / TILE_PX).toInt() + 1).coerceAtMost(map.height - 1)
+    return cols to rows
+}
+
+private fun DrawScope.drawGrid(map: BattleMap, camera: Offset, zoom: Float) {
+    val viewport = size
+    val (cols, rows) = visibleTileBounds(map, camera, zoom, viewport)
+    if (cols.isEmpty() || rows.isEmpty()) return
+    fun toScreen(world: Offset) = worldToScreen(world, camera, zoom, viewport)
+
+    val yTop = toScreen(Offset(0f, rows.first * TILE_PX)).y
+    val yBottom = toScreen(Offset(0f, (rows.last + 1) * TILE_PX)).y
+    for (col in cols.first..cols.last + 1) {
+        val x = toScreen(Offset(col * TILE_PX, 0f)).x
+        drawLine(INK_FAINT, Offset(x, yTop), Offset(x, yBottom))
     }
-    for (row in 0..map.height) {
-        val y = row * TILE_PX
-        drawLine(INK_FAINT, Offset(0f, y), Offset(width, y))
+    val xLeft = toScreen(Offset(cols.first * TILE_PX, 0f)).x
+    val xRight = toScreen(Offset((cols.last + 1) * TILE_PX, 0f)).x
+    for (row in rows.first..rows.last + 1) {
+        val y = toScreen(Offset(0f, row * TILE_PX)).y
+        drawLine(INK_FAINT, Offset(xLeft, y), Offset(xRight, y))
     }
+    val screenTile = TILE_PX * zoom
     map.walls.forEach { pos ->
-        drawRect(
-            color = INK,
-            topLeft = Offset(pos.col * TILE_PX, pos.row * TILE_PX),
-            size = Size(TILE_PX, TILE_PX),
-        )
+        if (pos.col !in cols || pos.row !in rows) return@forEach
+        drawRect(color = INK, topLeft = toScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX)), size = Size(screenTile, screenTile))
     }
 }
 
 /** doc16: "Reachable — dotted ink outline, 8% warm tint" — a faint fill plus a dashed ink border, not a flat color fill. */
-private fun DrawScope.drawHighlight(pos: GridPos) {
-    val topLeft = Offset(pos.col * TILE_PX, pos.row * TILE_PX)
-    val size = Size(TILE_PX, TILE_PX)
-    drawRect(color = INK.copy(alpha = 0.08f), topLeft = topLeft, size = size)
+private fun DrawScope.drawHighlight(pos: GridPos, camera: Offset, zoom: Float) {
+    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
+    val tileSize = Size(TILE_PX * zoom, TILE_PX * zoom)
+    drawRect(color = INK.copy(alpha = 0.08f), topLeft = topLeft, size = tileSize)
     drawRect(
         color = INK,
         topLeft = topLeft,
-        size = size,
+        size = tileSize,
         style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))),
     )
 }
 
-private fun DrawScope.drawEntity(entity: VisualEntity, color: Color) {
-    drawCircle(color = color, radius = TILE_PX * 0.35f * entity.scale.value, center = entity.pos.value, alpha = entity.alpha.value)
+private fun DrawScope.drawEntity(entity: VisualEntity, color: Color, camera: Offset, zoom: Float) {
+    drawCircle(
+        color = color,
+        radius = TILE_PX * zoom * 0.35f * entity.scale.value,
+        center = worldToScreen(entity.pos.value, camera, zoom, size),
+        alpha = entity.alpha.value,
+    )
 }
 
-private fun DrawScope.drawOverlay(overlay: Overlay) {
+private fun DrawScope.drawOverlay(overlay: Overlay, camera: Offset, zoom: Float) {
     // No text-in-Canvas dependency pulled in for one debug number — a small colored square
     // stands in for the real floating-number readout a font/text-measurer would draw.
     val color = if (overlay.amount < 0) Color(0xFFB71C1C) else Color(0xFF2E7D32)
-    drawRect(color = color, topLeft = overlay.pos + Offset(TILE_PX * 0.3f, -TILE_PX * 0.6f), size = Size(TILE_PX * 0.25f, TILE_PX * 0.25f))
+    val screenPos = worldToScreen(overlay.pos, camera, zoom, size)
+    val screenTile = TILE_PX * zoom
+    drawRect(color = color, topLeft = screenPos + Offset(screenTile * 0.3f, -screenTile * 0.6f), size = Size(screenTile * 0.25f, screenTile * 0.25f))
 }
 
 /**
@@ -329,9 +397,61 @@ fun App(initialState: GameState, catalog: Catalog) {
     var selection by remember { mutableStateOf<Selection>(Selection.None) }
     var inspected by remember { mutableStateOf<EntityId?>(null) }
     var sheetExpanded by remember { mutableStateOf(true) }
+    var viewportSize by remember { mutableStateOf(Size.Zero) }
     val scope = rememberCoroutineScope()
 
+    // doc15 Camera: "never moves while the player is in ActionSelected or TargetPicked."
+    val canPan = selection is Selection.None
+
     LaunchedEffect(Unit) { player.run() }
+
+    /** doc15 Camera: "follows the active entity, but only when it leaves a comfortable inner rectangle." */
+    suspend fun followIfNeeded(entityWorldPos: Offset) {
+        if (viewportSize == Size.Zero) return
+        val zoom = world.zoom.targetValue
+        val camera = world.camera.targetValue
+        val screenPos = worldToScreen(entityWorldPos, camera, zoom, viewportSize)
+        val left = viewportSize.width * CAMERA_DEAD_ZONE_MARGIN
+        val right = viewportSize.width * (1f - CAMERA_DEAD_ZONE_MARGIN)
+        val top = viewportSize.height * CAMERA_DEAD_ZONE_MARGIN
+        val bottom = viewportSize.height * (1f - CAMERA_DEAD_ZONE_MARGIN)
+        val dx = when {
+            screenPos.x < left -> screenPos.x - left
+            screenPos.x > right -> screenPos.x - right
+            else -> 0f
+        }
+        val dy = when {
+            screenPos.y < top -> screenPos.y - top
+            screenPos.y > bottom -> screenPos.y - bottom
+            else -> 0f
+        }
+        if (dx != 0f || dy != 0f) world.camera.animateTo(camera + Offset(dx, dy) / zoom)
+    }
+
+    // snapshotFlow, not a plain LaunchedEffect(activeId) — the active entity's own VisualEntity.pos
+    // keeps changing smoothly for the whole duration of a move animation, and the camera has to
+    // track every frame of that, not just jump once when the active entity itself changes.
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            val id = state.turn.order.getOrNull(state.turn.activeIndex)
+            id?.let { world.entities[it]?.pos?.value }
+        }.collect { pos ->
+            if (pos != null && canPan) followIfNeeded(pos)
+        }
+    }
+
+    /** doc15 Camera: "during AI turns, pans to keep both the actor and its target on screen; if they do not both fit, prioritise the target." */
+    suspend fun frameActorAndTarget(actorPos: GridPos, targetPos: GridPos) {
+        if (viewportSize == Size.Zero) return
+        val zoom = world.zoom.targetValue
+        val actorWorld = actorPos.toOffset(TILE_PX)
+        val targetWorld = targetPos.toOffset(TILE_PX)
+        val screenDelta = (targetWorld - actorWorld) * zoom
+        val fits = abs(screenDelta.x) < viewportSize.width * AI_FRAME_FIT_FRACTION &&
+            abs(screenDelta.y) < viewportSize.height * AI_FRAME_FIT_FRACTION
+        val focus = if (fits) (actorWorld + targetWorld) / 2f else targetWorld
+        world.camera.animateTo(focus)
+    }
 
     suspend fun applyStep(result: StepResult): Boolean = when (result) {
         is StepResult.Completed -> {
@@ -367,7 +487,12 @@ fun App(initialState: GameState, catalog: Catalog) {
             if (active.actor?.controller is Controller.Human) return
             if ((active.health?.current ?: 1) > 0) {
                 val decision = chooseAction(state, activeId, catalog)
-                if (decision != null) applyStep(perform(state, activeId, decision.actionId, decision.ctx, catalog))
+                if (decision != null) {
+                    val actorPos = active.pos
+                    val targetPos = decision.ctx.targets.firstOrNull()?.let { state.byId[it]?.pos } ?: decision.ctx.point
+                    if (actorPos != null && targetPos != null) frameActorAndTarget(actorPos, targetPos)
+                    applyStep(perform(state, activeId, decision.actionId, decision.ctx, catalog))
+                }
             }
             endTurn(activeId)
         }
@@ -378,14 +503,31 @@ fun App(initialState: GameState, catalog: Catalog) {
     val isHumanTurn = active?.actor?.controller is Controller.Human
 
     Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
-        TurnOrderStrip(state, colors)
-        Box(modifier = Modifier.weight(1f).fillMaxWidth(), contentAlignment = Alignment.Center) {
+        TurnOrderStrip(
+            state,
+            colors,
+            onCenterOnActive = {
+                val pos = active?.pos ?: return@TurnOrderStrip
+                scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
+            },
+        )
+        // doc15: the board is a flex viewport (pan+zoom, culled), not sized to the map. BoxWithConstraints
+        // gives Board's Canvas an explicit dp size matching the available space, rather than
+        // `Modifier.weight(1f)` directly on the Canvas: a Row-weighted Canvas used to draw fine but its
+        // pointer-input hit-test bounds silently didn't match its rendered bounds, so every tap was
+        // dropped (a Compose Desktop/Skiko quirk in this dev environment, found by empirical isolation —
+        // a plain fixed-size Canvas elsewhere in the same window received clicks correctly, the same
+        // Canvas under `weight(1f)` never did). An ancestor claiming leftover space via weight(), like
+        // this Box, is fine — only the Canvas itself may never carry weight() directly.
+        BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Board(
                 map = state.map,
                 world = world,
                 colors = colors,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
-                modifier = Modifier.size(TILE_DP * state.map.width, TILE_DP * state.map.height),
+                canPan = canPan,
+                modifier = Modifier.size(maxWidth, maxHeight),
+                onViewportSizeChanged = { viewportSize = it },
                 // doc15's targeting state machine: ActionPicked -> tap a legal tile -> TargetPicked;
                 // TargetPicked -> tap elsewhere -> cancels back to Idle (not a re-inspect — the
                 // player already has a pending action, tapping the board again means "never mind");
