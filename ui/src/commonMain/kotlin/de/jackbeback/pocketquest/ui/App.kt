@@ -20,7 +20,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -181,6 +180,43 @@ private fun PartyBar(state: GameState, catalog: Catalog, modifier: Modifier = Mo
 }
 
 /**
+ * doc15's Inspect bottom-sheet state: read-only stats/statuses for whatever the player tapped
+ * outside of an active targeting flow. Deliberately doesn't try to fake "threat range" or "last
+ * action" — doc15 asks for both on an enemy, but nothing tracks either yet (no committed-AI-intent
+ * concept exists — see doc15's own "Threat overlay, and the intent question"), so showing them
+ * would be invented data, not a read of something real.
+ */
+@Composable
+private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog, onBack: () -> Unit) {
+    val entity = state.byId[entityId]
+    if (entity == null) {
+        BasicText("(no longer on the board)", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
+        Spacer(modifier = Modifier.size(8.dp))
+        InkButton("Back", onClick = onBack)
+        return
+    }
+    val s = entity.stats(catalog)
+    BasicText(
+        "${catalog.archetype(entity.archetype).name} — ${entity.actor?.faction ?: Faction.Neutral}",
+        style = TextStyle(color = INK, fontSize = 16.sp),
+    )
+    Spacer(modifier = Modifier.size(4.dp))
+    BasicText(
+        "HP ${entity.health?.current}/${s.maxHp} · AC ${s.armorClass}" +
+            (entity.resources?.let { " · AP ${it.ap}/${s.maxAp} · Mana ${it.mana}/${s.maxMana}" } ?: ""),
+        style = TextStyle(color = INK_FAINT, fontSize = 13.sp),
+    )
+    if (entity.statuses.isNotEmpty()) {
+        Spacer(modifier = Modifier.size(8.dp))
+        entity.statuses.forEach { status ->
+            BasicText("${status.def.raw} ×${status.stacks} (${status.expiry})", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
+        }
+    }
+    Spacer(modifier = Modifier.size(12.dp))
+    InkButton("Back", onClick = onBack)
+}
+
+/**
  * doc07: "the grid is one Canvas, not 400 composables." Grid lines and
  * blocked tiles come from [BattleMap] (static for the battle); token
  * positions/HP/scale/alpha come from [VisualWorld] (animated). [legalTiles]
@@ -278,8 +314,9 @@ private fun DrawScope.drawOverlay(overlay: Overlay) {
  * action uses, so there is exactly one code path for "an entity acted," not two.
  *
  * Layout is doc15's portrait anatomy: turn-order strip pinned at top, board in the middle, party
- * bar, then the bottom sheet. Bottom sheet only has the Peek state so far (name/HP/AP/mana +
- * action bar) — Inspect (tap an entity/tile) and Prompt (StepResult.AwaitingInput) are deferred.
+ * bar, then the bottom sheet. Bottom sheet has Peek (name/HP/AP/mana + action bar) and Inspect
+ * (tap something outside an active targeting flow — read-only stats/statuses) — Prompt
+ * (StepResult.AwaitingInput) is still deferred, nothing in the demo catalog ever triggers it.
  */
 @Composable
 fun App(initialState: GameState, catalog: Catalog) {
@@ -289,6 +326,7 @@ fun App(initialState: GameState, catalog: Catalog) {
     val colors = remember(initialState) { initialState.entities.associate { it.id to colorFor(it.actor?.faction) } }
     val log = remember { mutableStateListOf<String>() }
     var selection by remember { mutableStateOf<Selection>(Selection.None) }
+    var inspected by remember { mutableStateOf<EntityId?>(null) }
     var sheetExpanded by remember { mutableStateOf(true) }
     val scope = rememberCoroutineScope()
 
@@ -347,28 +385,40 @@ fun App(initialState: GameState, catalog: Catalog) {
                 colors = colors,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
                 modifier = Modifier.size(TILE_DP * state.map.width, TILE_DP * state.map.height),
+                // doc15's targeting state machine: ActionPicked -> tap a legal tile -> TargetPicked;
+                // TargetPicked -> tap elsewhere -> cancels back to Idle (not a re-inspect — the
+                // player already has a pending action, tapping the board again means "never mind");
+                // Idle -> tap own char/enemy/cell -> Inspect (whatever's on that tile, or nothing).
                 onTileTap = tap@{ pos ->
-                    val picked = selection as? Selection.ActionPicked ?: return@tap
-                    if (pos !in picked.legal) return@tap
-                    val def = catalog.actionDef(picked.actionId)
-                    val targets = affectedBy(state, def, activeId!!, pos)
-                    val ctx = ActionCtx(activeId, targets, point = pos)
-                    selection = Selection.TargetPicked(picked.actionId, ctx, preview(state, activeId, picked.actionId, ctx, catalog))
+                    when (val sel = selection) {
+                        is Selection.ActionPicked -> {
+                            if (pos !in sel.legal) return@tap
+                            val def = catalog.actionDef(sel.actionId)
+                            val targets = affectedBy(state, def, activeId!!, pos)
+                            val ctx = ActionCtx(activeId, targets, point = pos)
+                            selection = Selection.TargetPicked(sel.actionId, ctx, preview(state, activeId, sel.actionId, ctx, catalog))
+                        }
+                        is Selection.TargetPicked -> selection = Selection.None
+                        Selection.None -> inspected = state.occupancy[pos]
+                    }
                 },
             )
         }
         PartyBar(state, catalog)
 
-        // Bottom sheet — Peek state only (doc15). Rounded top corners + a darker paper tone read
-        // as a distinct surface sitting over the board, per doc16's "sheet sits in the ink
-        // register" instruction. doc15: "dismissible only to half-height, never fully" — collapsed
-        // still shows the header line, just hides the action bar/log so more board is visible. A
-        // tap-to-toggle handle for now, not a drag gesture (velocity tracking/snap points are real
-        // work, deferred).
+        // Bottom sheet — Peek/Inspect states (doc15). Flush against the party bar directly above
+        // it (same PAPER_SHEET tone, no gap between them), so rounded top corners here just
+        // exposed the outer PAPER background peeking through the corner cutouts — a real visual
+        // glitch found by the user, not a stylistic choice. A hairline ink border reads as a
+        // bordered card instead (same technique InkButton already uses), no rounding needed.
+        // doc15: "dismissible only to half-height, never fully" — collapsed still shows the header
+        // line, just hides the action bar/log so more board is visible. A tap-to-toggle handle for
+        // now, not a drag gesture (velocity tracking/snap points are real work, deferred).
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .background(PAPER_SHEET, shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                .border(width = 1.dp, color = INK_FAINT)
+                .background(PAPER_SHEET)
                 .padding(16.dp),
         ) {
             Box(
@@ -396,7 +446,12 @@ fun App(initialState: GameState, catalog: Catalog) {
             if (!sheetExpanded) return@Column
             Spacer(modifier = Modifier.size(12.dp))
 
-            if (!isHumanTurn) {
+            val inspectedId = inspected
+            if (inspectedId != null) {
+                // Inspect deliberately looks different from Peek (doc15: "they must not look
+                // alike") — no action bar, just read-only details plus Back.
+                InspectPanel(inspectedId, state, catalog, onBack = { inspected = null })
+            } else if (!isHumanTurn) {
                 BasicText("Enemy turn…", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
             } else {
                 when (val sel = selection) {
@@ -408,12 +463,28 @@ fun App(initialState: GameState, catalog: Catalog) {
                                     actionId.raw,
                                     modifier = Modifier.padding(end = 8.dp),
                                     onClick = {
+                                        inspected = null
                                         val def = catalog.actionDef(actionId)
-                                        selection = if (def.targeting.mode == TargetMode.SelfOnly) {
-                                            val ctx = ActionCtx(activeId, listOf(activeId), point = active.pos)
-                                            Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
-                                        } else {
-                                            Selection.ActionPicked(actionId, legalTargets(state, activeId, def, catalog))
+                                        selection = when {
+                                            def.targeting.mode == TargetMode.SelfOnly -> {
+                                                val ctx = ActionCtx(activeId, listOf(activeId), point = active.pos)
+                                                Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
+                                            }
+                                            // Exactly one legal target: skip straight to TargetPicked instead of
+                                            // making the player tap the only option on the board. Still requires
+                                            // an explicit Confirm — this only removes a redundant tap, not the
+                                            // safety net doc15's "nothing mutates before Confirm" is built on.
+                                            else -> {
+                                                val legal = legalTargets(state, activeId, def, catalog)
+                                                val onlyTarget = legal.singleOrNull()
+                                                if (onlyTarget != null) {
+                                                    val targets = affectedBy(state, def, activeId, onlyTarget)
+                                                    val ctx = ActionCtx(activeId, targets, point = onlyTarget)
+                                                    Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
+                                                } else {
+                                                    Selection.ActionPicked(actionId, legal)
+                                                }
+                                            }
                                         }
                                     },
                                 )
