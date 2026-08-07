@@ -37,6 +37,13 @@ sealed interface GameEvent {
     /** The 0 -> >0 HP transition via Heal — the counterpart to [Downed]. */
     @Serializable @SerialName("revived") data class Revived(val target: EntityId) : GameEvent
 
+    /**
+     * docs/18-damage-pipeline.md: emitted by the Retarget/Split damage-pipeline steps, positioned
+     * before the resulting DamageTaken — without it the animation director sees damage land on a
+     * character nobody attacked. [by] is the status that carried the redirecting step, if any.
+     */
+    @Serializable @SerialName("damageRedirected") data class DamageRedirected(val from: EntityId, val to: EntityId, val by: StatusId? = null) : GameEvent
+
     /** Emitted instead of throwing/silently no-opping when a handler's re-validation fails — see docs/04-resolver.md. */
     @Serializable @SerialName("fizzled") data class Fizzled(val effect: String, val reason: Rejection) : GameEvent
 }

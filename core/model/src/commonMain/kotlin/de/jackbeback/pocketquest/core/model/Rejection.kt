@@ -24,4 +24,6 @@ sealed interface Rejection {
     @Serializable @SerialName("noLegalTarget") data object NoLegalTarget : Rejection
     /** docs/17-engine-gaps.md 1.5 — a Downed (0 HP) entity cannot act, full stop, not even via a Free action. */
     @Serializable @SerialName("downed") data object Downed : Rejection
+    /** docs/18-damage-pipeline.md — a DamageStep.Prevent matched (immunity, "ignore the first hit this round"). Not a precondition failure, but still reported rather than silently doing nothing — doc15's own warning against silent no-ops. */
+    @Serializable @SerialName("prevented") data object Prevented : Rejection
 }

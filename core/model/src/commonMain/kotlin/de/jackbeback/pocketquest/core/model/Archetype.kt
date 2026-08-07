@@ -15,4 +15,6 @@ data class Archetype(
     val baseMaxMana: Int,
     val actions: List<ActionId> = emptyList(),
     val innateModifiers: List<Modifier> = emptyList(),
+    val innateDamageSteps: List<DamageStep> = emptyList(),
+    val innateHealSteps: List<HealStep> = emptyList(),
 )

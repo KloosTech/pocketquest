@@ -12,6 +12,7 @@ import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.Cost
+import de.jackbeback.pocketquest.core.model.DamageStep
 import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Equipment
@@ -21,6 +22,7 @@ import de.jackbeback.pocketquest.core.model.FeatureDef
 import de.jackbeback.pocketquest.core.model.FeatureId
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.HealStep
 import de.jackbeback.pocketquest.core.model.Health
 import de.jackbeback.pocketquest.core.model.ActiveStatus
 import de.jackbeback.pocketquest.core.model.EffectTemplate
@@ -188,6 +190,8 @@ class ArchetypeBuilder(private val name: String) {
     private var abilityScores = AbilityScores(10, 10, 10, 10, 10, 10)
     private val innate = mutableListOf<Modifier>()
     private val actionIds = mutableListOf<ActionId>()
+    private val damageSteps = mutableListOf<DamageStep>()
+    private val healSteps = mutableListOf<HealStep>()
 
     fun abilities(str: Int = 10, dex: Int = 10, con: Int = 10, int: Int = 10, wis: Int = 10, cha: Int = 10) {
         abilityScores = AbilityScores(str, dex, con, int, wis, cha)
@@ -201,6 +205,14 @@ class ArchetypeBuilder(private val name: String) {
         actionIds += names.map { ActionId(it) }
     }
 
+    fun damageStep(s: DamageStep) {
+        damageSteps += s
+    }
+
+    fun healStep(s: HealStep) {
+        healSteps += s
+    }
+
     fun build(): Archetype = Archetype(
         id = ArchetypeId(name),
         name = name,
@@ -212,6 +224,8 @@ class ArchetypeBuilder(private val name: String) {
         baseMaxMana = mana,
         actions = actionIds.toList(),
         innateModifiers = innate.toList(),
+        innateDamageSteps = damageSteps.toList(),
+        innateHealSteps = healSteps.toList(),
     )
 }
 
@@ -219,6 +233,8 @@ class StatusDefBuilder(private val name: String) {
     var stackPolicy: StackPolicy = StackPolicy.Refresh
     private val mods = mutableListOf<Modifier>()
     private val onTurnStartTemplates = mutableListOf<EffectTemplate>()
+    private val damageSteps = mutableListOf<DamageStep>()
+    private val healSteps = mutableListOf<HealStep>()
 
     fun modifier(m: Modifier) {
         mods += m
@@ -228,23 +244,43 @@ class StatusDefBuilder(private val name: String) {
         onTurnStartTemplates += template
     }
 
-    fun build(): StatusDef = StatusDef(StatusId(name), name, stackPolicy, mods.toList(), onTurnStartTemplates.toList())
+    fun damageStep(s: DamageStep) {
+        damageSteps += s
+    }
+
+    fun healStep(s: HealStep) {
+        healSteps += s
+    }
+
+    fun build(): StatusDef = StatusDef(StatusId(name), name, stackPolicy, mods.toList(), onTurnStartTemplates.toList(), damageSteps.toList(), healSteps.toList())
 }
 
 class ItemDefBuilder(private val name: String) {
     private val mods = mutableListOf<Modifier>()
     var twoHanded: Boolean = false
+    private val damageSteps = mutableListOf<DamageStep>()
+    private val healSteps = mutableListOf<HealStep>()
 
     fun modifier(m: Modifier) {
         mods += m
     }
 
-    fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList(), twoHanded)
+    fun damageStep(s: DamageStep) {
+        damageSteps += s
+    }
+
+    fun healStep(s: HealStep) {
+        healSteps += s
+    }
+
+    fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList(), twoHanded, damageSteps.toList(), healSteps.toList())
 }
 
 class FeatureDefBuilder(private val name: String) {
     private val mods = mutableListOf<Modifier>()
     private val grantedActionIds = mutableListOf<ActionId>()
+    private val damageSteps = mutableListOf<DamageStep>()
+    private val healSteps = mutableListOf<HealStep>()
 
     fun modifier(m: Modifier) {
         mods += m
@@ -254,7 +290,15 @@ class FeatureDefBuilder(private val name: String) {
         grantedActionIds += ActionId(actionName)
     }
 
-    fun build(): FeatureDef = FeatureDef(FeatureId(name), name, mods.toList(), grantedActionIds.toList())
+    fun damageStep(s: DamageStep) {
+        damageSteps += s
+    }
+
+    fun healStep(s: HealStep) {
+        healSteps += s
+    }
+
+    fun build(): FeatureDef = FeatureDef(FeatureId(name), name, mods.toList(), grantedActionIds.toList(), damageSteps.toList(), healSteps.toList())
 }
 
 class EntityBuilder {

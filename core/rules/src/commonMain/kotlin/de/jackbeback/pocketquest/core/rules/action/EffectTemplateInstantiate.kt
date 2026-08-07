@@ -18,14 +18,14 @@ private fun resolveRef(ref: Ref, ctx: ActionCtx): List<EntityId> = when (ref) {
 /** Resolves every [Ref] placeholder into a concrete [Effect]. `EachTarget` expands to one effect per target. */
 fun EffectTemplate.instantiate(ctx: ActionCtx, cat: Catalog): List<Effect> = when (this) {
     is EffectTemplate.DealDamage ->
-        resolveRef(target, ctx).map { Effect.DealDamage(it, amount, damageType) }
+        resolveRef(target, ctx).map { Effect.DealDamage(it, amount, damageType, tags = tags) }
 
     is EffectTemplate.ApplyStatus ->
         resolveRef(target, ctx).map { Effect.ApplyStatus(it, status, stacks, expiry) }
 
     is EffectTemplate.RollAttack -> {
         val attackerId = resolveRef(attacker, ctx).firstOrNull() ?: return emptyList()
-        resolveRef(target, ctx).map { Effect.RollAttack(attackerId, it, attackBonus, advantage, damage, damageType) }
+        resolveRef(target, ctx).map { Effect.RollAttack(attackerId, it, attackBonus, advantage, damage, damageType, tags) }
     }
 
     is EffectTemplate.RollSave ->

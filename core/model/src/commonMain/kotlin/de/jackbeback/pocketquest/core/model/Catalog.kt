@@ -16,6 +16,9 @@ data class StatusDef(
     val modifiers: List<Modifier> = emptyList(),
     /** Executed once when the affected entity's turn starts (regeneration, damage over time). */
     val onTurnStart: List<EffectTemplate> = emptyList(),
+    /** docs/18-damage-pipeline.md — collected the same way as [modifiers], through the entity carrying this status. */
+    val damageSteps: List<DamageStep> = emptyList(),
+    val healSteps: List<HealStep> = emptyList(),
 )
 
 @Serializable
@@ -25,6 +28,8 @@ data class ItemDef(
     val modifiers: List<Modifier> = emptyList(),
     /** Occupies MainHand and OffHand — see equip()/canEquip() in :core:rules and docs/03-modifiers-and-status.md. */
     val twoHanded: Boolean = false,
+    val damageSteps: List<DamageStep> = emptyList(),
+    val healSteps: List<HealStep> = emptyList(),
 )
 
 /**
@@ -39,6 +44,8 @@ data class FeatureDef(
     val name: String,
     val modifiers: List<Modifier> = emptyList(),
     val grantsActions: List<ActionId> = emptyList(),
+    val damageSteps: List<DamageStep> = emptyList(),
+    val healSteps: List<HealStep> = emptyList(),
 )
 
 @Serializable

@@ -16,12 +16,24 @@ sealed interface Effect {
     @Serializable @SerialName("ask")
     data class Ask(val request: DecisionRequest) : Effect
 
+    /**
+     * docs/18-damage-pipeline.md: [target]/[amount]/[damageType] are the RAW request — the actual
+     * 8-step pipeline (retarget, prevent, convert, scale, reduce, absorb, apply, after) runs
+     * inside the handler, entirely synchronously, with hops tracked as a local variable rather
+     * than a field here — nothing about an in-progress retarget chain needs to survive a process
+     * death mid-chain, since the whole chain resolves within one handler call. [fromReflect]
+     * exists purely so a Reflect step's spawned counter-damage can't itself trigger another
+     * Reflect — internal bookkeeping, never set by content authoring (EffectTemplate has no
+     * matching field).
+     */
     @Serializable @SerialName("dealDamage")
     data class DealDamage(
         val target: EntityId,
         val amount: Int,
         val damageType: DamageType,
         val source: EntityId? = null,
+        val tags: Set<DamageTag> = emptySet(),
+        val fromReflect: Boolean = false,
     ) : Effect
 
     /** Self-continuing: the handler re-pushes with index+1 rather than looping — see docs/04-resolver.md. */
@@ -61,6 +73,7 @@ sealed interface Effect {
         val advantage: Set<AdvSide> = emptySet(),
         val damage: DiceSpec,
         val damageType: DamageType,
+        val tags: Set<DamageTag> = emptySet(),
     ) : Effect
 
     /** d20 + ability modifier vs dc. Spawns whichever branch wins — see docs/05's Slot example; this is the simpler direct-branch shape. */

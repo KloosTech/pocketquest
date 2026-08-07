@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.ActiveStatus
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.DamageStep
 import de.jackbeback.pocketquest.core.model.Decision
 import de.jackbeback.pocketquest.core.model.DecisionId
 import de.jackbeback.pocketquest.core.model.DecisionRequest
@@ -16,6 +17,7 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.HealStep
 import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Resistance
@@ -134,12 +136,26 @@ private fun effectLabel(effect: Effect): String =
 private fun fizzle(state: GameState, effect: Effect, reason: Rejection): HandlerOutcome =
     HandlerOutcome(state, events = listOf(GameEvent.Fizzled(effectLabel(effect), reason)))
 
+/**
+ * docs/18-damage-pipeline.md's HealInstance — "the same shape, but much shorter": Prevent (a
+ * matching HealStep.Prevent cancels the heal entirely — wounds that cannot be healed), Scale
+ * (all matching HealStep.Scale multiply the amount, same "apply every match" pattern DealDamage's
+ * Scale/Reduce use), Apply. No retarget/absorb/reflect — doc18 explicitly rules out redirecting
+ * healing as a mechanic nobody asks for.
+ */
 private fun heal(state: GameState, effect: Effect.Heal, cat: Catalog): HandlerOutcome {
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
     val health = target.health ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
+    val steps = collectHealSteps(target, cat)
+    val prevented = steps.any { (it.step as? HealStep.Prevent)?.let { p -> matchesStepCondition(p.condition, state, null, null, emptySet()) } == true }
+    if (prevented) return HandlerOutcome(state, listOf(GameEvent.Fizzled(effectLabel(effect), Rejection.Prevented)))
+
+    var amountF = effect.amount.toFloat()
+    steps.forEach { (it.step as? HealStep.Scale)?.let { s -> amountF *= s.factor } }
+
     val maxHp = target.stats(cat).maxHp
-    val newCurrent = (health.current + effect.amount).coerceAtMost(maxHp)
+    val newCurrent = (health.current + amountF.roundToInt()).coerceAtMost(maxHp)
     val newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
     val actualHealed = newCurrent - health.current
     val events = mutableListOf<GameEvent>(GameEvent.Healed(target.id, actualHealed, effect.source))
@@ -164,39 +180,160 @@ private fun removeStatus(state: GameState, effect: Effect.RemoveStatus): Handler
     return HandlerOutcome(newState, listOf(GameEvent.StatusExpired(target.id, effect.status)))
 }
 
+/**
+ * docs/18-damage-pipeline.md's 8-step pipeline, entirely synchronous within this one handler
+ * call — [hops] is a local variable, nothing about an in-progress retarget chain is persisted,
+ * since the whole chain (including any Split's spawned follow-up, which is a wholly separate
+ * DealDamage the resolver processes on its own later) resolves before this function returns.
+ *
+ * Ordering is the whole design (doc18's own words): retarget first so everything downstream reads
+ * the FINAL target's own defences, not the original's; scale before reduce so flat reduction
+ * doesn't itself get multiplied by resistance; absorb last before apply so a shield soaks the
+ * already-reduced number.
+ */
 private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog): HandlerOutcome {
-    val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
-    val health = target.health ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
-    if (health.current <= 0) return fizzle(state, effect, Rejection.TargetMissing(effect.target))
-
-    val resistance = target.stats(cat).resistances[effect.damageType] ?: Resistance.None
-    val finalAmount = when (resistance) {
-        Resistance.Immune -> 0
-        Resistance.Resistant -> effect.amount / 2
-        Resistance.Vulnerable -> effect.amount * 2
-        Resistance.None -> effect.amount
-    }
-    val newCurrent = (health.current - finalAmount).coerceAtLeast(0)
-    var newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
+    val originalTarget = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    val originalHealth = originalTarget.health ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    if (originalHealth.current <= 0) return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
     val events = mutableListOf<GameEvent>()
-    events += GameEvent.DamageTaken(target.id, finalAmount, effect.damageType)
+    val spawn = mutableListOf<Effect>()
+    var type = effect.damageType
+    var amount = effect.amount
+    val hops = mutableListOf(effect.target)
+    var currentTargetId = effect.target
+
+    // Step 1: Retarget / Split, up to 4 hops (doc18's loop-protection cap) — a Retarget onto an
+    // entity already in `hops` is skipped rather than looping forever between two mutual wards.
+    while (hops.size <= 4) {
+        val currentEntity = state.byId[currentTargetId] ?: break
+        val steps = collectDamageSteps(currentEntity, cat)
+        val redirect = steps.firstNotNullOfOrNull { sourced ->
+            when (val step = sourced.step) {
+                is DamageStep.Retarget -> {
+                    val refId = resolveStepRef(step.to, sourced.statusSourceId, effect.source)
+                    if (refId != null && refId !in hops && matchesStepCondition(step.condition, state, refId, currentEntity.pos, effect.tags)) {
+                        Triple(refId, null as Float?, sourced.statusDefId)
+                    } else {
+                        null
+                    }
+                }
+                is DamageStep.Split -> {
+                    val refId = resolveStepRef(step.to, sourced.statusSourceId, effect.source)
+                    if (refId != null && matchesStepCondition(step.condition, state, refId, currentEntity.pos, effect.tags)) {
+                        Triple(refId, step.fraction as Float?, sourced.statusDefId)
+                    } else {
+                        null
+                    }
+                }
+                else -> null
+            }
+        } ?: break
+
+        val (refId, splitFraction, statusDefId) = redirect
+        events += GameEvent.DamageRedirected(currentTargetId, refId, statusDefId)
+        if (splitFraction != null) {
+            // Split peels off a portion as an independent DealDamage (its own full pipeline, own
+            // hops) and leaves the rest on the current target un-retargeted — "share the pain,"
+            // not "hand it off entirely."
+            val splitAmount = (amount * splitFraction).roundToInt()
+            if (splitAmount > 0) {
+                spawn += Effect.DealDamage(refId, splitAmount, type, source = effect.source, tags = effect.tags)
+                amount -= splitAmount
+            }
+            break
+        } else {
+            currentTargetId = refId
+            hops += refId
+        }
+    }
+    if (hops.size > 4) return HandlerOutcome(state, events + GameEvent.Fizzled(effectLabel(effect), Rejection.Prevented), spawn)
+
+    val finalTarget = state.byId[currentTargetId] ?: return HandlerOutcome(state, events, spawn)
+    val finalHealth = finalTarget.health ?: return HandlerOutcome(state, events, spawn)
+    if (finalHealth.current <= 0) return HandlerOutcome(state, events, spawn)
+    val finalSteps = collectDamageSteps(finalTarget, cat)
+
+    // Step 2: Prevent.
+    val prevented = finalSteps.any { (it.step as? DamageStep.Prevent)?.let { p -> matchesStepCondition(p.condition, state, null, null, effect.tags) } == true }
+    if (prevented) return HandlerOutcome(state, events + GameEvent.Fizzled(effectLabel(effect), Rejection.Prevented), spawn)
+
+    // Step 3: Convert — first match wins, mirrors how step 1 resolves "the" Retarget.
+    finalSteps.firstNotNullOfOrNull { sourced ->
+        val step = sourced.step as? DamageStep.Convert ?: return@firstNotNullOfOrNull null
+        if (step.from == null || step.from == type) step.to else null
+    }?.let { type = it }
+
+    // Step 4: Scale. Resistance (Modifier.Resist -> Stats.resistances) is the baked-in scale doc18
+    // names explicitly; applied first via the exact old integer-division truncation so existing
+    // behavior/tests (which predate this pipeline) don't shift, then any content-authored Scale
+    // steps multiply on top as float factors.
+    val resistance = finalTarget.stats(cat).resistances[type] ?: Resistance.None
+    var scaled = when (resistance) {
+        Resistance.Immune -> 0
+        Resistance.Resistant -> amount / 2
+        Resistance.Vulnerable -> amount * 2
+        Resistance.None -> amount
+    }
+    var scaledF = scaled.toFloat()
+    finalSteps.forEach { sourced ->
+        val step = sourced.step as? DamageStep.Scale ?: return@forEach
+        if (step.onlyType == null || step.onlyType == type) scaledF *= step.factor
+    }
+    scaled = scaledF.roundToInt()
+
+    // Step 5: Reduce — every matching step sums, like Modifier.Add.
+    var totalReduce = 0
+    finalSteps.forEach { sourced ->
+        val step = sourced.step as? DamageStep.Reduce ?: return@forEach
+        if (step.onlyType == null || step.onlyType == type) totalReduce += step.flat
+    }
+    var remaining = (scaled - totalReduce).coerceAtLeast(0)
+
+    // Step 6: Absorb — Health.temp, doc18's only pool today.
+    var temp = finalHealth.temp
+    finalSteps.forEach { sourced ->
+        val step = sourced.step as? DamageStep.Absorb ?: return@forEach
+        if (remaining <= 0) return@forEach
+        val (newTemp, newRemaining) = step.pool.consume(temp, remaining)
+        temp = newTemp
+        remaining = newRemaining
+    }
+
+    // Step 7: Apply.
+    val newCurrent = (finalHealth.current - remaining).coerceAtLeast(0)
+    var newState = state.withEntity(finalTarget.id) { it.copy(health = it.health!!.copy(current = newCurrent, temp = temp)) }
+    events += GameEvent.DamageTaken(finalTarget.id, remaining, type)
     if (newCurrent == 0) {
-        events += GameEvent.Died(target.id)
-        events += GameEvent.Downed(target.id)
+        events += GameEvent.Died(finalTarget.id)
+        events += GameEvent.Downed(finalTarget.id)
     }
 
     // Damage triggers a CON save (or breaks unconditionally on death) for whichever entity is
     // concentrating, if any is — see docs/03-modifiers-and-status.md.
-    val linkId = target.concentrating
-    val spawn = if (linkId != null && newCurrent == 0) {
+    val linkId = finalTarget.concentrating
+    if (linkId != null && newCurrent == 0) {
         newState = breakConcentration(newState, linkId, events)
-        emptyList()
-    } else if (linkId != null && finalAmount > 0) {
-        listOf(Effect.ConcentrationCheck(target.id, dc = maxOf(10, finalAmount / 2)))
-    } else {
-        emptyList()
+    } else if (linkId != null && remaining > 0) {
+        spawn += Effect.ConcentrationCheck(finalTarget.id, dc = maxOf(10, remaining / 2))
     }
+
+    // Step 8: After — Reflect. Never for a DealDamage that is itself the product of a Reflect
+    // (Effect.fromReflect), or a thorns-on-thorns pair would loop forever the same way an
+    // unguarded mutual Retarget would.
+    if (!effect.fromReflect) {
+        val reflectSource = effect.source
+        if (reflectSource != null) {
+            finalSteps.forEach { sourced ->
+                val step = sourced.step as? DamageStep.Reflect ?: return@forEach
+                val reflectAmount = (remaining * step.fraction).roundToInt()
+                if (reflectAmount > 0) {
+                    spawn += Effect.DealDamage(reflectSource, reflectAmount, step.type ?: type, source = finalTarget.id, tags = effect.tags, fromReflect = true)
+                }
+            }
+        }
+    }
+
     return HandlerOutcome(newState, events, spawn)
 }
 
@@ -301,7 +438,7 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
     if (!hit) return HandlerOutcome(afterD20, listOf(rolledEvent))
 
     val (dmgValue, afterDamageRoll) = rollDice(afterD20, mode, effect.damage)
-    val spawn = listOf(Effect.DealDamage(effect.target, dmgValue.roundToInt(), effect.damageType, source = effect.attacker))
+    val spawn = listOf(Effect.DealDamage(effect.target, dmgValue.roundToInt(), effect.damageType, source = effect.attacker, tags = effect.tags))
     return HandlerOutcome(afterDamageRoll, listOf(rolledEvent), spawn)
 }
 
