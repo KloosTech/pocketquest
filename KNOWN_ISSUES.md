@@ -13,14 +13,14 @@ below. Its Tier 0 list maps onto #1-#11 almost exactly:
 | #1 (movement never animates) | not listed in doc17 | Fixed |
 | #2 (corpses/reserve units) | 0.1 | Fixed |
 | #3 (free reactions) | 0.2 | Fixed |
-| #4 (`reactedTo` dedup) | 0.3 | Open |
-| #5 (reaction depth) | 0.4 | Open (5a is a kept tradeoff, 5b needs a fix) |
-| #6 (`ActionStarted` bypasses triggers) | 0.5 | Open |
+| #4 (`reactedTo` dedup) | 0.3 | Fixed |
+| #5 (reaction depth) | 0.4 | 5a kept as a documented tradeoff, 5b Fixed |
+| #6 (`ActionStarted` bypasses triggers) | 0.5 | Fixed |
 | #7 (turn boundary) | 0.6 | Fixed |
-| #8 (`answererFor` null-controller stall) | 0.7 | Open |
-| #9 (`Fizzled` uses `class.simpleName`) | 0.8 | Open |
-| #10 (Expected-mode contradictions) | 0.9 | Open |
-| #11 (`Modifier.Roll` dead code) | 0.10 | Open |
+| #8 (`answererFor` null-controller stall) | 0.7 | Fixed |
+| #9 (`Fizzled` uses `class.simpleName`) | 0.8 | Fixed |
+| #10 (Expected-mode contradictions) | 0.9 | Fixed |
+| #11 (`Modifier.Roll` dead code) | 0.10 | Open — needs a design pass, see below |
 
 Status legend:
 
@@ -161,7 +161,15 @@ minimum a mana check) before spawning `spend + instantiated` — either a
 
 ## 4. `reactedTo` dedups on structural equality of the event
 
-**Status: Confirmed (scope corrected).**
+**Status: Fixed.** `ReactedKey` gained a `version: Long` field, populated
+from `state.version` wherever a `ReactedKey` is constructed
+(`collectTriggers`, both the filter and the insert). Two structurally-
+identical events for the same entity at different `state.version`s no
+longer collide. Regression tests:
+`ReactionsTest.collectTriggersStillDedupsTheSameEventAtTheSameStateVersion`
+and `...OffersAgainForAStructurallyIdenticalEventAtALaterStateVersion`.
+
+**Status (original finding): Confirmed (scope corrected).**
 
 `ReactedKey(val who: EntityId, val event: GameEvent)`
 (`Reactions.kt:23`) uses the raw `GameEvent` data class for equality.
@@ -199,7 +207,13 @@ moment of the event is already threaded everywhere and would work.
 
 ## 5. Reaction depth: counts total waves, not nesting, and doesn't throw at the limit
 
-**Status: two sub-findings, different severity.**
+**Status: 5b Fixed, 5a kept as-is (see below).** `collectTriggers` now
+`check(depth < MAX_REACTION_DEPTH) { ... }` — throws `IllegalStateException`
+matching doc09's spec, instead of silently returning no offers. The
+existing unit test was renamed/rewritten to
+`collectTriggersThrowsAtMaxDepth` (`assertFailsWith`).
+
+**Status (original finding): two sub-findings, different severity.**
 
 **5a — `depth` is a per-run() wave counter, not nesting depth.** This part
 is a **deliberate, already-documented tradeoff**, not a fresh oversight —
@@ -241,7 +255,15 @@ MAX_REACTION_DEPTH) { ... }` (throw) to match doc09, and update
 
 ## 6. Counterspell (or any `ActionStarted` reaction) can never fire
 
-**Status: Confirmed.**
+**Status: Fixed.** `perform()`/`preview()` now route `ActionStarted`
+through `collectTriggers` explicitly (a new shared `buildInitial()`
+helper in `Perform.kt`) before the action's own stack (cost + effects) is
+even pushed — a matching reaction resolves before the caster pays or the
+action's effects run, matching real Counterspell timing. Regression
+tests: `PerformTest.aCounterspellShapedReactionToActionStartedFires` and
+`...previewAlsoSeesAnActionStartedReaction`.
+
+**Status (original finding): Confirmed.**
 
 `perform()` (`Perform.kt:36`):
 
@@ -330,7 +352,18 @@ shrink at runtime.
 
 ## 8. `answererFor` stalls the resolver for a controller-less entity
 
-**Status: Confirmed** (doc17 0.7).
+**Status: Fixed.** Added `Answerer.NeverReacts`, returned directly when
+`entity.actor == null` (checked before ever looking at `.controller`, so
+there's no nullable-chain collapse with a genuine `Controller.Human` to
+conflate anymore). `offerReaction` handles it as a no-op — no `Ask`, no
+`AwaitingInput` — while `ReactionTriggered` still fires (the opportunity
+was still evaluated, just never answered). Regression tests:
+`ReactionsTest.answererForReturnsNeverReactsWhenEntityHasNoActor` and
+`...aReactionOfferedToAnActorlessEntityResolvesInlineInsteadOfStalling`
+(the latter runs a real `run()` and asserts `Completed`, not
+`AwaitingInput`).
+
+**Status (original finding): Confirmed** (doc17 0.7).
 
 ```kotlin
 fun answererFor(entity: Entity): Answerer = when (val controller = entity.actor?.controller) {
@@ -366,7 +399,15 @@ exists; until then, a minimal third `Answerer` case suffices.
 
 ## 9. `Fizzled` events use `effect::class.simpleName`, which R8 renames
 
-**Status: Confirmed** (doc17 0.8).
+**Status: Fixed.** `fizzle()` now derives the label from the effect's own
+polymorphic `@SerialName` (via `Json.encodeToJsonElement` and reading the
+`"type"` discriminator field) instead of `effect::class.simpleName`. The
+`@SerialName` is a compile-time string baked into the generated
+serializer — immune to R8 renaming by construction, not by convention.
+`:core:rules` gained a `kotlinx-serialization-json` `commonMain`
+dependency (previously test-only) to do this.
+
+**Status (original finding): Confirmed** (doc17 0.8).
 
 ```kotlin
 private fun fizzle(state: GameState, effect: Effect, reason: Rejection): HandlerOutcome =
@@ -396,7 +437,25 @@ minification.
 
 ## 10. Expected-mode previews can report a self-contradictory roll, and ignore advantage entirely
 
-**Status: Confirmed** (doc17 0.9).
+**Status: Fixed.** `rollD20` now returns `Int`, not `Double` — Live mode
+already had an exact integer from `RngState.d20()`; Expected mode now
+rounds once, immediately, via a new `expectedD20(advantage)` that also
+finally reads the `advantage` parameter instead of ignoring it: Normal
+11 (from 10.5), Advantage 14 (from the true E[max(X,Y)]=13.825, not
+10.5), Disadvantage 7 (from E[min(X,Y)]=7.175). `rollAttack`/`rollSave`/
+`concentrationCheck` all use that single rounded value for both the
+hit/success decision and the recorded event field, so the two can no
+longer disagree. One existing test (`FlagshipScenarioTest`) had a
+concentration check hand-tuned to fail against the old raw 10.5 that sat
+exactly on the new rounded boundary (con 8, mod −1: old `10.5−1=9.5<10`
+fails; new `11−1=10≥10` flips to succeeds) — adjusted to con 6 (mod −2)
+for a comfortable margin under the corrected rounding, preserving the
+scenario's actual narrative intent (a failed check breaking
+concentration). Regression tests:
+`RollEffectTest.expectedModeHitDecisionAgreesWithTheRecordedD20AtTheRoundingBoundary`
+and `...ReflectsAdvantageAndDisadvantageInsteadOfAlwaysNormal`.
+
+**Status (original finding): Confirmed** (doc17 0.9).
 
 ```kotlin
 private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): Pair<Double, GameState> = when (mode) {

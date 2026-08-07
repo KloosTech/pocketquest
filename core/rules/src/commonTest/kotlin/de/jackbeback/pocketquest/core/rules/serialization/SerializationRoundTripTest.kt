@@ -90,7 +90,7 @@ class SerializationRoundTripTest {
             emitted = listOf(GameEvent.MoveStepped(s.id("hero"), GridPos(0, 0), GridPos(1, 0))),
             steps = 3,
             depth = 1,
-            reactedTo = setOf(ReactedKey(s.id("goblin"), triggerEvent)),
+            reactedTo = setOf(ReactedKey(s.id("goblin"), triggerEvent, s.state.version)),
         )
 
         val encoded = json.encodeToString(Resolver.serializer(), resolver)

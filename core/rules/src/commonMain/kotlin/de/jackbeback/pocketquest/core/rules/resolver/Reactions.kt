@@ -18,19 +18,36 @@ import kotlinx.serialization.Serializable
 /** Reaction chains trigger reactions — this bounds it. Two creatures with mutually-triggering reactions loop forever without it. */
 const val MAX_REACTION_DEPTH = 8
 
-/** Tracks "entity X was already offered a reaction to event Y" — dedup is by structural equality on the event itself, see the pass-4 commit. */
+/**
+ * Tracks "entity X was already offered a reaction to event Y". `version` — `state.version` at the
+ * moment the event was collected — disambiguates two structurally-identical events for the same
+ * entity at different points within one resolver run; dedup on `(who, event)` alone would treat a
+ * second, later occurrence of an equal event as the same offer and silently skip it
+ * (KNOWN_ISSUES.md #4).
+ */
 @Serializable
-data class ReactedKey(val who: EntityId, val event: GameEvent)
+data class ReactedKey(val who: EntityId, val event: GameEvent, val version: Long)
 
 sealed interface Answerer {
     data object HumanUi : Answerer
     data class Ai(val profile: AiProfileId) : Answerer
+
+    /**
+     * No `actor` at all — a wall, hazard, or other non-combatant. Never answers. Distinct from
+     * `HumanUi` on purpose: offering a reaction to an actor-less entity used to fall into
+     * `HumanUi` and push `Effect.Ask`, parking the resolver in `AwaitingInput` forever waiting for
+     * a decision nobody can make (KNOWN_ISSUES.md #8).
+     */
+    data object NeverReacts : Answerer
     // Auto(rule) from docs/04 omitted — no AutoRule content exists to drive it yet.
 }
 
-fun answererFor(entity: Entity): Answerer = when (val controller = entity.actor?.controller) {
-    is Controller.Ai -> Answerer.Ai(controller.profile)
-    is Controller.Human, null -> Answerer.HumanUi
+fun answererFor(entity: Entity): Answerer {
+    val actor = entity.actor ?: return Answerer.NeverReacts
+    return when (val controller = actor.controller) {
+        is Controller.Ai -> Answerer.Ai(controller.profile)
+        is Controller.Human -> Answerer.HumanUi
+    }
 }
 
 fun GameEvent.kind(): ReactionTriggerKind = when (this) {
@@ -123,6 +140,12 @@ fun matchingReaction(reactor: Entity, event: GameEvent, cat: Catalog): ActionId?
  * EntityId, the depth guard, and one-offer-per-entity-per-event are all
  * load-bearing — see the doc. Returns the updated `alreadyReacted` set
  * alongside the offers so the caller can thread it through the resolver.
+ *
+ * The depth guard throws rather than returning no offers — doc09 specifies
+ * "throw rather than hang" for a mutually-triggering reaction pair, and a
+ * silent empty return here is exactly the failure mode doc04's guard-rail
+ * philosophy (MAX_STEPS, a stale resume() id) exists to avoid. See
+ * KNOWN_ISSUES.md #5b.
  */
 fun collectTriggers(
     state: GameState,
@@ -131,20 +154,20 @@ fun collectTriggers(
     cat: Catalog,
     alreadyReacted: Set<ReactedKey>,
 ): Pair<List<Effect>, Set<ReactedKey>> {
-    if (depth >= MAX_REACTION_DEPTH) return emptyList<Effect>() to alreadyReacted
+    check(depth < MAX_REACTION_DEPTH) { "reaction depth exceeded MAX_REACTION_DEPTH=$MAX_REACTION_DEPTH — likely a mutual-reaction loop" }
 
     var reacted = alreadyReacted
     val offers = mutableListOf<Effect>()
 
     for (event in events) {
         val reactors = state.entities
-            .filter { ReactedKey(it.id, event) !in reacted }
+            .filter { ReactedKey(it.id, event, state.version) !in reacted }
             .sortedWith(compareBy({ state.turn.order.indexOf(it.id) }, { it.id.raw }))
 
         for (reactor in reactors) {
             val actionId = matchingReaction(reactor, event, cat) ?: continue
             offers += Effect.OfferReaction(event, reactor.id, actionId)
-            reacted = reacted + ReactedKey(reactor.id, event)
+            reacted = reacted + ReactedKey(reactor.id, event, state.version)
         }
     }
 

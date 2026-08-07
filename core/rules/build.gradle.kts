@@ -35,6 +35,10 @@ kotlin {
             // directly in :core:rules' own public API, so consumers (like :data) need them too.
             api(projects.core.model)
             implementation(libs.kotlinx.serialization.core)
+            // Used by fizzle() to derive a Fizzled event's effect label from the effect's own
+            // polymorphic @SerialName rather than effect::class.simpleName, which R8 renames in
+            // release builds — see KNOWN_ISSUES.md #9.
+            implementation(libs.kotlinx.serialization.json)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

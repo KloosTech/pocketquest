@@ -28,6 +28,10 @@ import de.jackbeback.pocketquest.core.rules.action.instantiate
 import de.jackbeback.pocketquest.core.rules.d20
 import de.jackbeback.pocketquest.core.rules.matches
 import de.jackbeback.pocketquest.core.rules.resolveAdvantage
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.encodeToJsonElement
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import de.jackbeback.pocketquest.core.rules.roll
 import de.jackbeback.pocketquest.core.rules.stat.stats
 import kotlin.math.roundToInt
@@ -71,12 +75,33 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
  * — see [RngMode]. Returned as Double so both callers (hit/miss comparison,
  * damage totals) share one code path regardless of mode.
  */
-private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): Pair<Double, GameState> = when (mode) {
+/**
+ * Returns an `Int`, not the `Double` it used to — Expected mode's raw expectation (10.5 for
+ * Normal) was rounded separately for the recorded `d20` event field but compared unrounded for
+ * the hit/success decision, so the two could disagree (KNOWN_ISSUES.md #10). Rounding once, here,
+ * and using that single value for both eliminates the whole class of bug. Also fixes Expected
+ * mode ignoring `advantage` entirely: it used to always return 10.5 regardless, understating the
+ * true expected value of an advantaged roll (which is measurably higher) in every AI/preview
+ * evaluation.
+ */
+private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): Pair<Int, GameState> = when (mode) {
     RngMode.Live -> {
         val (next, value) = state.rng.d20(advantage)
-        value.toDouble() to state.copy(rng = next)
+        value to state.copy(rng = next)
     }
-    RngMode.Expected -> 10.5 to state
+    RngMode.Expected -> expectedD20(advantage) to state
+}
+
+/**
+ * True expected value of a d20 under the given roll mode, rounded to the nearest integer (ties
+ * toward positive infinity, matching Kotlin's `roundToInt`): Normal E[X]=10.5 -> 11. Advantage
+ * E[max(X,Y)] for X,Y ~ Uniform{1..20} = (2*sum(k^2) - sum(k))/400 = 13.825 -> 14. Disadvantage
+ * E[min(X,Y)] = 21 - E[max] = 7.175 -> 7.
+ */
+private fun expectedD20(advantage: RollMode): Int = when (advantage) {
+    RollMode.Normal -> 11
+    RollMode.Advantage -> 14
+    RollMode.Disadvantage -> 7
 }
 
 private fun rollDice(state: GameState, mode: RngMode, spec: DiceSpec): Pair<Double, GameState> = when (mode) {
@@ -93,8 +118,19 @@ private fun rollDice(state: GameState, mode: RngMode, spec: DiceSpec): Pair<Doub
 private fun GameState.withEntity(id: EntityId, transform: (Entity) -> Entity): GameState =
     copy(entities = entities.map { if (it.id == id) transform(it) else it }, version = version + 1)
 
+/**
+ * The effect's own polymorphic discriminator (its `@SerialName`, e.g. `"dealDamage"`), not
+ * `effect::class.simpleName` — R8/ProGuard renames Kotlin classes in release builds, so the
+ * simpleName would turn into an obfuscated identifier there while every debug run and test stays
+ * readable, hiding the break until production (KNOWN_ISSUES.md #9). The `@SerialName` is a
+ * compile-time string baked into the generated serializer, immune to minification by design —
+ * exactly why every Effect subtype already carries one.
+ */
+private fun effectLabel(effect: Effect): String =
+    Json.encodeToJsonElement(Effect.serializer(), effect).jsonObject["type"]?.jsonPrimitive?.content ?: "Effect"
+
 private fun fizzle(state: GameState, effect: Effect, reason: Rejection): HandlerOutcome =
-    HandlerOutcome(state, events = listOf(GameEvent.Fizzled(effect::class.simpleName ?: "Effect", reason)))
+    HandlerOutcome(state, events = listOf(GameEvent.Fizzled(effectLabel(effect), reason)))
 
 private fun heal(state: GameState, effect: Effect.Heal, cat: Catalog): HandlerOutcome {
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
@@ -234,7 +270,7 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
     val rolledEvent = GameEvent.AttackRolled(
         attacker = attacker.id,
         target = target.id,
-        d20 = rollValue.roundToInt(),
+        d20 = rollValue,
         mod = effect.attackBonus,
         ac = ac,
         hit = hit,
@@ -258,7 +294,7 @@ private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mo
     val rolledEvent = GameEvent.SaveRolled(
         target = target.id,
         ability = effect.ability,
-        d20 = rollValue.roundToInt(),
+        d20 = rollValue,
         mod = mod,
         dc = effect.dc,
         success = success,
@@ -294,6 +330,9 @@ private fun offerReaction(state: GameState, effect: Effect.OfferReaction, cat: C
         // a special case inside it") — AI always accepts an available reaction. Proves the resolver
         // mechanism (inline resolution, never AwaitingInput for AI) without inventing AI judgement.
         is Answerer.Ai -> acceptReaction(state, effect.who, effect.actionId, effect.trigger, cat)
+        // No actor at all — nothing to ask, nothing to decide. ReactionTriggered still fires below
+        // (it means "this opportunity was evaluated", regardless of who — or whether anyone — answers).
+        Answerer.NeverReacts -> HandlerOutcome(state)
     }
     return outcome.copy(events = listOf(triggeredEvent) + outcome.events)
 }
@@ -369,7 +408,7 @@ private fun concentrationCheck(state: GameState, effect: Effect.ConcentrationChe
     val (rollValue, afterRoll) = rollD20(state, mode, RollMode.Normal)
     val success = rollValue + mod >= effect.dc
 
-    val events = mutableListOf<GameEvent>(GameEvent.ConcentrationCheckRolled(who.id, effect.dc, rollValue.roundToInt(), mod, success))
+    val events = mutableListOf<GameEvent>(GameEvent.ConcentrationCheckRolled(who.id, effect.dc, rollValue, mod, success))
     var working = afterRoll
     if (!success) working = breakConcentration(working, linkId, events)
     return HandlerOutcome(working, events)

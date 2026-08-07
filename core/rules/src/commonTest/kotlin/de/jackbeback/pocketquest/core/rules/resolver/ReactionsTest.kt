@@ -17,6 +17,7 @@ import de.jackbeback.pocketquest.core.model.ReactionTriggerKind
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertNotNull
@@ -91,6 +92,32 @@ class ReactionsTest {
         assertNull(matchingReaction(dead, event, s.catalog))
     }
 
+    // --- answererFor / KNOWN_ISSUES.md #8 ---
+
+    @Test
+    fun answererForReturnsNeverReactsWhenEntityHasNoActor() {
+        val s = opportunityAttackScenario()
+        val noActor = s.entity("fighter").copy(actor = null)
+        assertEquals(Answerer.NeverReacts, answererFor(noActor))
+    }
+
+    @Test
+    fun aReactionOfferedToAnActorlessEntityResolvesInlineInsteadOfStalling() {
+        val s = opportunityAttackScenario()
+        val stateWithoutActor = s.state.copy(
+            entities = s.state.entities.map { if (it.id == s.id("fighter")) it.copy(actor = null) else it },
+        )
+        val move = Effect.MoveAlong(s.id("runner"), listOf(GridPos(2, 0)))
+        val result = run(Resolver(stateWithoutActor, stack = listOf(move)), s.catalog)
+
+        val completed = assertCompleted(result)
+        assertTrue(completed.resolver.emitted.none { it is GameEvent.AttackRolled }, "an actor-less entity cannot react")
+        assertTrue(
+            completed.resolver.emitted.contains(GameEvent.ReactionTriggered(s.id("fighter"), ActionId("oppAttack"))),
+            "the opportunity is still evaluated and reported, just never answered",
+        )
+    }
+
     // --- collectTriggers (ordering, depth guard, dedup) ---
 
     @Test
@@ -117,20 +144,43 @@ class ReactionsTest {
     }
 
     @Test
-    fun collectTriggersReturnsNothingAtMaxDepth() {
+    fun collectTriggersThrowsAtMaxDepth() {
         val s = opportunityAttackScenario()
         val event = GameEvent.MoveStepped(s.id("runner"), GridPos(1, 0), GridPos(2, 0))
-        val (offers, _) = collectTriggers(s.state, listOf(event), depth = MAX_REACTION_DEPTH, cat = s.catalog, alreadyReacted = emptySet())
-        assertTrue(offers.isEmpty())
+        assertFailsWith<IllegalStateException> {
+            collectTriggers(s.state, listOf(event), depth = MAX_REACTION_DEPTH, cat = s.catalog, alreadyReacted = emptySet())
+        }
     }
 
     @Test
     fun collectTriggersNeverOffersTheSameEntityTwiceForTheSameEvent() {
         val s = opportunityAttackScenario()
         val event = GameEvent.MoveStepped(s.id("runner"), GridPos(1, 0), GridPos(2, 0))
-        val alreadyReacted = setOf(ReactedKey(s.id("fighter"), event))
+        val alreadyReacted = setOf(ReactedKey(s.id("fighter"), event, s.state.version))
         val (offers, _) = collectTriggers(s.state, listOf(event), depth = 0, cat = s.catalog, alreadyReacted = alreadyReacted)
         assertTrue(offers.isEmpty())
+    }
+
+    @Test
+    fun collectTriggersStillDedupsTheSameEventAtTheSameStateVersion() {
+        val s = opportunityAttackScenario()
+        val event = GameEvent.MoveStepped(s.id("runner"), GridPos(1, 0), GridPos(2, 0))
+        val (_, reacted) = collectTriggers(s.state, listOf(event), depth = 0, cat = s.catalog, alreadyReacted = emptySet())
+        val (offers, _) = collectTriggers(s.state, listOf(event), depth = 0, cat = s.catalog, alreadyReacted = reacted)
+        assertTrue(offers.isEmpty(), "the same event at the same state.version must still be deduped")
+    }
+
+    @Test
+    fun collectTriggersOffersAgainForAStructurallyIdenticalEventAtALaterStateVersion() {
+        val s = opportunityAttackScenario()
+        val event = GameEvent.MoveStepped(s.id("runner"), GridPos(1, 0), GridPos(2, 0))
+        val (_, reacted) = collectTriggers(s.state, listOf(event), depth = 0, cat = s.catalog, alreadyReacted = emptySet())
+
+        // Same event VALUE, but the world has moved on — dedup by event equality alone would
+        // wrongly treat this as the same offer and skip it (KNOWN_ISSUES.md #4).
+        val laterState = s.state.copy(version = s.state.version + 1)
+        val (offers, _) = collectTriggers(laterState, listOf(event), depth = 0, cat = s.catalog, alreadyReacted = reacted)
+        assertEquals(1, offers.size, "a structurally-identical event at a later state.version must still be offered")
     }
 
     // --- full resolver integration ---

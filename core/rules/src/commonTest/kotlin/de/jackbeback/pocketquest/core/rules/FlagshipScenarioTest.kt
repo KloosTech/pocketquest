@@ -50,7 +50,11 @@ class FlagshipScenarioTest {
             map(10, 10)
             seed(1)
 
-            archetype("wizard") { hp = 18; ac = 12; ap = 2; mana = 9; abilities(con = 8, dex = 14) }
+            // con=6 (mod -2), not 8 (mod -1): the concentration check below must fail with a clear
+            // margin under Expected mode's rounded d20 (11, not the old raw 10.5) — see
+            // KNOWN_ISSUES.md #10. At con=8 (mod -1) the check sat exactly on the new boundary
+            // (11-1=10 >= dc 10) and flipped to a success, which this scenario isn't testing for.
+            archetype("wizard") { hp = 18; ac = 12; ap = 2; mana = 9; abilities(con = 6, dex = 14) }
             archetype("goblinWarrior") { hp = 7; ac = 15; ap = 2; abilities(dex = 18); actions("oppAttack") }
             archetype("goblinWeak") { hp = 7; ac = 13; abilities(dex = 10) }
             archetype("ally") { hp = 10 }

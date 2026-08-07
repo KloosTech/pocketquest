@@ -182,4 +182,42 @@ class RollEffectTest {
         val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
         assertEquals(11, rolled.d20) // 10.5 rounds half-up
     }
+
+    // --- KNOWN_ISSUES.md #10 ---
+
+    @Test
+    fun expectedModeHitDecisionAgreesWithTheRecordedD20AtTheRoundingBoundary() {
+        // Expected mode used to decide hit/success against the unrounded 10.5 while separately
+        // rounding the recorded d20 to 11 for the event — an ac of exactly 11 used to come out
+        // hit=false (10.5 < 11) even though the recorded d20 (11) + mod (0) >= ac (11) says it
+        // should have hit. Both must now agree, because both now come from the same rounded value.
+        val s = scenario {
+            archetype("dummy") { hp = 10; ac = 11 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(10) }
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, damage = DiceSpec(1, 4, 0), damageType = DamageType.Fire)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
+        assertEquals(11, rolled.d20)
+        assertTrue(rolled.hit, "recorded d20 (11) + mod (0) >= ac (11) must agree with the hit flag")
+    }
+
+    @Test
+    fun expectedModeReflectsAdvantageAndDisadvantageInsteadOfAlwaysNormal() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(10) }
+        }
+        fun d20For(advantage: Set<AdvSide>): Int {
+            val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, advantage = advantage, damage = DiceSpec(1, 4, 0), damageType = DamageType.Fire)
+            val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+            return (out.events.single() as GameEvent.AttackRolled).d20
+        }
+        assertEquals(11, d20For(emptySet()), "Normal: E[X]=10.5 -> 11")
+        assertEquals(14, d20For(setOf(AdvSide.Advantage)), "Advantage: E[max(X,Y)]=13.825 -> 14, not always 10.5")
+        assertEquals(7, d20For(setOf(AdvSide.Disadvantage)), "Disadvantage: E[min(X,Y)]=7.175 -> 7, not always 10.5")
+    }
 }

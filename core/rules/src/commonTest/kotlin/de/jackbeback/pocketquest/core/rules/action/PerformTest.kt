@@ -10,6 +10,7 @@ import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Range
 import de.jackbeback.pocketquest.core.model.Ref
+import de.jackbeback.pocketquest.core.model.ReactionTriggerKind
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.TargetMode
@@ -94,5 +95,58 @@ class PerformTest {
         val resultB = assertIs<StepResult.Completed>(perform(s.state, s.id("hero"), ActionId("stab"), ctx, s.catalog))
         assertEquals(resultA.resolver.emitted, resultB.resolver.emitted)
         assertEquals(resultA.resolver.state, resultB.resolver.state)
+    }
+
+    // --- KNOWN_ISSUES.md #6: ActionStarted must reach collectTriggers ---
+
+    private fun counterspellScenario() = scenario {
+        map(10, 10)
+        seed(1)
+        archetype("caster") { hp = 20; ap = 2; mana = 5; actions("firebolt") }
+        archetype("interrupter") { hp = 20; ap = 2; mana = 5; actions("counterspell") }
+        entity("caster") { archetype("caster"); at(0, 0); hp(20); ap(2); mana(5) }
+        entity("interrupter") { archetype("interrupter"); at(1, 0); hp(20); ap(2); mana(5); ai() }
+        initiative("caster", "interrupter")
+        actionDef("firebolt") {
+            cost(ActionCost.Main, mana = 3)
+            targeting(TargetMode.SelfOnly, Range.SelfRange, Shape.Single)
+            effect(EffectTemplate.DealDamage(Ref.Caster, amount = 1, damageType = DamageType.Fire)) // a harmless self-tick, just so firebolt has SOME effect
+        }
+        actionDef("counterspell") {
+            cost(ActionCost.Reaction, mana = 3)
+            targeting(TargetMode.SingleEntity, Range.Tiles(5), Shape.Single)
+            reactionTrigger(ReactionTriggerKind.ActionStarted)
+            effect(EffectTemplate.RollAttack(Ref.Caster, Ref.EachTarget, attackBonus = 999, damage = DiceSpec(1, 4, 0), damageType = DamageType.Force))
+        }
+    }
+
+    @Test
+    fun aCounterspellShapedReactionToActionStartedFires() {
+        val s = counterspellScenario()
+        val ctx = ActionCtx(s.id("caster"), targets = listOf(s.id("caster")), point = GridPos(0, 0))
+        val result = perform(s.state, s.id("caster"), ActionId("firebolt"), ctx, s.catalog)
+
+        val completed = assertIs<StepResult.Completed>(result)
+        val events = completed.resolver.emitted
+        assertTrue(
+            events.contains(GameEvent.ReactionTriggered(s.id("interrupter"), ActionId("counterspell"))),
+            "the interrupter must be offered a reaction to ActionStarted",
+        )
+        assertTrue(events.any { it is GameEvent.AttackRolled }, "the counterspell's own effect must actually resolve, not just be offered")
+
+        // The reaction is placed ahead of the interrupted action's own stack — it resolves before
+        // the caster even pays firebolt's cost, matching real Counterspell timing (interrupts the
+        // instant casting begins).
+        val reactionAttackIndex = events.indexOfFirst { it is GameEvent.AttackRolled }
+        val casterResourcesSpentIndex = events.indexOfFirst { it is GameEvent.ResourcesSpent && it.who == s.id("caster") }
+        assertTrue(reactionAttackIndex < casterResourcesSpentIndex, "the counterspell must resolve before the caster pays firebolt's cost")
+    }
+
+    @Test
+    fun previewAlsoSeesAnActionStartedReaction() {
+        val s = counterspellScenario()
+        val ctx = ActionCtx(s.id("caster"), targets = listOf(s.id("caster")), point = GridPos(0, 0))
+        val result = preview(s.state, s.id("caster"), ActionId("firebolt"), ctx, s.catalog)
+        assertTrue(result.events.any { it is GameEvent.AttackRolled }, "preview must run through the same trigger pipeline as perform()")
     }
 }
