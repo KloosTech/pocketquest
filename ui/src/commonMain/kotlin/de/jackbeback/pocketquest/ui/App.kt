@@ -132,10 +132,11 @@ private fun InkButton(label: String, modifier: Modifier = Modifier, onClick: () 
  * not just the party, belongs here), the active one ringed. No tap-to-inspect yet (doc15's
  * Inspect state isn't built), so these tokens are read-only for now. [onCenterOnActive] is doc15's
  * Camera section's own explicit ask: "a 'centre on active' button in the turn strip for when the
- * player has panned away."
+ * player has panned away." [onOpenLog] is doc15's battle log ask: "reachable from the turn strip" —
+ * placed at the strip's own trailing end, past every turn token, per the user's explicit request.
  */
 @Composable
-private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, onCenterOnActive: () -> Unit, modifier: Modifier = Modifier) {
+private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, onCenterOnActive: () -> Unit, onOpenLog: () -> Unit, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier.fillMaxWidth().height(56.dp).background(PAPER_SHEET).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -158,6 +159,8 @@ private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, onCen
                 Box(Modifier.size(22.dp).background((colors[id] ?: Color.Gray).copy(alpha = if (alive) 1f else 0.3f), CircleShape))
             }
         }
+        Spacer(modifier = Modifier.weight(1f))
+        InkButton("☰", onClick = onOpenLog)
     }
 }
 
@@ -221,6 +224,47 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
     }
     Spacer(modifier = Modifier.size(12.dp))
     InkButton("Back", onClick = onBack)
+}
+
+/**
+ * doc15's battle log: "reachable from the turn strip," full-screen so it reads as its own place
+ * rather than squeezed into the Peek sheet. The background `clickable` with no action is there
+ * purely to consume taps — without it, a tap on this panel would fall through to the board/sheet
+ * underneath, since a plain `background()` doesn't claim pointer input on its own.
+ */
+@Composable
+private fun CombatLogPanel(log: List<LogEntry>, onClose: () -> Unit) {
+    // Resets to newest-first each time the panel reopens — a per-session display preference, not
+    // state worth persisting across opens.
+    var newestFirst by remember { mutableStateOf(true) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(PAPER)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {},
+    ) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                BasicText("Battle Log", style = TextStyle(color = INK, fontSize = 18.sp))
+                Spacer(modifier = Modifier.weight(1f))
+                InkButton("Close", onClick = onClose)
+            }
+            // The list is stored newest-first (each event is prepended) — spelled out explicitly
+            // rather than left implicit, since "top vs bottom = newest" isn't a universal log
+            // convention. Clickable to flip the displayed order without re-fetching anything.
+            BasicText(
+                if (newestFirst) "▾ newest first" else "▴ oldest first",
+                modifier = Modifier
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { newestFirst = !newestFirst },
+                style = TextStyle(color = INK_FAINT, fontSize = 11.sp),
+            )
+            Spacer(modifier = Modifier.size(12.dp))
+            val displayed = if (newestFirst) log else log.asReversed()
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                items(displayed) { entry -> BasicText(entry.text, style = TextStyle(color = entry.category.color(), fontSize = 13.sp)) }
+            }
+        }
+    }
 }
 
 /**
@@ -414,7 +458,8 @@ fun App(initialState: GameState, catalog: Catalog) {
     val world = remember { VisualWorld(initialState, TILE_PX) }
     val player = remember { AnimationPlayer(world) }
     val colors = remember(initialState) { initialState.entities.associate { it.id to colorFor(it.actor?.faction) } }
-    val log = remember { mutableStateListOf<String>() }
+    val log = remember { mutableStateListOf<LogEntry>() }
+    var logOpen by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf<Selection>(Selection.None) }
     var inspected by remember { mutableStateOf<EntityId?>(null) }
     var sheetExpanded by remember { mutableStateOf(true) }
@@ -476,7 +521,10 @@ fun App(initialState: GameState, catalog: Catalog) {
 
     suspend fun applyStep(result: StepResult): Boolean = when (result) {
         is StepResult.Completed -> {
-            result.resolver.emitted.forEach { log.add(0, it.toString()) }
+            // Formatted against the PRE-update `state` — fine for entity-name resolution (archetype
+            // never changes mid-encounter), and the only state that's actually in scope here; the
+            // resolver's own final state isn't assigned to `state` until after this loop.
+            result.resolver.emitted.forEach { event -> formatEvent(event, state, catalog)?.let { log.add(0, it) } }
             player.enqueue(result.resolver.emitted.flatMap { choreograph(it) })
             player.awaitDrained()
             world.settle(result.resolver.state)
@@ -484,14 +532,14 @@ fun App(initialState: GameState, catalog: Catalog) {
             true
         }
         is StepResult.Rejected -> {
-            log.add(0, "rejected: ${result.reasons}")
+            log.add(0, LogEntry("rejected: ${result.reasons}", LogCategory.Blocked))
             false
         }
         is StepResult.AwaitingInput -> {
             // A human-facing reaction prompt isn't built yet — no Reaction-cost action exists in
             // the demo catalog, so this never actually fires; logged rather than silently dropped
             // in case content changes that.
-            log.add(0, "awaiting a decision (not supported yet): ${result.request}")
+            log.add(0, LogEntry("awaiting a decision (not supported yet): ${result.request}", LogCategory.Info))
             false
         }
     }
@@ -523,6 +571,7 @@ fun App(initialState: GameState, catalog: Catalog) {
     val active = activeId?.let { state.byId[it] }
     val isHumanTurn = active?.actor?.controller is Controller.Human
 
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
         TurnOrderStrip(
             state,
@@ -531,6 +580,7 @@ fun App(initialState: GameState, catalog: Catalog) {
                 val pos = active?.pos ?: return@TurnOrderStrip
                 scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
             },
+            onOpenLog = { logOpen = true },
         )
         // doc15: the board is a flex viewport (pan+zoom, culled), not sized to the map. BoxWithConstraints
         // gives Board's Canvas an explicit dp size matching the available space, rather than
@@ -687,11 +737,13 @@ fun App(initialState: GameState, catalog: Catalog) {
                     }
                 }
             }
+        }
+    }
 
-            Spacer(modifier = Modifier.size(12.dp))
-            LazyColumn(modifier = Modifier.heightIn(max = 120.dp)) {
-                items(log) { line -> BasicText(line, style = TextStyle(color = INK_FAINT, fontSize = 11.sp)) }
-            }
+        // doc15: "reachable from the turn strip" — a dedicated full-screen panel (☰ button above),
+        // not squeezed inline into the Peek sheet alongside the action bar anymore.
+        if (logOpen) {
+            CombatLogPanel(log, onClose = { logOpen = false })
         }
     }
 }
