@@ -1,7 +1,28 @@
 # Known issues
 
-Tracked findings from an external spec-analysis pass, each independently
-verified against the current code (not taken on faith). Status legend:
+Tracked findings from an external spec-analysis pass (#1-#7) plus
+`docs/17-engine-gaps.md`'s Tier 0 (#8-#11), each independently verified
+against the current code (not taken on faith). `docs/17-engine-gaps.md`
+is now the authoritative, dependency-ordered gap list for the whole
+project — this file stays as the detailed investigation record for the
+items that came out of it, cross-referenced by its numbering (0.1-0.10)
+below. Its Tier 0 list maps onto #1-#11 almost exactly:
+
+| Here | doc17 | Status |
+| --- | --- | --- |
+| #1 (movement never animates) | not listed in doc17 | Fixed |
+| #2 (corpses/reserve units) | 0.1 | Fixed |
+| #3 (free reactions) | 0.2 | Fixed |
+| #4 (`reactedTo` dedup) | 0.3 | Open |
+| #5 (reaction depth) | 0.4 | Open (5a is a kept tradeoff, 5b needs a fix) |
+| #6 (`ActionStarted` bypasses triggers) | 0.5 | Open |
+| #7 (turn boundary) | 0.6 | Fixed |
+| #8 (`answererFor` null-controller stall) | 0.7 | Open |
+| #9 (`Fizzled` uses `class.simpleName`) | 0.8 | Open |
+| #10 (Expected-mode contradictions) | 0.9 | Open |
+| #11 (`Modifier.Roll` dead code) | 0.10 | Open |
+
+Status legend:
 
 - **Confirmed** — reproduced by reading the exact code path; real bug.
 - **Confirmed (scope corrected)** — real, but the report's framing overstated
@@ -304,3 +325,157 @@ that invariant-checking should catch instead, prompting removal from
 `order` elsewhere. Worth resolving alongside whatever pass finally
 implements `DestroyEntity`, since that's what would first make `order`
 shrink at runtime.
+
+---
+
+## 8. `answererFor` stalls the resolver for a controller-less entity
+
+**Status: Confirmed** (doc17 0.7).
+
+```kotlin
+fun answererFor(entity: Entity): Answerer = when (val controller = entity.actor?.controller) {
+    is Controller.Ai -> Answerer.Ai(controller.profile)
+    is Controller.Human, null -> Answerer.HumanUi
+}
+```
+
+(`Reactions.kt:31`.) A `null` controller — meaning `entity.actor` itself
+is `null` (a non-combatant per `Entity.kt`'s own doc comment: *"a wall
+has no health field... it has health=null"*, and by extension no `actor`
+either) — falls into the `HumanUi` branch. If such an entity ever ends
+up offered a reaction (nothing currently prevents an archetype with no
+`actor`-bearing entity from having reaction-cost actions authored for
+it), `offerReaction` (`Handlers.kt:280`) spawns `Effect.Ask` and the
+resolver returns `AwaitingInput` — a decision prompt for a "player" who
+does not exist and will never answer. The resolver would sit parked in
+`AwaitingInput` forever; nothing times it out.
+
+Currently unreachable in the same sense as #7 originally was: nothing in
+the catalog authors a reaction action on an actor-less archetype. Will
+bite the first piece of content that does (e.g. an environmental hazard
+with a triggered response).
+
+**Fix direction:** `answererFor` should return a distinct "never reacts"
+answerer for a `null` controller — not `HumanUi`, not `Ai` — so
+`offerReaction` can skip straight to "no reaction" instead of asking. The
+doc04-specified `Answerer.Auto` (never implemented, doc03.8 in
+`docs/17-engine-gaps.md`) would be the natural home for this once it
+exists; until then, a minimal third `Answerer` case suffices.
+
+---
+
+## 9. `Fizzled` events use `effect::class.simpleName`, which R8 renames
+
+**Status: Confirmed** (doc17 0.8).
+
+```kotlin
+private fun fizzle(state: GameState, effect: Effect, reason: Rejection): HandlerOutcome =
+    HandlerOutcome(state, events = listOf(GameEvent.Fizzled(effect::class.simpleName ?: "Effect", reason)))
+```
+
+(`Handlers.kt:96`.) `GameEvent.Fizzled.effect: String` is meant to name
+which effect failed, for the battle log and for debugging. In a release
+build, R8/ProGuard renames Kotlin classes (including sealed subtypes of
+`Effect`) unless explicitly kept — `class.simpleName` would return the
+obfuscated name (`a`, `b$c`, etc.) instead of `"DealDamage"`,
+`"SpendCost"`, and so on. Debug builds and every existing test run
+un-obfuscated, so this passes every golden-event-list check today and
+only breaks in production, where nobody is running the test suite
+against the output.
+
+**Fix direction:** every `Effect` subtype already carries a stable
+`@SerialName` for exactly this class-name-instability reason (see
+`AGENTS.md`'s *"Every Effect... needs an explicit @SerialName"* rule,
+already enforced by pass 7's reflection test). `fizzle()` should read
+that `@SerialName` instead of `class.simpleName` — same annotation,
+same serializer machinery already in place, just read from the runtime
+class's annotations rather than relying on the class name surviving
+minification.
+
+---
+
+## 10. Expected-mode previews can report a self-contradictory roll, and ignore advantage entirely
+
+**Status: Confirmed** (doc17 0.9).
+
+```kotlin
+private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): Pair<Double, GameState> = when (mode) {
+    RngMode.Live -> ...
+    RngMode.Expected -> 10.5 to state
+}
+```
+
+(`Handlers.kt:74`.) In `rollAttack` (`Handlers.kt:223`), `hit` is decided
+against the *unrounded* `10.5`: `val total = rollValue + effect.attackBonus;
+val hit = total >= ac`. The emitted `AttackRolled.d20` field, though, is
+`rollValue.roundToInt()` — a rounded integer. Per Kotlin's documented
+tie-breaking rule (`roundToInt` rounds ties toward positive infinity),
+`10.5` rounds to `11`, not `10` as doc17's illustrative example states —
+worth correcting doc17 itself if this file's fix references it, since
+the mechanism is right but that specific number isn't. The real bug
+survives the correction: recompute `hit` by hand from the *recorded*
+event fields (`d20 + mod >= ac`) and it can disagree with the `hit` flag
+actually emitted, whenever `ac` falls strictly between `10.5 + mod` and
+`11 + mod`. A human reading a preview's event log has no way to tell the
+roll was fractional; they'll "check the math" against the rounded number
+and get the wrong answer.
+
+Separately: `resolveAdvantage`/`RollMode` are threaded into `rollD20`'s
+signature but `RngMode.Expected` ignores the `advantage` parameter
+completely, always returning `10.5` regardless of advantage or
+disadvantage. A true expected value under advantage is measurably higher
+(≈13.825 for a d20, not 10.5) — every AI/preview evaluation of an
+advantaged attack currently understates its own odds, which
+systematically biases `:core:ai`'s `chooseAction` scoring against
+advantage-granting plays without anyone having decided that should be
+true.
+
+**Fix direction:** two independent fixes. (a) Either round `rollValue`
+consistently *before* computing `hit` too (so the recorded d20 and the
+hit decision agree, at the cost of Expected mode being a slightly
+different number than the "true" continuous expectation), or keep `hit`
+exact but stop reporting a misleadingly precise-looking integer `d20` in
+Expected mode specifically. (b) Compute the real expected value of a d20
+under advantage/disadvantage (sum over 400 pair-outcomes, or the closed
+form) instead of hardcoding `10.5` regardless of `advantage`.
+
+---
+
+## 11. `Modifier.Roll` is fully dead code
+
+**Status: Confirmed** (doc17 0.10).
+
+`Modifier.Roll(ctx: RollContext, side: AdvSide)` and `RollContext`
+(`Modifier.kt`) are modeled, `@Serializable`, and round-trip through
+JSON like every other `Modifier` variant — but `stats()`
+(`StatsDerivation.kt`) never reads them:
+
+```kotlin
+for (om in ordered) (om.modifier as? Modifier.Add)?.let { work.add(it.stat, it.value) }
+for (om in ordered) (om.modifier as? Modifier.Mul)?.let { work.mul(it.stat, it.factor) }
+...Override...
+...Grant...
+...Resist...
+```
+
+(`StatsDerivation.kt:74-90`.) Five of `Modifier`'s six sealed subtypes
+get an `as?` filter pass; `Roll` gets none. `Stats` itself
+(`AbilityScores.kt`) has no advantage/roll-context field at all to put
+the result in even if `stats()` did read it. A status or item authored
+today with `Modifier.Roll(AttackRoll(...), Advantage)` — "grants
+advantage on attack rolls" — silently does nothing. Combined with #10's
+finding (`RngMode.Expected` also ignores advantage), advantage as a
+mechanic does not currently function anywhere in the engine end to end,
+despite `AdvSide`/`RollMode`/`resolveAdvantage` all existing and being
+exercised by dice-roll-level tests.
+
+**Fix direction:** this is a real design gap, not a one-line patch —
+`Stats` needs a place to carry "sources of advantage/disadvantage on
+[context]" (probably `Set<RollContext>` split by side, or a
+`Map<RollContext, RollMode>`), `stats()` needs a sixth filter pass
+collecting `Modifier.Roll` into it, and every call site that currently
+takes an explicit `advantage: Set<AdvSide>` parameter (actions,
+`EffectTemplate.RollAttack`/`RollSave`) needs to fold in whatever the
+caster's/target's derived `Stats` contributes on top of what the action
+itself specifies. Worth designing alongside whichever pass finally
+implements real advantage-granting content, not in isolation.
