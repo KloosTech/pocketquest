@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.core.rules.resolver
 
 import de.jackbeback.pocketquest.core.model.Ability
 import de.jackbeback.pocketquest.core.model.AdvSide
+import de.jackbeback.pocketquest.core.model.DamageTag
 import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.Effect
@@ -11,13 +12,26 @@ import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.Modifier
 import de.jackbeback.pocketquest.core.model.Rejection
+import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollContext
+import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.StatusId
+import de.jackbeback.pocketquest.core.rules.d20
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
+import de.jackbeback.pocketquest.core.rules.roll
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+
+/** Brute-force search for a seed whose very first d20() roll (Normal mode) lands on [target] — lets a crit/fumble test drive a real, deterministic Live-mode roll without hand-computing the PRNG's output. */
+private fun seedRollingD20(target: Int): Long {
+    for (seed in 0L until 5000L) {
+        val (_, value) = RngState(seed).d20(RollMode.Normal)
+        if (value == target) return seed
+    }
+    error("no seed in [0, 5000) produced a natural $target on the first roll")
+}
 
 class RollEffectTest {
 
@@ -96,6 +110,57 @@ class RollEffectTest {
 
         assertTrue(!(out.events.single() as GameEvent.AttackRolled).hit)
         assertEquals(s.state.rng.calls + 1, out.state.rng.calls, "a miss only rolls the d20, never the damage dice")
+    }
+
+    // --- docs/17-engine-gaps.md 3.6: crits and fumbles ---
+
+    @Test
+    fun rollAttackNaturalTwentyAlwaysHitsAndDoublesDamageDice() {
+        val seed = seedRollingD20(20)
+        val s = scenario {
+            seed(seed)
+            archetype("attacker") { hp = 10 }
+            archetype("unhittable") { hp = 10; ac = 999 } // would guarantee a miss on any total-vs-ac math alone
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("unhittable"); at(1, 0); hp(10) }
+        }
+        val spec = DiceSpec(1, 6, 3)
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, damage = spec, damageType = DamageType.Fire)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Live)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events[0])
+        assertEquals(20, rolled.d20)
+        assertTrue(rolled.hit, "a natural 20 always hits, even against ac=999")
+        assertTrue(rolled.critical)
+
+        // Replay the exact same RNG sequence directly (one d20 call, then the DOUBLED dice spec) to
+        // pin down the exact expected damage rather than just asserting "some amount landed."
+        val (afterD20, d20Value) = s.state.rng.d20(RollMode.Normal)
+        assertEquals(20, d20Value)
+        val (_, expectedRoll) = afterD20.roll(spec.copy(count = spec.count * 2))
+        val dealt = assertIs<Effect.DealDamage>(out.spawn.single())
+        assertEquals(expectedRoll.total, dealt.amount, "1d6+3 crits as 2d6+3, not (1d6+3)*2")
+        assertEquals(setOf(DamageTag.Critical), dealt.tags)
+    }
+
+    @Test
+    fun rollAttackNaturalOneAlwaysMissesRegardlessOfBonus() {
+        val seed = seedRollingD20(1)
+        val s = scenario {
+            seed(seed)
+            archetype("attacker") { hp = 10 }
+            archetype("easyTarget") { hp = 10; ac = 1 } // trivially low AC
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("easyTarget"); at(1, 0); hp(10) }
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 50, damage = DiceSpec(1, 6, 0), damageType = DamageType.Fire)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Live)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
+        assertEquals(1, rolled.d20)
+        assertTrue(!rolled.hit, "a natural 1 always misses, even with attackBonus=50 vs ac=1")
+        assertTrue(!rolled.critical)
+        assertTrue(out.spawn.isEmpty(), "a fumble must not spawn DealDamage")
     }
 
     @Test

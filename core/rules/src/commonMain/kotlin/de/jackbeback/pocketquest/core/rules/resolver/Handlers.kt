@@ -8,6 +8,7 @@ import de.jackbeback.pocketquest.core.model.ActiveStatus
 import de.jackbeback.pocketquest.core.model.Actor
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.DamageStep
+import de.jackbeback.pocketquest.core.model.DamageTag
 import de.jackbeback.pocketquest.core.model.Decision
 import de.jackbeback.pocketquest.core.model.DecisionId
 import de.jackbeback.pocketquest.core.model.DecisionRequest
@@ -527,8 +528,15 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
         .toSet()
     val advantageMode = resolveAdvantage(effect.advantage + derivedAdvantage)
     val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
+    // doc17-engine-gaps.md 3.6: a natural 20 always hits (even against an AC the flat total would
+    // never clear); a natural 1 always misses (even against an AC the flat total would clear).
+    // Expected mode's rolls are fixed rounded averages (11/14/7) and never literally 1 or 20, so
+    // neither branch can ever fire there — a preview never shows a crit/fumble, which is correct,
+    // previews are about the average case.
+    val critical = rollValue == 20
+    val fumble = rollValue == 1
     val total = rollValue + effect.attackBonus
-    val hit = total >= ac
+    val hit = !fumble && (critical || total >= ac)
 
     val rolledEvent = GameEvent.AttackRolled(
         attacker = attacker.id,
@@ -537,11 +545,18 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
         mod = effect.attackBonus,
         ac = ac,
         hit = hit,
+        critical = critical,
     )
     if (!hit) return HandlerOutcome(afterD20, listOf(rolledEvent))
 
-    val (dmgValue, afterDamageRoll) = rollDice(afterD20, mode, effect.damage)
-    val spawn = listOf(Effect.DealDamage(effect.target, dmgValue.roundToInt(), effect.damageType, source = effect.attacker, tags = effect.tags))
+    // doc18-damage-pipeline.md already reserves a Critical DamageTag for exactly this — a content-
+    // authored DamageStep can key off it (e.g. Vulnerable-to-crits) without this handler knowing
+    // anything about that content. Doubling only the dice, not the flat modifier, is the actual 5e
+    // rule: 1d8+3 crits as 2d8+3, not (1d8+3)*2.
+    val damageSpec = if (critical) effect.damage.copy(count = effect.damage.count * 2) else effect.damage
+    val (dmgValue, afterDamageRoll) = rollDice(afterD20, mode, damageSpec)
+    val tags = if (critical) effect.tags + DamageTag.Critical else effect.tags
+    val spawn = listOf(Effect.DealDamage(effect.target, dmgValue.roundToInt(), effect.damageType, source = effect.attacker, tags = tags))
     return HandlerOutcome(afterDamageRoll, listOf(rolledEvent), spawn)
 }
 

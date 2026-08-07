@@ -36,7 +36,11 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
     return when (event) {
         is GameEvent.AttackRolled -> {
             val total = event.d20 + event.mod
-            val verdict = if (event.hit) "hit" else "miss"
+            val verdict = when {
+                event.critical -> "critical hit!"
+                event.hit -> "hit"
+                else -> "miss"
+            }
             LogEntry("${name(event.attacker)} attacks ${name(event.target)}: $verdict ($total vs AC ${event.ac})", LogCategory.Info)
         }
         is GameEvent.DamageTaken -> LogEntry("${name(event.target)} takes ${event.amount} ${event.damageType.name.lowercase()} damage.", LogCategory.Damage)
