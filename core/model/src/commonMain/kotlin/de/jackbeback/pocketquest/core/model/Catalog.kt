@@ -23,6 +23,8 @@ data class ItemDef(
     val id: ItemId,
     val name: String,
     val modifiers: List<Modifier> = emptyList(),
+    /** Occupies MainHand and OffHand — see equip()/canEquip() in :core:rules and docs/03-modifiers-and-status.md. */
+    val twoHanded: Boolean = false,
 )
 
 @Serializable

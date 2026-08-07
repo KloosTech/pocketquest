@@ -220,12 +220,13 @@ class StatusDefBuilder(private val name: String) {
 
 class ItemDefBuilder(private val name: String) {
     private val mods = mutableListOf<Modifier>()
+    var twoHanded: Boolean = false
 
     fun modifier(m: Modifier) {
         mods += m
     }
 
-    fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList())
+    fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList(), twoHanded)
 }
 
 class EntityBuilder {
