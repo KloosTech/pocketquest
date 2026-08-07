@@ -59,6 +59,13 @@ sealed interface EffectTemplate {
     /** doc17-engine-gaps.md 3.1: the destination is the action's own targeted point (`ActionCtx.point`) — a Point-targeted teleport action's whole reason for existing, not a separate ref/slot. */
     @Serializable @SerialName("teleport")
     data class Teleport(val who: Ref) : EffectTemplate
+
+    /** doc17-engine-gaps.md 3.1: position comes from `ActionCtx.point`, same reasoning as [Teleport] — a "summon" action is Point-targeted by nature. */
+    @Serializable @SerialName("spawnEntity")
+    data class SpawnEntity(val archetype: ArchetypeId, val faction: Faction, val controller: Controller) : EffectTemplate
+
+    @Serializable @SerialName("destroyEntity")
+    data class DestroyEntity(val target: Ref) : EffectTemplate
 }
 
 /** A pure declaration — no logic. Performing it pushes SpendCost then its instantiated effects onto the resolver stack. */

@@ -71,6 +71,8 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
         is GameEvent.ResourcesReset -> null // fires every single turn boundary; would drown the log in noise doc15 never asks for.
         is GameEvent.MoveStepped -> null // one line per tile stepped would be far noisier than the walk itself is informative.
         is GameEvent.Teleported -> LogEntry("${name(event.who)} teleports away!", LogCategory.Info)
+        is GameEvent.EntitySpawned -> LogEntry("${cat.archetype(event.archetype).name} arrives.", LogCategory.Info)
+        is GameEvent.EntityDestroyed -> LogEntry("${name(event.target)} is destroyed.", LogCategory.Death)
         is GameEvent.Fizzled -> LogEntry("${event.effect} fizzles: ${describeRejection(event.reason)}", LogCategory.Blocked)
     }
 }

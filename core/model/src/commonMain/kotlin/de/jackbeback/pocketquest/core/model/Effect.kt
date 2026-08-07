@@ -64,6 +64,28 @@ sealed interface Effect {
     data class Teleport(val who: EntityId, val to: GridPos) : Effect
 
     /**
+     * doc17-engine-gaps.md 3.1 / doc05. Full HP/AP/mana on arrival, derived through `stats(cat)`
+     * off a preliminary entity rather than read straight from `Archetype.baseMaxHp` etc — a
+     * shortcut there would skip the archetype's own innate modifiers. Joins `turn.order` at the
+     * END of the current round (decided with the user, not guessed — docs give no guidance):
+     * reinforcements don't cut into a round already in progress, they act from next round on.
+     */
+    @Serializable @SerialName("spawnEntity")
+    data class SpawnEntity(val archetype: ArchetypeId, val pos: GridPos, val faction: Faction, val controller: Controller) : Effect
+
+    /**
+     * doc17-engine-gaps.md 3.1 / doc05. Removes [target] from both `entities` and `turn.order`,
+     * fixing up `activeIndex` so it keeps pointing at the same logical "next to act" (see the
+     * handler for the index-shift cases) — genuinely the primitive's hard part, not the removal
+     * itself. Also breaks the destroyed entity's own concentration, if any (mirrors
+     * `breakConcentration`'s existing damage-triggered call sites: a dead caster can't keep
+     * concentrating). Deliberately does NOT auto-advance the turn if [target] was itself active —
+     * that would entangle this with EndTurn's own boundary logic, which nothing has asked for.
+     */
+    @Serializable @SerialName("destroyEntity")
+    data class DestroyEntity(val target: EntityId) : Effect
+
+    /**
      * Deliberately not built from docs/05's Cost/ActionCost — that needs
      * ActionDef, which doesn't exist yet. Amounts are spelled out directly
      * so this primitive stands alone until actions arrive.

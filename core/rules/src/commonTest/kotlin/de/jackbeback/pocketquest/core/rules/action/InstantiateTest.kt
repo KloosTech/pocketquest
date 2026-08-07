@@ -203,4 +203,30 @@ class InstantiateTest {
         val ctx = ActionCtx(caster, targets = emptyList(), point = null)
         assertEquals(emptyList(), template.instantiate(state, ctx, cat))
     }
+
+    // --- SpawnEntity / DestroyEntity (docs/17-engine-gaps.md 3.1) ---
+
+    @Test
+    fun spawnEntityResolvesPositionAgainstCtxPoint() {
+        val template = EffectTemplate.SpawnEntity(ArchetypeId("goblin"), Faction.Enemy, Controller.Human)
+        val ctx = ActionCtx(caster, targets = emptyList(), point = GridPos(4, 4))
+        assertEquals(
+            listOf(Effect.SpawnEntity(ArchetypeId("goblin"), GridPos(4, 4), Faction.Enemy, Controller.Human)),
+            template.instantiate(state, ctx, cat),
+        )
+    }
+
+    @Test
+    fun spawnEntityWithNoCtxPointProducesNoEffects() {
+        val template = EffectTemplate.SpawnEntity(ArchetypeId("goblin"), Faction.Enemy, Controller.Human)
+        val ctx = ActionCtx(caster, targets = emptyList(), point = null)
+        assertEquals(emptyList(), template.instantiate(state, ctx, cat))
+    }
+
+    @Test
+    fun destroyEntityResolvesTargetRef() {
+        val template = EffectTemplate.DestroyEntity(target = Ref.EachTarget)
+        val ctx = ActionCtx(caster, targets = listOf(EntityId(5)))
+        assertEquals(listOf(Effect.DestroyEntity(EntityId(5))), template.instantiate(state, ctx, cat))
+    }
 }

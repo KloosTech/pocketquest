@@ -49,4 +49,10 @@ sealed interface GameEvent {
 
     /** doc17-engine-gaps.md 3.1: [Effect.Teleport]'s own event, distinct from [MoveStepped] — an instant blink, not a walked step. */
     @Serializable @SerialName("teleported") data class Teleported(val who: EntityId, val from: GridPos, val to: GridPos) : GameEvent
+
+    /** doc17-engine-gaps.md 3.1: [Effect.SpawnEntity]'s event. */
+    @Serializable @SerialName("entitySpawned") data class EntitySpawned(val entityId: EntityId, val archetype: ArchetypeId, val pos: GridPos) : GameEvent
+
+    /** doc17-engine-gaps.md 3.1: [Effect.DestroyEntity]'s event. */
+    @Serializable @SerialName("entityDestroyed") data class EntityDestroyed(val target: EntityId) : GameEvent
 }

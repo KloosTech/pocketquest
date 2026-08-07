@@ -103,6 +103,16 @@ fun choreograph(event: GameEvent): List<Beat> = when (event) {
     // (App.kt logs every emitted event unconditionally). Only Rejection.Blocked carries a tile to
     // flash; every other Rejection reason (missing target, insufficient resources, prevented...)
     // has nothing to point a tile-flash at, so those get the log line only, not a guessed position.
+    // doc17-engine-gaps.md 3.1: no "pop in" beat — settle()'s getOrPut only creates the new
+    // entity's VisualEntity AFTER beats drain, so a beat referencing world.entities[event.entityId]
+    // here would find nothing yet. It simply appears once settle() runs; a real appear-animation
+    // would need settle() reordered ahead of the beat queue, which nothing has asked for.
+    is GameEvent.EntitySpawned -> emptyList()
+    // Fades to fully invisible (0f, not DOWNED_ALPHA) before settle() removes its VisualEntity
+    // entirely — genuine removal, unlike Downed's "still here, low-contrast."
+    is GameEvent.EntityDestroyed -> listOf(
+        Beat(Timing.Blocking) { world -> world.entities[event.target]?.alpha?.animateTo(0f, tween(world.scaled(DEATH_FADE_MS))) },
+    )
     is GameEvent.Fizzled -> (event.reason as? Rejection.Blocked)?.let { blocked ->
         listOf(Beat(Timing.Blocking) { world -> world.flashTile(blocked.pos) })
     } ?: emptyList()

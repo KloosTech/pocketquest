@@ -20,6 +20,8 @@ data class GameState(
     val nextDecisionId: Long = 0,
     /** Monotonic source for fresh LinkIds (e.g. when starting concentration) — never reused, never reset. */
     val nextLinkId: Long = 0,
+    /** doc17-engine-gaps.md 3.1: monotonic source for a freshly [Effect.SpawnEntity]'d entity's id — never reused, never reset, same pattern as [nextDecisionId]/[nextLinkId]. */
+    val nextEntityId: Long = 0,
 ) {
     @Transient
     val byId: Map<EntityId, Entity> = entities.associateBy { it.id }

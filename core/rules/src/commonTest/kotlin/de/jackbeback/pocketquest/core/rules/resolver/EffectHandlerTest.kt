@@ -1,17 +1,23 @@
 package de.jackbeback.pocketquest.core.rules.resolver
 
+import de.jackbeback.pocketquest.core.model.ActiveStatus
+import de.jackbeback.pocketquest.core.model.ArchetypeId
+import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.Effect
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Expiry
+import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Modifier
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Resistance
 import de.jackbeback.pocketquest.core.model.Stat
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.StatusId
+import de.jackbeback.pocketquest.core.rules.checkInvariants
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import de.jackbeback.pocketquest.core.rules.fixture.walls
 import kotlin.test.Test
@@ -323,6 +329,174 @@ class EffectHandlerTest {
         val s = scenario { archetype("dummy") { hp = 10 } }
         val out = applyEffect(s.state, Effect.Teleport(EntityId(999), GridPos(1, 1)), emptyMap(), s.catalog)
         assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    // --- SpawnEntity ---
+
+    @Test
+    fun spawnEntityArrivesAtFullDerivedHpApMana() {
+        val s = scenario {
+            // An innate +5 MaxHp modifier proves the spawn goes through real stats() derivation,
+            // not a shortcut straight off Archetype.baseMaxHp/baseMaxAp/baseMaxMana.
+            archetype("goblin") { hp = 10; ap = 2; mana = 3; modifier(Modifier.Add(Stat.MaxHp, 5)) }
+        }
+        val out = applyEffect(s.state, Effect.SpawnEntity(ArchetypeId("goblin"), GridPos(5, 5), Faction.Enemy, Controller.Human), emptyMap(), s.catalog)
+
+        val spawned = out.state.entities.single { it.archetype == ArchetypeId("goblin") }
+        assertEquals(15, spawned.health?.current, "must go through stats() — 10 base + 5 from the innate modifier")
+        assertEquals(2, spawned.resources?.ap)
+        assertEquals(3, spawned.resources?.mana)
+        assertEquals(GridPos(5, 5), spawned.pos)
+        assertEquals(Faction.Enemy, spawned.actor?.faction)
+        assertEquals(listOf(GameEvent.EntitySpawned(spawned.id, ArchetypeId("goblin"), GridPos(5, 5))), out.events)
+        assertTrue(checkInvariants(out.state, s.catalog).isEmpty())
+    }
+
+    @Test
+    fun spawnEntityJoinsTurnOrderAtTheEnd() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("first") { archetype("dummy"); at(0, 0) }
+            entity("second") { archetype("dummy"); at(1, 0) }
+        }
+        val out = applyEffect(s.state, Effect.SpawnEntity(ArchetypeId("dummy"), GridPos(5, 5), Faction.Player, Controller.Human), emptyMap(), s.catalog)
+        val spawnedId = out.state.entities.single { it.pos == GridPos(5, 5) }.id
+        assertEquals(listOf(s.id("first"), s.id("second"), spawnedId), out.state.turn.order)
+    }
+
+    @Test
+    fun spawnEntityMintsAFreshNonCollidingId() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("first") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.SpawnEntity(ArchetypeId("dummy"), GridPos(5, 5), Faction.Player, Controller.Human), emptyMap(), s.catalog)
+        val spawned = out.state.entities.single { it.pos == GridPos(5, 5) }
+        assertTrue(spawned.id != s.id("first"))
+        assertEquals(s.state.nextEntityId + 1, out.state.nextEntityId)
+    }
+
+    @Test
+    fun spawnEntityOnAWallFizzles() {
+        val s = scenario { archetype("dummy") { hp = 10 } }
+        val blockedState = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(5, 5))))
+        val out = applyEffect(blockedState, Effect.SpawnEntity(ArchetypeId("dummy"), GridPos(5, 5), Faction.Player, Controller.Human), emptyMap(), s.catalog)
+        assertEquals(blockedState, out.state)
+        assertEquals(Rejection.Blocked(GridPos(5, 5)), (out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    @Test
+    fun spawnEntityOnAnOccupiedTileFizzles() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("occupant") { archetype("dummy"); at(5, 5) }
+        }
+        val out = applyEffect(s.state, Effect.SpawnEntity(ArchetypeId("dummy"), GridPos(5, 5), Faction.Player, Controller.Human), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertEquals(Rejection.Blocked(GridPos(5, 5)), (out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    // --- DestroyEntity ---
+
+    @Test
+    fun destroyEntityRemovesFromEntitiesAndTurnOrder() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("first") { archetype("dummy"); at(0, 0) }
+            entity("second") { archetype("dummy"); at(1, 0) }
+        }
+        val out = applyEffect(s.state, Effect.DestroyEntity(s.id("second")), emptyMap(), s.catalog)
+        assertTrue(out.state.byId[s.id("second")] == null)
+        assertEquals(listOf(s.id("first")), out.state.turn.order)
+        assertEquals(listOf(GameEvent.EntityDestroyed(s.id("second"))), out.events)
+        assertTrue(checkInvariants(out.state, s.catalog).isEmpty())
+    }
+
+    @Test
+    fun destroyEntityShiftsActiveIndexDownWhenAnEarlierEntityIsDestroyed() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("first") { archetype("dummy"); at(0, 0) }
+            entity("second") { archetype("dummy"); at(1, 0) }
+            entity("third") { archetype("dummy"); at(2, 0) }
+        }
+        // "second" is active (index 1); destroying "first" (index 0, before it) must shift activeIndex to 0
+        // so it still points at "second".
+        val active = s.state.copy(turn = s.state.turn.copy(activeIndex = 1))
+        val out = applyEffect(active, Effect.DestroyEntity(s.id("first")), emptyMap(), s.catalog)
+        assertEquals(0, out.state.turn.activeIndex)
+        assertEquals(s.id("second"), out.state.turn.order[out.state.turn.activeIndex])
+    }
+
+    @Test
+    fun destroyEntityKeepsActiveIndexPointingAtTheNextEntityWhenTheActiveEntityDestroysItself() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("first") { archetype("dummy"); at(0, 0) }
+            entity("second") { archetype("dummy"); at(1, 0) }
+            entity("third") { archetype("dummy"); at(2, 0) }
+        }
+        val active = s.state.copy(turn = s.state.turn.copy(activeIndex = 1)) // "second" is active
+        val out = applyEffect(active, Effect.DestroyEntity(s.id("second")), emptyMap(), s.catalog)
+        assertEquals(1, out.state.turn.activeIndex)
+        assertEquals(s.id("third"), out.state.turn.order[out.state.turn.activeIndex], "index 1 now holds what was next in line")
+    }
+
+    @Test
+    fun destroyEntityClampsActiveIndexWhenTheLastActiveEntityDestroysItself() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("first") { archetype("dummy"); at(0, 0) }
+            entity("second") { archetype("dummy"); at(1, 0) }
+        }
+        val active = s.state.copy(turn = s.state.turn.copy(activeIndex = 1)) // "second" (last) is active
+        val out = applyEffect(active, Effect.DestroyEntity(s.id("second")), emptyMap(), s.catalog)
+        assertEquals(0, out.state.turn.activeIndex, "clamped into bounds — round-wrapping is EndTurn's job, not this primitive's")
+        assertTrue(checkInvariants(out.state, s.catalog).isEmpty())
+    }
+
+    @Test
+    fun destroyingTheOnlyEntityLeavesAnEmptyOrderAtIndexZero() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("only") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.DestroyEntity(s.id("only")), emptyMap(), s.catalog)
+        assertTrue(out.state.turn.order.isEmpty())
+        assertEquals(0, out.state.turn.activeIndex)
+    }
+
+    @Test
+    fun destroyingAnAlreadyGoneEntityIsANoOp() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val out = applyEffect(s.state, Effect.DestroyEntity(EntityId(999)), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertTrue(out.events.isEmpty())
+    }
+
+    @Test
+    fun destroyEntityBreaksItsOwnConcentrationAndClearsTheLinkedStatus() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("caster") { archetype("dummy"); at(0, 0) }
+            entity("ally") { archetype("dummy"); at(1, 0) }
+        }
+        val link = LinkId(1)
+        val linked = s.state.copy(
+            entities = s.state.entities.map {
+                when (it.id) {
+                    s.id("caster") -> it.copy(concentrating = link)
+                    s.id("ally") -> it.copy(statuses = listOf(ActiveStatus(StatusId("blessed"), sourceId = s.id("caster"), linkId = link, expiry = Expiry.Permanent, appliedAtVersion = 0)))
+                    else -> it
+                }
+            },
+        )
+        val out = applyEffect(linked, Effect.DestroyEntity(s.id("caster")), emptyMap(), s.catalog)
+        assertTrue(out.state.byId[s.id("ally")]?.statuses?.isEmpty() == true, "the linked status on the ally must fall away with the caster's concentration")
+        assertTrue(out.events.any { it is GameEvent.ConcentrationBroken })
     }
 
     // --- SpendCost ---

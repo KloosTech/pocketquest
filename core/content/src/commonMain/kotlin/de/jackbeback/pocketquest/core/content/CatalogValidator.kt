@@ -69,7 +69,9 @@ object CatalogValidator {
                 template.onFail.forEach { checkEffectTemplate(it, "$owner.onFail", catalog, problems) }
             }
 
-            is EffectTemplate.DealDamage, is EffectTemplate.RollAttack, is EffectTemplate.Push, is EffectTemplate.Teleport -> Unit
+            is EffectTemplate.DealDamage, is EffectTemplate.RollAttack, is EffectTemplate.Push, is EffectTemplate.Teleport,
+            is EffectTemplate.SpawnEntity, is EffectTemplate.DestroyEntity,
+            -> Unit
         }
     }
 }

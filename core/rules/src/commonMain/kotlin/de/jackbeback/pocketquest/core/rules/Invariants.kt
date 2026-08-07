@@ -7,9 +7,11 @@ import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.rules.stat.stats
 
 /**
- * The 7 invariants from docs/02-state-model.md#invariants. Returns
- * violation messages — empty means valid. Used by tests and (in debug
- * builds) after every resolver step once the resolver exists.
+ * The 8 invariants from docs/02-state-model.md#invariants (originally 7 —
+ * #8 added alongside doc17-engine-gaps.md 3.1's SpawnEntity, see doc02's
+ * own note on why). Returns violation messages — empty means valid. Used by
+ * tests and (in debug builds) after every resolver step once the resolver
+ * exists.
  */
 fun checkInvariants(state: GameState, cat: Catalog): List<String> {
     val violations = mutableListOf<String>()
@@ -57,6 +59,12 @@ fun checkInvariants(state: GameState, cat: Catalog): List<String> {
     // 7. activeIndex in order.indices whenever order is non-empty.
     if (state.turn.order.isNotEmpty() && state.turn.activeIndex !in state.turn.order.indices) {
         violations += "turn.activeIndex ${state.turn.activeIndex} outside order.indices (size ${state.turn.order.size})"
+    }
+
+    // 8. Every EntityId in entities is unique.
+    val seenIds = mutableSetOf<EntityId>()
+    for (e in state.entities) {
+        if (!seenIds.add(e.id)) violations += "entity id ${e.id.raw} appears more than once in entities"
     }
 
     return violations

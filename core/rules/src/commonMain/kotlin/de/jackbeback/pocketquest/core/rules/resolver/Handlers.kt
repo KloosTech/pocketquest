@@ -5,6 +5,7 @@ import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.ActiveStatus
+import de.jackbeback.pocketquest.core.model.Actor
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.DamageStep
 import de.jackbeback.pocketquest.core.model.Decision
@@ -18,10 +19,12 @@ import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.Health
 import de.jackbeback.pocketquest.core.model.HealStep
 import de.jackbeback.pocketquest.core.model.LinkId
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Resistance
+import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
 import de.jackbeback.pocketquest.core.model.StackPolicy
@@ -74,6 +77,8 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.RefillMana -> refillMana(state, effect, cat)
         is Effect.Push -> push(state, effect)
         is Effect.Teleport -> teleport(state, effect)
+        is Effect.SpawnEntity -> spawnEntity(state, effect, cat)
+        is Effect.DestroyEntity -> destroyEntity(state, effect)
     }
 
 /**
@@ -388,6 +393,67 @@ private fun teleport(state: GameState, effect: Effect.Teleport): HandlerOutcome 
 
     val newState = state.withEntity(who.id) { it.copy(pos = effect.to) }
     return HandlerOutcome(newState, listOf(GameEvent.Teleported(who.id, from, effect.to)))
+}
+
+/**
+ * doc17-engine-gaps.md 3.1: full HP/AP/mana derived through `stats(cat)` on a preliminary entity —
+ * never a shortcut off `Archetype.baseMaxHp` directly, which would skip the archetype's own innate
+ * modifiers. Joins `turn.order` at the end, per the user's explicit choice (see [Effect.SpawnEntity]'s
+ * own doc comment) — reinforcements don't cut into a round already in progress.
+ */
+private fun spawnEntity(state: GameState, effect: Effect.SpawnEntity, cat: Catalog): HandlerOutcome {
+    if (!state.map.isWalkable(effect.pos) || state.occupancy.containsKey(effect.pos)) {
+        return fizzle(state, effect, Rejection.Blocked(effect.pos))
+    }
+
+    val id = EntityId(state.nextEntityId)
+    val preliminary = Entity(id, effect.archetype, effect.pos, health = null, resources = null, actor = Actor(effect.faction, effect.controller))
+    val stats = preliminary.stats(cat)
+    val spawned = preliminary.copy(health = Health(stats.maxHp), resources = Resources(ap = stats.maxAp, mana = stats.maxMana))
+
+    val newState = state.copy(
+        entities = state.entities + spawned,
+        turn = state.turn.copy(order = state.turn.order + id),
+        nextEntityId = state.nextEntityId + 1,
+        version = state.version + 1,
+    )
+    return HandlerOutcome(newState, listOf(GameEvent.EntitySpawned(id, effect.archetype, effect.pos)))
+}
+
+/**
+ * doc17-engine-gaps.md 3.1: the hard part is keeping `turn.activeIndex` pointing at the same
+ * logical "next to act" entity after the list shrinks — not the removal itself. Already-gone is a
+ * silent no-op (mirrors `removeStatus`'s already-absent case), not a `Rejection`: destroying
+ * something already destroyed isn't a precondition failure. Doesn't attempt round-wrapping when the
+ * removed entity was last in `turn.order` and active — that's `EndTurn`'s job, not this primitive's;
+ * this only guarantees a valid, non-crashing index.
+ */
+private fun destroyEntity(state: GameState, effect: Effect.DestroyEntity): HandlerOutcome {
+    val target = state.byId[effect.target] ?: return HandlerOutcome(state)
+
+    // breakConcentration must run BEFORE target is filtered out of entities — it finds the
+    // concentrator via `entities.find { it.concentrating == linkId }`, which would find nothing
+    // (and so skip clearing the field / emitting ConcentrationBroken) if target were already gone.
+    val events = mutableListOf<GameEvent>(GameEvent.EntityDestroyed(effect.target))
+    var working = state
+    target.concentrating?.let { linkId -> working = breakConcentration(working, linkId, events) }
+
+    val order = working.turn.order
+    val i = order.indexOf(effect.target)
+    val newOrder = if (i == -1) order else order.toMutableList().also { it.removeAt(i) }
+    val newActiveIndex = when {
+        i == -1 -> working.turn.activeIndex
+        newOrder.isEmpty() -> 0
+        i < working.turn.activeIndex -> working.turn.activeIndex - 1
+        else -> working.turn.activeIndex.coerceAtMost(newOrder.size - 1)
+    }
+
+    working = working.copy(
+        entities = working.entities.filterNot { it.id == effect.target },
+        turn = working.turn.copy(order = newOrder, activeIndex = newActiveIndex),
+        version = working.version + 1,
+    )
+    return HandlerOutcome(working, events)
 }
 
 private fun spendCost(state: GameState, effect: Effect.SpendCost): HandlerOutcome {

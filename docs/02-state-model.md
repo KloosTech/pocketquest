@@ -183,6 +183,14 @@ Enforced in a `checkInvariants(state)` helper used by tests and debug builds:
 5. `resources.ap in 0..stats.maxAp`, same for mana.
 6. Every `ActiveStatus.sourceId`, if non-null, refers to an existing entity.
 7. `activeIndex in order.indices` whenever `order` is non-empty.
+8. Every `EntityId` in `entities` is unique. Added alongside `SpawnEntity`
+   (17-engine-gaps.md 3.1) — every entity before that primitive existed was
+   hand-authored with distinct ids by content/fixture authors, so a
+   collision was purely a hypothetical mistake; `SpawnEntity` is the first
+   thing that mints ids programmatically, and a bug in that minting silently
+   corrupts `state.byId` (a `Map`, so a colliding id just overwrites the
+   earlier entity there while both remain in the `entities` list) with
+   nothing else to catch it.
 
 These become the shared assertion block in the property tests described in
 [09-test-plan.md](09-test-plan.md).

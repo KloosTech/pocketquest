@@ -163,6 +163,9 @@ class ScenarioBuilder {
             map = BattleMap(width, height),
             turn = TurnState(round = 1, order = order, activeIndex = 0, phase = TurnPhase.Start),
             rng = RngState(seed),
+            // ids are assigned 0..entityOrder.size-1 above — the next SpawnEntity in a test must
+            // not collide with one of those already-assigned ids.
+            nextEntityId = entityOrder.size.toLong(),
         )
         val catalog = Catalog(
             archetypes = archetypes.values.associateBy { it.id },

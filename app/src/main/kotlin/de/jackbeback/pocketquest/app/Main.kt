@@ -117,6 +117,7 @@ fun main() {
         map = BattleMap(10, 10),
         turn = TurnState(round = 1, order = listOf(heroId, goblinId), activeIndex = 0, phase = TurnPhase.Main),
         rng = RngState(seed = 42, calls = 0),
+        nextEntityId = 2, // one past heroId/goblinId — nothing spawns yet, but keeps this correct for when something does
     )
 
     // Persistence smoke test against the initial state — the interactive session's own state

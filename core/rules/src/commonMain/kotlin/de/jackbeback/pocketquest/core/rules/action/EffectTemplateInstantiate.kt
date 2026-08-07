@@ -67,4 +67,10 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
 
     is EffectTemplate.Teleport ->
         ctx.point?.let { destination -> resolveRef(who, ctx).map { Effect.Teleport(it, destination) } } ?: emptyList()
+
+    is EffectTemplate.SpawnEntity ->
+        ctx.point?.let { pos -> listOf(Effect.SpawnEntity(archetype, pos, faction, controller)) } ?: emptyList()
+
+    is EffectTemplate.DestroyEntity ->
+        resolveRef(target, ctx).map { Effect.DestroyEntity(it) }
 }
