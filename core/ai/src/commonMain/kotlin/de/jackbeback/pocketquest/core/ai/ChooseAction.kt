@@ -4,14 +4,17 @@ import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionDef
 import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.rules.action.canPerform
 import de.jackbeback.pocketquest.core.rules.action.grantedActions
 import de.jackbeback.pocketquest.core.rules.action.preview
+import de.jackbeback.pocketquest.core.rules.action.tauntedBy
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
 
@@ -56,14 +59,31 @@ fun chooseAction(state: GameState, entityId: EntityId, cat: Catalog): AiDecision
 }
 
 private fun candidateContexts(state: GameState, caster: EntityId, def: ActionDef, cat: Catalog): List<ActionCtx> {
-    val casterPos = state.byId[caster]?.pos ?: return emptyList()
+    val casterEntity = state.byId[caster] ?: return emptyList()
+    val casterPos = casterEntity.pos ?: return emptyList()
     return when (def.targeting.mode) {
         TargetMode.SelfOnly -> listOf(ActionCtx(caster, targets = listOf(caster), point = casterPos))
-        TargetMode.SingleEntity -> legalTargets(state, caster, def, cat).map { point ->
+        TargetMode.SingleEntity -> narrowedByTaunt(state, casterEntity, legalTargets(state, caster, def, cat), cat).map { point ->
             ActionCtx(caster, targets = affectedBy(state, def, caster, point), point = point)
         }
         TargetMode.Point, TargetMode.Direction, TargetMode.Path -> emptyList()
     }
+}
+
+/**
+ * doc10/doc18: Taunt "lives in :core:ai's target selection" — restricts candidates to whichever
+ * taunter(s) are among them, when any are. Scoped naturally to enemy-facing actions only: an
+ * ally-heal's [legal] set is never going to contain the (enemy-of-the-caster) taunter's position to
+ * begin with, so this only ever narrows something that was already enemy-targeting. If the
+ * taunter(s) aren't legal targets for THIS action at all — out of range, blocked LoS, wrong weapon
+ * — [legal] is returned unchanged rather than narrowing to nothing: taunt binds the choice among
+ * reachable options, it doesn't invent a target the action mechanically can't reach.
+ */
+private fun narrowedByTaunt(state: GameState, caster: Entity, legal: Set<GridPos>, cat: Catalog): Set<GridPos> {
+    val tauntedBy = caster.tauntedBy(cat)
+    if (tauntedBy.isEmpty()) return legal
+    val onlyTaunters = legal.filterTo(mutableSetOf()) { pos -> state.occupancy[pos] in tauntedBy }
+    return onlyTaunters.ifEmpty { legal }
 }
 
 /**
