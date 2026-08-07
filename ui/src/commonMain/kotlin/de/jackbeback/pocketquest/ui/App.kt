@@ -74,7 +74,7 @@ private fun DrawScope.drawGrid(map: BattleMap) {
         val y = row * TILE_PX
         drawLine(Color.DarkGray, Offset(0f, y), Offset(width, y))
     }
-    map.blockedTiles.forEach { pos ->
+    map.walls.forEach { pos ->
         drawRect(
             color = Color.Black,
             topLeft = Offset(pos.col * TILE_PX, pos.row * TILE_PX),

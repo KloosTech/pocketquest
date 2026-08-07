@@ -9,6 +9,7 @@ import de.jackbeback.pocketquest.core.model.TargetFilter
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.model.Targeting
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
+import de.jackbeback.pocketquest.core.rules.fixture.walls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -61,7 +62,7 @@ class TargetingTest {
             archetype("dummy") { hp = 10 }
             entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
         }
-        val blocked = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(2, 0))))
+        val blocked = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(2, 0))))
         val def = actionDefWith(Targeting(TargetMode.Point, Range.Tiles(5), Shape.Single, requiresLoS = true))
         val legal = legalTargets(blocked, s.id("hero"), def, s.catalog)
         assertFalse(GridPos(4, 0) in legal, "tile behind the wall must be excluded when LoS is required")
@@ -77,7 +78,7 @@ class TargetingTest {
         }
         // Wall directly east forces any path around it to cost more than 2 straight-line tiles.
         val walled = s.state.copy(
-            map = s.state.map.copy(blockedTiles = setOf(GridPos(1, 0), GridPos(1, 1), GridPos(1, -1)).filter { s.state.map.inBounds(it) }.toSet()),
+            map = s.state.map.copy(terrain = walls(GridPos(1, 0), GridPos(1, 1), GridPos(1, -1)).filterKeys { s.state.map.inBounds(it) }),
         )
         val def = actionDefWith(Targeting(TargetMode.Path, Range.Tiles(2), Shape.Single, requiresLoS = false))
         val legal = legalTargets(walled, s.id("hero"), def, s.catalog)

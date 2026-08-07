@@ -12,6 +12,7 @@ import de.jackbeback.pocketquest.core.model.chebyshevDistanceTo
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.findPath
 import de.jackbeback.pocketquest.core.rules.targeting.hasLineOfSight
+import de.jackbeback.pocketquest.core.rules.targeting.pathCost
 import de.jackbeback.pocketquest.core.rules.targeting.rangeInTiles
 
 /**
@@ -55,7 +56,8 @@ fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCt
                 rejections += Rejection.Blocked(point)
             } else {
                 val ap = resources?.ap ?: 0
-                if (ap < path.size) rejections += Rejection.NotEnoughAp(path.size, ap)
+                val cost = path.pathCost(state.map)
+                if (ap < cost) rejections += Rejection.NotEnoughAp(cost, ap)
             }
         }
     }

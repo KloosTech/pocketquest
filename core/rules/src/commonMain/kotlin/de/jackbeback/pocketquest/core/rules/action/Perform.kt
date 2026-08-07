@@ -16,6 +16,7 @@ import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import de.jackbeback.pocketquest.core.rules.resolver.collectTriggers
 import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
 import de.jackbeback.pocketquest.core.rules.targeting.findPath
+import de.jackbeback.pocketquest.core.rules.targeting.pathCost
 
 private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId, ctx: ActionCtx, cat: Catalog): List<Effect> {
     val def = cat.actionDef(actionId)
@@ -39,7 +40,7 @@ private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId,
     // ResourcesSpent event rather than an out-of-band deduction — see docs/05-actions-and-effects.md.
     val spendCost = Effect.SpendCost(
         who = caster,
-        ap = path?.size ?: (movement?.tiles ?: 0),
+        ap = path?.pathCost(state.map) ?: (movement?.tiles ?: 0),
         mana = def.cost.mana,
         markQuickUsed = def.cost.action == ActionCost.Quick,
     )

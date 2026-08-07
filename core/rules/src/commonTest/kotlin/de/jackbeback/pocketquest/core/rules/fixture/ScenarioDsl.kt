@@ -40,9 +40,13 @@ import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.model.TargetFilter
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.model.Targeting
+import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
 import de.jackbeback.pocketquest.core.rules.checkInvariants
+
+/** Test convenience for `BattleMap.terrain` — every position becomes a wall. */
+fun walls(vararg positions: GridPos): Map<GridPos, TileType> = positions.associateWith { TileType.Wall }
 
 /**
  * Small DSL so scenarios read like the rules they encode — see

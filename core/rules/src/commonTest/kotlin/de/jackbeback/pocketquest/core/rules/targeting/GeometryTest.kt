@@ -3,6 +3,7 @@ package de.jackbeback.pocketquest.core.rules.targeting
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Shape
+import de.jackbeback.pocketquest.core.rules.fixture.walls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -27,7 +28,7 @@ class GeometryTest {
 
     @Test
     fun wallBetweenTwoPointsBlocksLineOfSight() {
-        val map = BattleMap(10, 10, blockedTiles = setOf(GridPos(2, 0)))
+        val map = BattleMap(10, 10, terrain = walls(GridPos(2, 0)))
         assertFalse(hasLineOfSight(GridPos(0, 0), GridPos(4, 0), map))
     }
 
@@ -35,10 +36,10 @@ class GeometryTest {
     fun diagonalStepBlockedByEitherSharedCardinalNeighbourWall() {
         // Moving from (0,0) to (1,1) diagonally: Bresenham visits no intermediate cell,
         // so the corner-cut check must catch a wall at (1,0) or (0,1) explicitly.
-        val mapBlockedRight = BattleMap(10, 10, blockedTiles = setOf(GridPos(1, 0)))
+        val mapBlockedRight = BattleMap(10, 10, terrain = walls(GridPos(1, 0)))
         assertFalse(hasLineOfSight(GridPos(0, 0), GridPos(1, 1), mapBlockedRight))
 
-        val mapBlockedBelow = BattleMap(10, 10, blockedTiles = setOf(GridPos(0, 1)))
+        val mapBlockedBelow = BattleMap(10, 10, terrain = walls(GridPos(0, 1)))
         assertFalse(hasLineOfSight(GridPos(0, 0), GridPos(1, 1), mapBlockedBelow))
 
         assertTrue(hasLineOfSight(GridPos(0, 0), GridPos(1, 1), openMap))
@@ -48,7 +49,7 @@ class GeometryTest {
     fun targetTileItselfIsNeverCheckedForBlocking() {
         // A blocked target tile is still "visible" up to it — legalTargets/canPerform decide
         // whether standing on a wall is a valid target, not hasLineOfSight.
-        val map = BattleMap(10, 10, blockedTiles = setOf(GridPos(4, 0)))
+        val map = BattleMap(10, 10, terrain = walls(GridPos(4, 0)))
         assertTrue(hasLineOfSight(GridPos(0, 0), GridPos(4, 0), map))
     }
 

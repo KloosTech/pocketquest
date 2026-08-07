@@ -14,6 +14,7 @@ import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.rules.action.canPerform
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
+import de.jackbeback.pocketquest.core.rules.fixture.walls
 import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import kotlin.random.Random
 import kotlin.test.Test
@@ -49,7 +50,7 @@ class RejectionSoundnessPropertyTest {
     @Test
     fun canPerformAndPerformAgreeAcrossManyRandomTargetChoices() {
         val s = scenarioWithBlockedTile()
-        val blockedState = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(7, 5))))
+        val blockedState = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(7, 5))))
         val def = s.catalog.actionDef(ActionId("bolt"))
         val rng = Random(42)
 

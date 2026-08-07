@@ -25,27 +25,30 @@ fun tilesWithinRange(origin: GridPos, range: Int, map: BattleMap): List<GridPos>
 internal val EIGHT_DIRECTIONS = listOf(-1 to -1, -1 to 0, -1 to 1, 0 to -1, 0 to 1, 1 to -1, 1 to 0, 1 to 1)
 
 /**
- * BFS reachability within [maxSteps] over walkable, unoccupied tiles.
- * Movement here has uniform cost (BattleMap has no terrain weighting), so
- * this is equivalent to what a full A* would produce — no pathfinding
- * algorithm needed, just a flood fill.
+ * Every tile reachable from [origin] for at most [maxCost], over walkable, unoccupied tiles.
+ * Cost-aware (docs/17-engine-gaps.md 1.4 — `BattleMap` used to be uniform-cost, so a plain BFS
+ * flood fill was equivalent to Dijkstra; difficult terrain broke that equivalence, so this now
+ * tracks the cheapest cost to reach each tile rather than just its step count). Linear min-scan
+ * over the frontier, same style as [findPath] — commonMain has no `java.util.PriorityQueue`.
  */
-fun reachableTiles(origin: GridPos, maxSteps: Int, map: BattleMap, occupancy: Map<GridPos, EntityId>): Set<GridPos> {
-    val visited = mutableMapOf(origin to 0)
-    val queue = ArrayDeque<GridPos>()
-    queue.add(origin)
-    while (queue.isNotEmpty()) {
-        val current = queue.removeFirst()
-        val dist = visited.getValue(current)
-        if (dist >= maxSteps) continue
+fun reachableTiles(origin: GridPos, maxCost: Int, map: BattleMap, occupancy: Map<GridPos, EntityId>): Set<GridPos> {
+    val bestCost = mutableMapOf(origin to 0)
+    val frontier = mutableListOf(origin)
+    while (frontier.isNotEmpty()) {
+        val current = frontier.minBy { bestCost.getValue(it) }
+        frontier.remove(current)
+        val costSoFar = bestCost.getValue(current)
         for ((dc, dr) in EIGHT_DIRECTIONS) {
             val next = GridPos(current.col + dc, current.row + dr)
-            if (next in visited) continue
             if (!map.isWalkable(next)) continue
             if (occupancy.containsKey(next)) continue
-            visited[next] = dist + 1
-            queue.add(next)
+            val tentative = costSoFar + map.moveCost(next)
+            if (tentative > maxCost) continue
+            if (tentative < (bestCost[next] ?: Int.MAX_VALUE)) {
+                bestCost[next] = tentative
+                frontier += next
+            }
         }
     }
-    return visited.keys - origin
+    return bestCost.keys - origin
 }

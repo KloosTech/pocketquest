@@ -3,6 +3,7 @@ package de.jackbeback.pocketquest.core.rules.targeting
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.rules.fixture.walls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -33,7 +34,7 @@ class PathfindingTest {
 
     @Test
     fun routesAroundAWallRatherThanFailing() {
-        val map = BattleMap(10, 10, blockedTiles = setOf(GridPos(1, 0), GridPos(1, 1), GridPos(1, 2)))
+        val map = BattleMap(10, 10, terrain = walls(GridPos(1, 0), GridPos(1, 1), GridPos(1, 2)))
         val path = findPath(GridPos(0, 1), GridPos(2, 1), map, emptyMap())
         requireNotNull(path)
         assertEquals(GridPos(2, 1), path.last())
@@ -43,7 +44,7 @@ class PathfindingTest {
 
     @Test
     fun destinationBlockedByTerrainReturnsNull() {
-        val map = BattleMap(10, 10, blockedTiles = setOf(GridPos(3, 0)))
+        val map = BattleMap(10, 10, terrain = walls(GridPos(3, 0)))
         assertNull(findPath(GridPos(0, 0), GridPos(3, 0), map, emptyMap()))
     }
 
@@ -56,7 +57,7 @@ class PathfindingTest {
 
     @Test
     fun fullyEnclosedDestinationIsUnreachable() {
-        val map = BattleMap(10, 10, blockedTiles = setOf(GridPos(4, 3), GridPos(5, 3), GridPos(6, 3), GridPos(4, 4), GridPos(6, 4), GridPos(4, 5), GridPos(5, 5), GridPos(6, 5)))
+        val map = BattleMap(10, 10, terrain = walls(GridPos(4, 3), GridPos(5, 3), GridPos(6, 3), GridPos(4, 4), GridPos(6, 4), GridPos(4, 5), GridPos(5, 5), GridPos(6, 5)))
         assertNull(findPath(GridPos(0, 0), GridPos(5, 4), map, emptyMap()))
     }
 

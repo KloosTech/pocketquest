@@ -12,7 +12,9 @@ import de.jackbeback.pocketquest.core.model.Ref
 import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.TargetMode
+import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
+import de.jackbeback.pocketquest.core.rules.fixture.walls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -132,10 +134,38 @@ class CanPerformTest {
                 targeting(TargetMode.Path, Range.Tiles(5), Shape.Single, requiresLoS = false)
             }
         }
-        val walled = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(3, 0))))
+        val walled = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(3, 0))))
         val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 0))
         val rejections = canPerform(walled, s.id("hero"), s.catalog.actionDef(actionId("move")), ctx, s.catalog)
         assertEquals(listOf(Rejection.Blocked(GridPos(3, 0))), rejections)
+    }
+
+    @Test
+    fun pathModeMovementCostReflectsDifficultTerrainNotJustTileCount() {
+        val s = scenario {
+            map(10, 10)
+            archetype("dummy") { hp = 10; ap = 3 }
+            entity("hero") { archetype("dummy"); at(0, 5); hp(10); ap(3) }
+            initiative("hero")
+            actionDef("move") {
+                cost(ActionCost.Movement(tiles = 0))
+                targeting(TargetMode.Path, Range.Tiles(5), Shape.Single, requiresLoS = false)
+            }
+        }
+        // 3 tiles away, but the middle one is Difficult (moveCost=2): real cost is 1+2+1=4, not 3.
+        // Walls above/below it close off any cheaper diagonal detour around the difficult tile.
+        val difficult = s.state.copy(
+            map = s.state.map.copy(
+                terrain = mapOf(
+                    GridPos(1, 4) to TileType.Wall,
+                    GridPos(1, 5) to TileType.Difficult,
+                    GridPos(1, 6) to TileType.Wall,
+                ),
+            ),
+        )
+        val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 5))
+        val rejections = canPerform(difficult, s.id("hero"), s.catalog.actionDef(actionId("move")), ctx, s.catalog)
+        assertEquals(listOf(Rejection.NotEnoughAp(4, 3)), rejections)
     }
 
     @Test
@@ -168,7 +198,7 @@ class CanPerformTest {
                 effect(EffectTemplate.DealDamage(Ref.EachTarget, 5, DamageType.Fire))
             }
         }
-        val walledState = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(2, 0))))
+        val walledState = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(2, 0))))
         val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(4, 0))
         val rejections = canPerform(walledState, s.id("hero"), s.catalog.actionDef(actionId("bolt")), ctx, s.catalog)
         assertTrue(Rejection.NoLineOfSight in rejections)

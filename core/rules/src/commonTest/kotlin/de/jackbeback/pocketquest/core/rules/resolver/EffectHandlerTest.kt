@@ -13,6 +13,7 @@ import de.jackbeback.pocketquest.core.model.Stat
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
+import de.jackbeback.pocketquest.core.rules.fixture.walls
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -162,7 +163,7 @@ class EffectHandlerTest {
             archetype("dummy") { hp = 10 }
             entity("hero") { archetype("dummy"); at(0, 0) }
         }
-        val blockedState = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(1, 0))))
+        val blockedState = s.state.copy(map = s.state.map.copy(terrain = walls(GridPos(1, 0))))
         val out = applyEffect(blockedState, Effect.MoveAlong(s.id("hero"), listOf(GridPos(1, 0))), emptyMap(), s.catalog)
 
         assertEquals(GridPos(0, 0), out.state.byId.getValue(s.id("hero")).pos)
