@@ -4,6 +4,7 @@ import androidx.compose.animation.core.tween
 import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameEvent
+import de.jackbeback.pocketquest.core.model.GridPos
 import kotlinx.coroutines.delay
 
 /** doc07: one place decides timing. Nothing else in the codebase knows how long anything takes. */
@@ -21,15 +22,18 @@ private const val STATUS_POP_MS = 200
 private const val DEATH_FADE_MS = 400
 private const val DAMAGE_NUMBER_HOLD_MS = 700L
 private const val HP_ANIMATE_MS = 250
+private const val MOVE_STEP_MS = 180
 
 /**
  * doc07's choreograph(): "adding a new game event means adding a when
  * branch here." Covers what the demo scenario actually emits
- * (AttackRolled/DamageTaken/Healed/StatusApplied), plus Died/Fizzled from
- * doc07's own example for completeness even though this demo never
- * produces them. ActionStarted/ResourcesSpent/ResourcesReset/
- * TurnStarted/TurnEnded fall through to the empty default — there is no
- * HUD or turn banner yet for them to drive.
+ * (AttackRolled/DamageTaken/Healed/StatusApplied), MoveStepped per doc07's
+ * own sketch (KNOWN_ISSUES.md #1 — missing until now, never exercised
+ * since nothing in the demo moves), plus Died/Fizzled from doc07's own
+ * example for completeness even though this demo never produces them.
+ * ActionStarted/ResourcesSpent/ResourcesReset/TurnStarted/TurnEnded fall
+ * through to the empty default — there is no HUD or turn banner yet for
+ * them to drive.
  *
  * Every beat that mutates a *shared* per-entity [Animatable] (`scale`,
  * `hp`) is [Timing.Blocking], never [Timing.Parallel] — found the hard way,
@@ -43,6 +47,9 @@ private const val HP_ANIMATE_MS = 250
  * touches its own freshly-created overlay entry, never shared state.
  */
 fun choreograph(event: GameEvent): List<Beat> = when (event) {
+    is GameEvent.MoveStepped -> listOf(
+        Beat(Timing.Blocking) { world -> world.walk(event.who, event.to) },
+    )
     is GameEvent.AttackRolled -> listOf(
         Beat(Timing.Blocking) { world -> world.pulse(event.attacker, 1.3f, ATTACK_PULSE_MS) },
     )
@@ -67,6 +74,11 @@ fun choreograph(event: GameEvent): List<Beat> = when (event) {
 
 /** doc07: "all durations must go through a single scale factor" — `speed = 0` collapses every hold to nothing. */
 fun VisualWorld.scaled(ms: Int): Int = if (speed <= 0f) 0 else (ms / speed).toInt().coerceAtLeast(0)
+
+private suspend fun VisualWorld.walk(id: EntityId, to: GridPos) {
+    val v = entities[id] ?: return
+    v.pos.animateTo(to.toOffset(tilePx), tween(scaled(MOVE_STEP_MS)))
+}
 
 private suspend fun VisualWorld.pulse(id: EntityId, factor: Float, ms: Int) {
     val v = entities[id] ?: return

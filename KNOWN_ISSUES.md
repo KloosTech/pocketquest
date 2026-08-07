@@ -20,26 +20,36 @@ implications.
 
 ## 1. Movement never animates
 
-**Status: Confirmed.**
+**Status: Fixed.** `choreograph()` now has a `MoveStepped` branch
+(`Beat(Timing.Blocking) { it.walk(event.who, event.to) }`), animating
+`pos` via `animateTo`. Regression test:
+`DirectorTest.moveSteppedProducesABlockingWalkBeat`.
 
 `choreograph()` in `ui/src/commonMain/kotlin/de/jackbeback/pocketquest/ui/Director.kt`
 has no `GameEvent.MoveStepped` branch — it falls through `else -> emptyList()`.
 `settle()` (`Reconciliation.kt`) snaps a moved token straight to its final
 tile with no interpolation in between.
 
-Not a regression — no pass has implemented it yet (doc07's animation pass
-covered Attack/Damage/Heal/Died/StatusApplied only). Highest-priority gap in
-`:ui`: it's the one animation the whole `VisualEntity.pos: Animatable<Offset>`
-design exists for.
-
-**Fix direction:** add a `Beat(Timing.Blocking) { it.walk(who, to) }` branch
-per doc07's own sketch, animating `pos` via `animateTo`.
+Was not a regression when reported — no pass had implemented it yet
+(doc07's animation pass covered Attack/Damage/Heal/Died/StatusApplied
+only). It was the one animation the whole `VisualEntity.pos:
+Animatable<Offset>` design exists for.
 
 ---
 
 ## 2. Corpses come back, and reserve units render in the corner
 
-**Status: Confirmed** (two related bugs in `Reconciliation.kt`/`App.kt`).
+**Status: Fixed** (both 2a and 2b). `VisualWorld.settle()` now forces
+`alpha` from `health.current` instead of snapping it to `1f`
+unconditionally, and both `settle()` and `VisualWorld`'s init block skip
+entities with `pos == null` entirely instead of defaulting to
+`Offset.Zero`. Regression tests:
+`ReconciliationTest.settleFadesADeadEntityEvenIfNoDeathBeatEverRan`,
+`settleRestoresAliveAlphaEvenIfLeftMidFade`,
+`reserveEntityWithNullPosGetsNoVisualEntity`,
+`settleRemovesAVisualEntityThatMovedToReserve`.
+
+Original findings (two related bugs in `Reconciliation.kt`/`App.kt`):
 
 **2a — resurrection.** `VisualWorld.settle()`
 (`ui/src/commonMain/kotlin/de/jackbeback/pocketquest/ui/Reconciliation.kt:18`)

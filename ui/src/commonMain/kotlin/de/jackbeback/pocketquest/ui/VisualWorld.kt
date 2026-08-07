@@ -38,7 +38,7 @@ data class Overlay(val id: Long, val entityId: EntityId, val amount: Int, val da
  * single scale factor") without needing an extra parameter threaded
  * through every call site.
  */
-class VisualWorld(initial: GameState, tilePx: Float) {
+class VisualWorld(initial: GameState, val tilePx: Float) {
     val entities = mutableStateMapOf<EntityId, VisualEntity>()
     val overlays = mutableStateListOf<Overlay>()
 
@@ -48,8 +48,11 @@ class VisualWorld(initial: GameState, tilePx: Float) {
     private var nextOverlayId = 0L
 
     init {
+        // doc02: pos == null means "not on the map" (reserve, dead) — nothing to draw at any
+        // position, so it gets no VisualEntity at all rather than a fake Offset.Zero one.
         initial.entities.forEach { e ->
-            entities[e.id] = VisualEntity(e.pos?.toOffset(tilePx) ?: Offset.Zero, (e.health?.current ?: 0).toFloat())
+            val pos = e.pos ?: return@forEach
+            entities[e.id] = VisualEntity(pos.toOffset(tilePx), (e.health?.current ?: 0).toFloat())
         }
     }
 

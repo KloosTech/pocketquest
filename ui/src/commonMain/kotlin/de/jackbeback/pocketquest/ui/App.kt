@@ -112,7 +112,7 @@ fun App(initialState: GameState, finalState: GameState, events: List<GameEvent>,
     fun skip() {
         playerJob?.cancel()
         world.speed = 0f
-        scope.launch { world.settle(finalState, TILE_PX) }
+        scope.launch { world.settle(finalState) }
     }
 
     LaunchedEffect(events) {
@@ -130,7 +130,7 @@ fun App(initialState: GameState, finalState: GameState, events: List<GameEvent>,
         player.enqueue(events.flatMap { choreograph(it) })
         player.close()
         player.run()
-        world.settle(finalState, TILE_PX)
+        world.settle(finalState)
     }
 
     Row(modifier = Modifier.fillMaxSize().background(Color.White)) {

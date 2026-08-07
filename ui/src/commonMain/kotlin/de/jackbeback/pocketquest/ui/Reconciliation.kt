@@ -1,22 +1,40 @@
 package de.jackbeback.pocketquest.ui
 
-import androidx.compose.ui.geometry.Offset
 import de.jackbeback.pocketquest.core.model.GameState
 
 /**
  * doc07's settle() — the safety net. Call after every drain (or a skip):
  * a forgotten or cancelled beat becomes a one-frame cosmetic glitch instead
  * of a token permanently in the wrong place.
+ *
+ * Forces alpha from `health.current` rather than leaving it alone: a beat
+ * fading a dead entity to 0 might have been skipped or cancelled mid-flight,
+ * and doc07's whole point is that settle() restores the correct final state
+ * regardless of what beats did or didn't finish — snapping every entity's
+ * alpha back to 1 unconditionally would resurrect a corpse the very next
+ * time this runs (found in KNOWN_ISSUES.md #2, never exercised before
+ * since the demo scenario never produced a Died event).
+ *
+ * A `pos == null` entity (doc02: reserve, dead — "not on the map") gets no
+ * VisualEntity at all — see [VisualWorld]'s init block for the equivalent
+ * fix on first construction.
  */
-suspend fun VisualWorld.settle(logical: GameState, tilePx: Float) {
+suspend fun VisualWorld.settle(logical: GameState) {
     logical.entities.forEach { e ->
-        val v = entities.getOrPut(e.id) {
-            VisualEntity(e.pos?.toOffset(tilePx) ?: Offset.Zero, (e.health?.current ?: 0).toFloat())
+        val pos = e.pos
+        if (pos == null) {
+            entities.remove(e.id)
+            return@forEach
         }
-        e.pos?.toOffset(tilePx)?.let { if (v.pos.value != it) v.pos.snapTo(it) }
+
+        val v = entities.getOrPut(e.id) { VisualEntity(pos.toOffset(tilePx), (e.health?.current ?: 0).toFloat()) }
+        val target = pos.toOffset(tilePx)
+        if (v.pos.value != target) v.pos.snapTo(target)
         e.health?.let { if (v.hp.value != it.current.toFloat()) v.hp.snapTo(it.current.toFloat()) }
-        v.alpha.snapTo(1f)
+
+        val alive = (e.health?.current ?: 1) > 0
+        v.alpha.snapTo(if (alive) 1f else 0f)
         v.scale.snapTo(1f)
     }
-    entities.keys.retainAll(logical.byId.keys)
+    entities.keys.retainAll(logical.entities.filter { it.pos != null }.map { it.id }.toSet())
 }
