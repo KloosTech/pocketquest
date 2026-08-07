@@ -39,7 +39,19 @@ fun legalTargets(state: GameState, caster: EntityId, def: ActionDef, cat: Catalo
             occupant != null && matchesFilter(occupant, caster, targeting.filter)
         }.toSet()
         TargetMode.Point, TargetMode.Direction -> visible.toSet()
-        TargetMode.Path -> reachableTiles(origin, maxRange, state.map, state.occupancy)
+        // Real bug found by actually playing a Move action live, not by inspection: this used to
+        // budget purely off the ActionDef's static `range` (an action-design ceiling, e.g. "Dash
+        // reaches at most 8 tiles"), completely ignoring the caster's actual remaining AP — so the
+        // board highlighted tiles the player could see but not afford, canPerform()/perform()
+        // correctly rejected them on Confirm, and it silently looked like "the tile I tapped does
+        // nothing." Capped by whichever is smaller so every highlighted tile is one Confirm will
+        // actually honour — every other TargetMode already has this property, Path was the outlier.
+        // A caster with no `resources` at all (a wall/hazard, not a real actor) has no AP economy to
+        // cap by, so it falls back to the range-only budget rather than being clamped to zero.
+        TargetMode.Path -> {
+            val budget = casterEntity.resources?.let { minOf(maxRange, it.ap) } ?: maxRange
+            reachableTiles(origin, budget, state.map, state.occupancy)
+        }
         TargetMode.SelfOnly -> setOf(origin) // unreachable — handled above
     }
 }

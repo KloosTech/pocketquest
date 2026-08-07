@@ -26,8 +26,10 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
     is EffectTemplate.DealDamage ->
         resolveRef(target, ctx).map { Effect.DealDamage(it, amount, damageType, tags = tags) }
 
-    is EffectTemplate.ApplyStatus ->
-        resolveRef(target, ctx).map { Effect.ApplyStatus(it, status, stacks, expiry) }
+    is EffectTemplate.ApplyStatus -> {
+        val sourceId = caster?.let { resolveRef(it, ctx).firstOrNull() }
+        resolveRef(target, ctx).map { Effect.ApplyStatus(it, status, stacks, expiry, sourceId = sourceId) }
+    }
 
     is EffectTemplate.RollAttack -> {
         val attackerId = resolveRef(attacker, ctx).firstOrNull() ?: return emptyList()
@@ -73,4 +75,9 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
 
     is EffectTemplate.DestroyEntity ->
         resolveRef(target, ctx).map { Effect.DestroyEntity(it) }
+
+    is EffectTemplate.Heal -> {
+        val sourceId = source?.let { resolveRef(it, ctx).firstOrNull() }
+        resolveRef(target, ctx).map { Effect.Heal(it, amount, source = sourceId) }
+    }
 }

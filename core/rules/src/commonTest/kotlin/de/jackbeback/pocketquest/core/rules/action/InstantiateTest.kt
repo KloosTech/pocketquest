@@ -229,4 +229,40 @@ class InstantiateTest {
         val ctx = ActionCtx(caster, targets = listOf(EntityId(5)))
         assertEquals(listOf(Effect.DestroyEntity(EntityId(5))), template.instantiate(state, ctx, cat))
     }
+
+    // --- ApplyStatus.caster / Heal (found missing while authoring real Taunt/healer content) ---
+
+    @Test
+    fun applyStatusThreadsTheCasterRefIntoSourceId() {
+        val template = EffectTemplate.ApplyStatus(Ref.EachTarget, StatusId("taunted"), expiry = Expiry.Permanent, caster = Ref.Caster)
+        val ctx = ActionCtx(caster, targets = listOf(EntityId(2)))
+        assertEquals(
+            listOf(Effect.ApplyStatus(EntityId(2), StatusId("taunted"), 1, Expiry.Permanent, sourceId = caster)),
+            template.instantiate(state, ctx, cat),
+        )
+    }
+
+    @Test
+    fun applyStatusWithNoCasterRefLeavesSourceIdNull() {
+        val template = EffectTemplate.ApplyStatus(Ref.EachTarget, StatusId("burn"), expiry = Expiry.Permanent)
+        val ctx = ActionCtx(caster, targets = listOf(EntityId(2)))
+        assertEquals(
+            listOf(Effect.ApplyStatus(EntityId(2), StatusId("burn"), 1, Expiry.Permanent, sourceId = null)),
+            template.instantiate(state, ctx, cat),
+        )
+    }
+
+    @Test
+    fun healResolvesTargetAmountAndOptionalSource() {
+        val template = EffectTemplate.Heal(Ref.EachTarget, 5, source = Ref.Caster)
+        val ctx = ActionCtx(caster, targets = listOf(EntityId(2)))
+        assertEquals(listOf(Effect.Heal(EntityId(2), 5, source = caster)), template.instantiate(state, ctx, cat))
+    }
+
+    @Test
+    fun healWithNoSourceRefLeavesSourceNull() {
+        val template = EffectTemplate.Heal(Ref.Caster, 5)
+        val ctx = ActionCtx(caster, targets = emptyList())
+        assertEquals(listOf(Effect.Heal(caster, 5, source = null)), template.instantiate(state, ctx, cat))
+    }
 }

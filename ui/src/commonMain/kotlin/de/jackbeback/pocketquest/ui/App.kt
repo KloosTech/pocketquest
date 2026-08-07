@@ -310,6 +310,7 @@ private fun Board(
     colors: Map<EntityId, Color>,
     legalTiles: Set<GridPos>,
     threatTiles: Set<GridPos>,
+    selectedTile: GridPos?,
     canPan: Boolean,
     onTileTap: (GridPos) -> Unit,
     onViewportSizeChanged: (Size) -> Unit,
@@ -370,6 +371,7 @@ private fun Board(
         drawGrid(map, camera, zoom)
         threatTiles.forEach { pos -> drawThreatHatch(pos, camera, zoom) }
         legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
+        selectedTile?.let { pos -> drawSelectedTile(pos, camera, zoom) }
         world.entities.forEach { (id, entity) ->
             drawEntity(entity, colors[id] ?: Color.Gray, camera, zoom)
         }
@@ -427,6 +429,15 @@ private fun DrawScope.drawHighlight(pos: GridPos, camera: Offset, zoom: Float) {
         size = tileSize,
         style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))),
     )
+}
+
+/** The tile picked in Selection.TargetPicked, before Confirm — a solid green tint+border, deliberately not the dashed ink "Reachable" style so a confirmed-looking pick reads differently from "you could tap here." */
+private fun DrawScope.drawSelectedTile(pos: GridPos, camera: Offset, zoom: Float) {
+    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
+    val tileSize = Size(TILE_PX * zoom, TILE_PX * zoom)
+    val green = Color(0xFF2E7D32)
+    drawRect(color = green.copy(alpha = 0.25f), topLeft = topLeft, size = tileSize)
+    drawRect(color = green, topLeft = topLeft, size = tileSize, style = Stroke(width = 3f))
 }
 
 /** doc16's visual spec for the threat overlay: "Enemy threat — Diagonal hatch, only while the threat overlay is on." */
@@ -651,6 +662,7 @@ fun App(initialState: GameState, catalog: Catalog) {
                 colors = colors,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
                 threatTiles = threatTiles,
+                selectedTile = (selection as? Selection.TargetPicked)?.ctx?.point,
                 canPan = canPan,
                 modifier = Modifier.size(maxWidth, maxHeight),
                 onViewportSizeChanged = { viewportSize = it },

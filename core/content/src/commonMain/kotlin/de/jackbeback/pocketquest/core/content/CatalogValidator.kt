@@ -70,7 +70,7 @@ object CatalogValidator {
             }
 
             is EffectTemplate.DealDamage, is EffectTemplate.RollAttack, is EffectTemplate.Push, is EffectTemplate.Teleport,
-            is EffectTemplate.SpawnEntity, is EffectTemplate.DestroyEntity,
+            is EffectTemplate.SpawnEntity, is EffectTemplate.DestroyEntity, is EffectTemplate.Heal,
             -> Unit
         }
     }

@@ -85,6 +85,37 @@ class TargetingTest {
         assertFalse(GridPos(2, 0) in legal, "directly behind the wall is farther than 2 actual steps away")
     }
 
+    @Test
+    fun legalTargetsPathModeCapsByAvailableApNotJustTheActionsDeclaredRange() {
+        // Found live: a Move action highlighted tiles up to its static range regardless of AP,
+        // canPerform/perform correctly rejected a tap beyond actual AP, and it silently looked
+        // broken — the highlighted set must never promise more than a Confirm can actually deliver.
+        val s = scenario {
+            map(10, 10)
+            archetype("dummy") { hp = 10; ap = 5 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(2) }
+        }
+        val def = actionDefWith(Targeting(TargetMode.Path, Range.Tiles(8), Shape.Single, requiresLoS = false))
+        val legal = legalTargets(s.state, s.id("hero"), def, s.catalog)
+        assertTrue(GridPos(2, 0) in legal, "within the 2 AP the entity actually has")
+        assertFalse(GridPos(5, 0) in legal, "the action's declared range is 8, but only 2 AP is actually available")
+    }
+
+    @Test
+    fun legalTargetsPathModeFallsBackToRangeAloneForAnEntityWithNoResources() {
+        // A wall/hazard/non-actor entity (doc02: resources == null means "no action economy at
+        // all", not "zero"). Capping its budget at 0 would neuter the range-only case entirely, not
+        // just correctly gate a real actor's AP.
+        val s = scenario {
+            map(10, 10)
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) } // no ap() -> resources == null
+        }
+        val def = actionDefWith(Targeting(TargetMode.Path, Range.Tiles(2), Shape.Single, requiresLoS = false))
+        val legal = legalTargets(s.state, s.id("hero"), def, s.catalog)
+        assertTrue(GridPos(2, 0) in legal, "no resources at all falls back to the range-only budget, not zero")
+    }
+
     // --- affectedBy ---
 
     @Test

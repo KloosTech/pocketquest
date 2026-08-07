@@ -28,8 +28,16 @@ sealed interface EffectTemplate {
     @Serializable @SerialName("dealDamage")
     data class DealDamage(val target: Ref, val amount: Int, val damageType: DamageType, val tags: Set<DamageTag> = emptySet()) : EffectTemplate
 
+    /**
+     * [caster] threads through to [Effect.ApplyStatus.sourceId] — found missing while authoring
+     * real Taunt content (doc17-engine-gaps.md 2.3): without it, every content-authored status
+     * applies with `sourceId = null`, and anything reading who granted a status (Taunt's
+     * `tauntedBy()`, a doc18 ward's `StepRef.StatusSource`) silently can't find them. Optional and
+     * defaulted to null — most statuses (a self-buff, `burning`'s own DoT) never needed a source at
+     * all, so this doesn't force every existing/future template to specify one.
+     */
     @Serializable @SerialName("applyStatus")
-    data class ApplyStatus(val target: Ref, val status: StatusId, val stacks: Int = 1, val expiry: Expiry) : EffectTemplate
+    data class ApplyStatus(val target: Ref, val status: StatusId, val stacks: Int = 1, val expiry: Expiry, val caster: Ref? = null) : EffectTemplate
 
     @Serializable @SerialName("rollAttack")
     data class RollAttack(
@@ -66,6 +74,14 @@ sealed interface EffectTemplate {
 
     @Serializable @SerialName("destroyEntity")
     data class DestroyEntity(val target: Ref) : EffectTemplate
+
+    /**
+     * [Effect.Heal] (pass 8) never got a content-authoring template — found missing while
+     * authoring a real healer archetype, the same way [ApplyStatus.caster] was. [source] is
+     * optional for the same reason: a self-heal has no separate source worth naming.
+     */
+    @Serializable @SerialName("heal")
+    data class Heal(val target: Ref, val amount: Int, val source: Ref? = null) : EffectTemplate
 }
 
 /** A pure declaration — no logic. Performing it pushes SpendCost then its instantiated effects onto the resolver stack. */
