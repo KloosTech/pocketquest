@@ -40,6 +40,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
@@ -67,6 +68,7 @@ import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
 import de.jackbeback.pocketquest.core.rules.stat.stats
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
+import de.jackbeback.pocketquest.core.rules.targeting.allThreatenedTiles
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -134,20 +136,41 @@ private fun InkButton(label: String, modifier: Modifier = Modifier, onClick: () 
  * Camera section's own explicit ask: "a 'centre on active' button in the turn strip for when the
  * player has panned away." [onOpenLog] is doc15's battle log ask: "reachable from the turn strip" —
  * placed at the strip's own trailing end, past every turn token, per the user's explicit request.
+ * [threatOverlayOn]/[onToggleThreat] is doc15's threat overlay toggle — "the highest-value quality-
+ * of-life feature there is, and it is cheap."
  */
 @Composable
-private fun TurnOrderStrip(state: GameState, colors: Map<EntityId, Color>, onCenterOnActive: () -> Unit, onOpenLog: () -> Unit, modifier: Modifier = Modifier) {
+private fun TurnOrderStrip(
+    state: GameState,
+    colors: Map<EntityId, Color>,
+    onCenterOnActive: () -> Unit,
+    onOpenLog: () -> Unit,
+    threatOverlayOn: Boolean,
+    onToggleThreat: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     Row(
         modifier = modifier.fillMaxWidth().height(56.dp).background(PAPER_SHEET).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         InkButton("⌖", modifier = Modifier.padding(end = 10.dp), onClick = onCenterOnActive)
+        Box(
+            modifier = Modifier
+                .padding(end = 10.dp)
+                .border(1.dp, INK)
+                .background(if (threatOverlayOn) Color(0xFFB71C1C) else PAPER)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onToggleThreat)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+        ) {
+            BasicText("⚠", style = TextStyle(color = if (threatOverlayOn) Color.White else INK, fontSize = 14.sp))
+        }
         val activeId = state.turn.order.getOrNull(state.turn.activeIndex)
         state.turn.order.forEach { id ->
             val entity = state.byId[id] ?: return@forEach
-            // Nothing removes a dead entity from turn.order yet (doc17 3.1's DestroyEntity is
-            // unimplemented) — endTurn already skips its turn, so this strip just needs to render
-            // that visually instead of showing a dead entity as a normal live token.
+            // Nothing removes a dead entity from turn.order in THIS demo (DestroyEntity exists as
+            // an engine primitive since doc17 3.1, but nothing in the demo catalog calls it) —
+            // endTurn already skips a dead entity's turn, so this strip just needs to render that
+            // visually instead of showing it as a normal live token.
             val alive = (entity.health?.current ?: 1) > 0
             Box(
                 modifier = Modifier.padding(end = 10.dp).size(32.dp),
@@ -286,6 +309,7 @@ private fun Board(
     world: VisualWorld,
     colors: Map<EntityId, Color>,
     legalTiles: Set<GridPos>,
+    threatTiles: Set<GridPos>,
     canPan: Boolean,
     onTileTap: (GridPos) -> Unit,
     onViewportSizeChanged: (Size) -> Unit,
@@ -344,6 +368,7 @@ private fun Board(
         val camera = world.camera.value
         val zoom = world.zoom.value
         drawGrid(map, camera, zoom)
+        threatTiles.forEach { pos -> drawThreatHatch(pos, camera, zoom) }
         legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
         world.entities.forEach { (id, entity) ->
             drawEntity(entity, colors[id] ?: Color.Gray, camera, zoom)
@@ -402,6 +427,25 @@ private fun DrawScope.drawHighlight(pos: GridPos, camera: Offset, zoom: Float) {
         size = tileSize,
         style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))),
     )
+}
+
+/** doc16's visual spec for the threat overlay: "Enemy threat — Diagonal hatch, only while the threat overlay is on." */
+private fun DrawScope.drawThreatHatch(pos: GridPos, camera: Offset, zoom: Float) {
+    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
+    val tileSize = TILE_PX * zoom
+    val color = Color(0xFFB71C1C).copy(alpha = 0.5f)
+    clipRect(topLeft.x, topLeft.y, topLeft.x + tileSize, topLeft.y + tileSize) {
+        val step = tileSize / 4f
+        for (i in -3..3) {
+            val offset = i * step
+            drawLine(
+                color = color,
+                start = Offset(topLeft.x + offset, topLeft.y + tileSize),
+                end = Offset(topLeft.x + offset + tileSize, topLeft.y),
+                strokeWidth = 2f,
+            )
+        }
+    }
 }
 
 private fun DrawScope.drawEntity(entity: VisualEntity, color: Color, camera: Offset, zoom: Float) {
@@ -464,7 +508,15 @@ fun App(initialState: GameState, catalog: Catalog) {
     var inspected by remember { mutableStateOf<EntityId?>(null) }
     var sheetExpanded by remember { mutableStateOf(true) }
     var viewportSize by remember { mutableStateOf(Size.Zero) }
+    var threatOverlayOn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+
+    // doc15: "a toggle that hatches every tile an enemy could reach and attack next turn" —
+    // recomputed only when the toggle flips or the game state actually changes, not on every
+    // camera/zoom-driven recomposition.
+    val threatTiles = remember(state, threatOverlayOn) {
+        if (threatOverlayOn) allThreatenedTiles(state, Faction.Enemy, catalog) else emptySet()
+    }
 
     // doc15 Camera: "never moves while the player is in ActionSelected or TargetPicked."
     val canPan = selection is Selection.None
@@ -581,6 +633,8 @@ fun App(initialState: GameState, catalog: Catalog) {
                 scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
             },
             onOpenLog = { logOpen = true },
+            threatOverlayOn = threatOverlayOn,
+            onToggleThreat = { threatOverlayOn = !threatOverlayOn },
         )
         // doc15: the board is a flex viewport (pan+zoom, culled), not sized to the map. BoxWithConstraints
         // gives Board's Canvas an explicit dp size matching the available space, rather than
@@ -596,6 +650,7 @@ fun App(initialState: GameState, catalog: Catalog) {
                 world = world,
                 colors = colors,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
+                threatTiles = threatTiles,
                 canPan = canPan,
                 modifier = Modifier.size(maxWidth, maxHeight),
                 onViewportSizeChanged = { viewportSize = it },
