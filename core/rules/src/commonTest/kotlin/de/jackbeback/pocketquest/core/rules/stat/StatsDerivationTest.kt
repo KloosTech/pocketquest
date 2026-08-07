@@ -113,6 +113,43 @@ class StatsDerivationTest {
         )
     }
 
+    // --- Feature modifiers — doc17-engine-gaps.md 1.7 ---
+
+    @Test
+    fun featureModifiersJoinTheFixedSourceOrder() {
+        val s = scenario {
+            archetype("dummy") { ac = 10; modifier(Modifier.Add(Stat.ArmorClass, 1)) } // 11
+            featureDef("toughening") { modifier(Modifier.Add(Stat.ArmorClass, 2)) } // 13
+            entity("hero") { archetype("dummy"); at(0, 0); feature("toughening") }
+        }
+        assertEquals(13, s.entity("hero").stats(s.catalog).armorClass)
+    }
+
+    @Test
+    fun featureOverrideBeatsArchetypeButLosesToEquipmentBySourceOrder() {
+        // doc11: features join right after archetype innate, before equipment — so on an Override
+        // tie, whichever comes LATER in that fixed order wins (equipment beats a feature, a
+        // feature beats archetype innate).
+        val s = scenario {
+            archetype("dummy") { ac = 10; modifier(Modifier.Override(Stat.ArmorClass, 1)) }
+            featureDef("toughening") { modifier(Modifier.Override(Stat.ArmorClass, 2)) }
+            itemDef("ring") { modifier(Modifier.Override(Stat.ArmorClass, 3)) }
+            entity("featureOnly") { archetype("dummy"); at(0, 0); feature("toughening") }
+            entity("featureAndItem") { archetype("dummy"); at(1, 0); feature("toughening"); equip(Slot.Ring1, "ring") }
+        }
+        assertEquals(2, s.entity("featureOnly").stats(s.catalog).armorClass, "feature beats archetype innate")
+        assertEquals(3, s.entity("featureAndItem").stats(s.catalog).armorClass, "equipment beats a feature")
+    }
+
+    @Test
+    fun anEntityWithNoFeaturesIsUnaffected() {
+        val s = scenario {
+            archetype("dummy") { ac = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        assertEquals(10, s.entity("hero").stats(s.catalog).armorClass)
+    }
+
     @Test
     fun rollGrantsAreNotScaledByStatusStacks() {
         val s = scenario {

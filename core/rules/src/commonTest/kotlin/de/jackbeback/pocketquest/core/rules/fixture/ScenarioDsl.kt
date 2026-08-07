@@ -17,6 +17,8 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Equipment
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.Faction
+import de.jackbeback.pocketquest.core.model.FeatureDef
+import de.jackbeback.pocketquest.core.model.FeatureId
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Health
@@ -71,6 +73,7 @@ class ScenarioBuilder {
     private val archetypes = mutableMapOf<String, Archetype>()
     private val statusDefs = mutableMapOf<String, StatusDef>()
     private val itemDefs = mutableMapOf<String, ItemDef>()
+    private val featureDefs = mutableMapOf<String, FeatureDef>()
     private val actionDefs = mutableMapOf<String, ActionDef>()
     private val entityOrder = mutableListOf<String>()
     private val entityBuilders = mutableMapOf<String, EntityBuilder>()
@@ -96,6 +99,10 @@ class ScenarioBuilder {
 
     fun itemDef(name: String, block: ItemDefBuilder.() -> Unit) {
         itemDefs[name] = ItemDefBuilder(name).apply(block).build()
+    }
+
+    fun featureDef(name: String, block: FeatureDefBuilder.() -> Unit) {
+        featureDefs[name] = FeatureDefBuilder(name).apply(block).build()
     }
 
     fun actionDef(name: String, block: ActionDefBuilder.() -> Unit) {
@@ -144,6 +151,7 @@ class ScenarioBuilder {
                 actor = Actor(b.faction, b.controller),
                 equipment = Equipment(b.equipmentSlots.toMap()),
                 statuses = statuses,
+                features = b.featureNames.map { FeatureId(it) },
             )
         }
 
@@ -159,6 +167,7 @@ class ScenarioBuilder {
             statuses = statusDefs.values.associateBy { it.id },
             items = itemDefs.values.associateBy { it.id },
             actions = actionDefs.values.associateBy { it.id },
+            features = featureDefs.values.associateBy { it.id },
         )
 
         val violations = checkInvariants(state, catalog)
@@ -233,6 +242,21 @@ class ItemDefBuilder(private val name: String) {
     fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList(), twoHanded)
 }
 
+class FeatureDefBuilder(private val name: String) {
+    private val mods = mutableListOf<Modifier>()
+    private val grantedActionIds = mutableListOf<ActionId>()
+
+    fun modifier(m: Modifier) {
+        mods += m
+    }
+
+    fun grantsAction(actionName: String) {
+        grantedActionIds += ActionId(actionName)
+    }
+
+    fun build(): FeatureDef = FeatureDef(FeatureId(name), name, mods.toList(), grantedActionIds.toList())
+}
+
 class EntityBuilder {
     var archetypeName: String? = null
         private set
@@ -249,6 +273,7 @@ class EntityBuilder {
     var controller: Controller = Controller.Human
         private set
     val equipmentSlots: MutableMap<Slot, ItemInstance> = mutableMapOf()
+    val featureNames: MutableList<String> = mutableListOf()
 
     fun archetype(name: String) {
         archetypeName = name
@@ -280,6 +305,10 @@ class EntityBuilder {
 
     fun equip(slot: Slot, itemName: String, enchantment: Int = 0, attuned: Boolean = false) {
         equipmentSlots[slot] = ItemInstance(ItemId(itemName), enchantment, attuned = attuned)
+    }
+
+    fun feature(featureName: String) {
+        featureNames += featureName
     }
 }
 

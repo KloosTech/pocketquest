@@ -10,6 +10,7 @@ import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.rules.action.canPerform
+import de.jackbeback.pocketquest.core.rules.action.grantedActions
 import de.jackbeback.pocketquest.core.rules.action.preview
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
@@ -21,7 +22,8 @@ data class AiDecision(val actionId: ActionId, val ctx: ActionCtx, val score: Int
  * doc05: "[preview] hands the AI its evaluation function for free: enumerate
  * legal actions, run each in Expected mode, score the resulting event list."
  * This is exactly that — nothing more. Enumerates every action the entity's
- * archetype knows, every legal target for each (via the same
+ * archetype knows plus anything a level feature granted it (doc17-engine-gaps.md 1.6), every
+ * legal target for each (via the same
  * `legalTargets`/`affectedBy` a UI's tile-highlighting would call), filters
  * through `canPerform` (the one true legality check, same as doc05's "one
  * function, three consumers"), scores each candidate with [preview] in
@@ -39,7 +41,7 @@ fun chooseAction(state: GameState, entityId: EntityId, cat: Catalog): AiDecision
     val faction = entity.actor?.faction
 
     var best: AiDecision? = null
-    for (actionId in archetype.actions) {
+    for (actionId in archetype.actions + entity.grantedActions(cat)) {
         val def = cat.actionDef(actionId)
         for (ctx in candidateContexts(state, entityId, def, cat)) {
             if (canPerform(state, entityId, def, ctx, cat).isNotEmpty()) continue

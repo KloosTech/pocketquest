@@ -27,12 +27,27 @@ data class ItemDef(
     val twoHanded: Boolean = false,
 )
 
+/**
+ * doc11-run-state.md: a level-up choice. `Progression.features: List<FeatureId>` (the run layer,
+ * not built yet) is what a real leveling flow would populate; the engine-level primitive this
+ * catalog entry feeds — Entity.features resolved through stats() and grantedActions() — doesn't
+ * need that layer to exist, same as every other ModifierSource here.
+ */
+@Serializable
+data class FeatureDef(
+    val id: FeatureId,
+    val name: String,
+    val modifiers: List<Modifier> = emptyList(),
+    val grantsActions: List<ActionId> = emptyList(),
+)
+
 @Serializable
 data class Catalog(
     val archetypes: Map<ArchetypeId, Archetype> = emptyMap(),
     val statuses: Map<StatusId, StatusDef> = emptyMap(),
     val items: Map<ItemId, ItemDef> = emptyMap(),
     val actions: Map<ActionId, ActionDef> = emptyMap(),
+    val features: Map<FeatureId, FeatureDef> = emptyMap(),
 ) {
     fun archetype(id: ArchetypeId): Archetype =
         archetypes[id] ?: error("Unknown archetype: ${id.raw}")
@@ -45,4 +60,7 @@ data class Catalog(
 
     fun actionDef(id: ActionId): ActionDef =
         actions[id] ?: error("Unknown action: ${id.raw}")
+
+    fun featureDef(id: FeatureId): FeatureDef =
+        features[id] ?: error("Unknown feature: ${id.raw}")
 }

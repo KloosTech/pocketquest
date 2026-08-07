@@ -54,6 +54,7 @@ import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.PreviewResult
 import de.jackbeback.pocketquest.core.model.TargetMode
+import de.jackbeback.pocketquest.core.rules.action.allActions
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.action.preview
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
@@ -456,9 +457,8 @@ fun App(initialState: GameState, catalog: Catalog) {
             } else {
                 when (val sel = selection) {
                     is Selection.None -> {
-                        val archetype = catalog.archetype(active.archetype)
                         Row {
-                            archetype.actions.forEach { actionId ->
+                            active.allActions(catalog).forEach { actionId ->
                                 InkButton(
                                     actionId.raw,
                                     modifier = Modifier.padding(end = 8.dp),

@@ -11,6 +11,8 @@ import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Cost
 import de.jackbeback.pocketquest.core.model.EffectTemplate
 import de.jackbeback.pocketquest.core.model.Expiry
+import de.jackbeback.pocketquest.core.model.FeatureDef
+import de.jackbeback.pocketquest.core.model.FeatureId
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.Range
 import de.jackbeback.pocketquest.core.model.Ref
@@ -103,6 +105,21 @@ class CatalogValidatorTest {
         val catalog = Catalog(statuses = mapOf(status.id to status))
         val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
         assertTrue(e.problems.single().contains("status 'burning'.onTurnStart references unknown status 'stacked'"))
+    }
+
+    @Test
+    fun featureGrantingAnUndefinedActionFailsValidation() {
+        val feature = FeatureDef(id = FeatureId("cleaveTraining"), name = "Cleave Training", grantsActions = listOf(ActionId("cleave")))
+        val catalog = Catalog(features = mapOf(feature.id to feature))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
+        assertTrue(e.problems.single().contains("Feature 'cleaveTraining' grants unknown action 'cleave'"))
+    }
+
+    @Test
+    fun featureGrantingAKnownActionPassesValidation() {
+        val feature = FeatureDef(id = FeatureId("training"), name = "Training", grantsActions = listOf(ActionId("strike")))
+        val catalog = Catalog(actions = mapOf(ActionId("strike") to strikeAction()), features = mapOf(feature.id to feature))
+        CatalogValidator.validate(catalog)
     }
 
     @Test

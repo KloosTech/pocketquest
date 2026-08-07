@@ -8,10 +8,10 @@ class CatalogValidationException(val problems: List<String>) : Exception(problem
 /**
  * Referential integrity only — every id one part of the catalog names
  * (an archetype's action list, an effect template's status, a cost's item
- * charges, a target filter's required status) must resolve inside the same
- * catalog. Everything else (stat names, damage types, ability scores) is
- * already enforced by the type system at parse time and needs no separate
- * check here.
+ * charges, a target filter's required status, a feature's granted actions)
+ * must resolve inside the same catalog. Everything else (stat names,
+ * damage types, ability scores) is already enforced by the type system at
+ * parse time and needs no separate check here.
  */
 object CatalogValidator {
 
@@ -43,6 +43,14 @@ object CatalogValidator {
         for (status in catalog.statuses.values) {
             status.onTurnStart.forEach {
                 checkEffectTemplate(it, "status '${status.id.raw}'.onTurnStart", catalog, problems)
+            }
+        }
+
+        for (feature in catalog.features.values) {
+            for (actionId in feature.grantsActions) {
+                if (actionId !in catalog.actions) {
+                    problems += "Feature '${feature.id.raw}' grants unknown action '${actionId.raw}'"
+                }
             }
         }
 

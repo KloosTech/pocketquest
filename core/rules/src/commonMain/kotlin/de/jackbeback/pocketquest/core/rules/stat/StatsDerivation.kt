@@ -44,6 +44,14 @@ fun Entity.stats(cat: Catalog): Stats {
 
     addAll(archetype.innateModifiers)
 
+    // doc17-engine-gaps.md 1.7: feature modifiers join the fixed source order right after
+    // archetype innate and before equipment — doc11-run-state.md's own ordering instruction.
+    // List order (not sorted, unlike statuses) — features are an authored/chosen sequence on the
+    // entity already, not an unordered multiset that needs a deterministic tie-break imposed.
+    for (featureId in features) {
+        addAll(cat.featureDef(featureId).modifiers)
+    }
+
     for (slot in Slot.entries) {
         val item = equipment.slots[slot] ?: continue
         addAll(cat.itemDef(item.def).modifiers)
