@@ -20,6 +20,21 @@ Read in order:
 | [08-migration-from-poc.md](08-migration-from-poc.md) | v1 problems → v2 answers, migration order |
 | [09-test-plan.md](09-test-plan.md) | What we test and how, before writing engine code |
 
+Game design and product layer:
+
+| Doc | Topic |
+| --- | --- |
+| [10-game-loop.md](10-game-loop.md) | Run structure, the three layers, resource economy, party rules |
+| [11-run-state.md](11-run-state.md) | `RunState` above `GameState`, encounter handoff, resume |
+| [15-battle-ui.md](15-battle-ui.md) | Screen anatomy, targeting state machine, prompts, camera |
+| [16-art-direction.md](16-art-direction.md) | Visual language, scaling rules, map resources, the designer |
+| [17-engine-gaps.md](17-engine-gaps.md) | Everything the loop needs that the engine lacks, by dependency |
+| [18-damage-pipeline.md](18-damage-pipeline.md) | Interception chain: redirect, absorb, reflect, resistance |
+
+| [19-placeholders.md](19-placeholders.md) | Generated placeholder art and the missing-asset registry |
+
+Not yet written: 12 (progression), 13 (encounters and events), 14 (UI shell).
+
 ---
 
 ## The five principles

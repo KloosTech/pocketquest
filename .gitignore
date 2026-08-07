@@ -22,3 +22,5 @@ captures
 
 # runtime artifacts of :app:run's demo pipeline, not source
 /app/pocketquest-demo.db*
+
+assets/normalized/
