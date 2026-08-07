@@ -59,7 +59,9 @@ class FlagshipScenarioTest {
             archetype("goblinWeak") { hp = 7; ac = 13; abilities(dex = 10) }
             archetype("ally") { hp = 10 }
 
-            entity("lyra") { archetype("wizard"); at(4, 0); hp(18); ap(0); mana(0) }
+            // mana is a per-encounter pool (doc10) — no longer refilled at the turn boundary below, so
+            // lyra must already be carrying what she needs to cast web later in this scenario.
+            entity("lyra") { archetype("wizard"); at(4, 0); hp(18); ap(0); mana(9) }
             entity("gobA") { archetype("goblinWarrior"); at(5, 0); hp(7); ap(2); ai() }
             entity("gobB") { archetype("goblinWeak"); at(5, 2); hp(7); ai() }
             entity("ally1") { archetype("ally"); at(0, 5); hp(10) }

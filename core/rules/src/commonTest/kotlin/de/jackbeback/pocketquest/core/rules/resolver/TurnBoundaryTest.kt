@@ -84,7 +84,7 @@ class TurnBoundaryTest {
     }
 
     @Test
-    fun resourcesResetToDerivedMaximaNotStoredValues() {
+    fun apResetsToDerivedMaximumButManaPersistsAcrossTurnBoundary() {
         val s = scenario {
             archetype("dummy") { hp = 10; ap = 2; mana = 3 }
             entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(0); mana(0) } // spent everything
@@ -96,8 +96,9 @@ class TurnBoundaryTest {
         val out = applyEffect(afterHero.state, Effect.EndTurn(s.id("goblin")), emptyMap(), s.catalog)
         val hero = out.state.byId.getValue(s.id("hero")).resources!!
         assertEquals(2, hero.ap)
-        assertEquals(3, hero.mana)
-        assertTrue(out.events.contains(GameEvent.ResourcesReset(s.id("hero"), ap = 2, mana = 3)))
+        // mana is a per-encounter pool (doc10) — endTurn must not refill it, only Effect.RefillMana does.
+        assertEquals(0, hero.mana)
+        assertTrue(out.events.contains(GameEvent.ResourcesReset(s.id("hero"), ap = 2, mana = 0)))
     }
 
     @Test
@@ -218,5 +219,85 @@ class TurnBoundaryTest {
         assertFailsWith<IllegalStateException> {
             applyEffect(s.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
         }
+    }
+
+    // --- doc17/doc10 1.1: mana is a per-encounter pool, refilled only by Effect.RefillMana ---
+
+    @Test
+    fun refillManaFillsToDerivedMaximumAndEmitsManaRefilled() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; mana = 9 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); mana(2) }
+        }
+        val out = applyEffect(s.state, Effect.RefillMana(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(9, out.state.byId.getValue(s.id("hero")).resources!!.mana)
+        assertEquals(listOf(GameEvent.ManaRefilled(s.id("hero"), 9)), out.events)
+    }
+
+    @Test
+    fun refillManaIsANoOpAndEmitsNothingWhenAlreadyFull() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; mana = 9 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); mana(9) }
+        }
+        val out = applyEffect(s.state, Effect.RefillMana(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(9, out.state.byId.getValue(s.id("hero")).resources!!.mana)
+        assertTrue(out.events.isEmpty())
+    }
+
+    @Test
+    fun refillManaIsANoOpForAnEntityWithNoResources() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) } // no ap()/mana() -> resources == null
+        }
+        val out = applyEffect(s.state, Effect.RefillMana(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(s.state, out.state)
+        assertTrue(out.events.isEmpty())
+    }
+
+    @Test
+    fun refillManaFizzlesOnAMissingEntity() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; mana = 9 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); mana(2) }
+        }
+        val ghost = de.jackbeback.pocketquest.core.model.EntityId(999L)
+        val out = applyEffect(s.state, Effect.RefillMana(ghost), emptyMap(), s.catalog)
+        assertTrue(out.events.single() is GameEvent.Fizzled)
+    }
+
+    @Test
+    fun compositeRefillsManaForAWholeParty() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; mana = 9 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); mana(1) }
+            entity("ally") { archetype("dummy"); at(1, 0); hp(10); mana(0) }
+        }
+        val out = applyEffect(
+            s.state,
+            Effect.Composite(listOf(Effect.RefillMana(s.id("hero")), Effect.RefillMana(s.id("ally")))),
+            emptyMap(),
+            s.catalog,
+        )
+        assertEquals(listOf(Effect.RefillMana(s.id("hero")), Effect.RefillMana(s.id("ally"))), out.spawn)
+    }
+
+    @Test
+    fun manaIsUnchangedAcrossATurnBoundaryButFullAfterAnExplicitRefill() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 2; mana = 9 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(0); mana(4) } // partially spent
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(10); ap(2); mana(9) }
+            initiative("hero", "goblin")
+        }
+        val afterHero = applyEffect(s.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        val afterGoblin = applyEffect(afterHero.state, Effect.EndTurn(s.id("goblin")), emptyMap(), s.catalog)
+        // wrapped all the way back to hero: the turn boundary must not have touched hero's mana.
+        assertEquals(4, afterGoblin.state.byId.getValue(s.id("hero")).resources!!.mana)
+
+        // only an explicit RefillMana (the encounter-end signal) brings it back to max.
+        val refilled = applyEffect(afterGoblin.state, Effect.RefillMana(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(9, refilled.state.byId.getValue(s.id("hero")).resources!!.mana)
     }
 }

@@ -68,6 +68,7 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.Heal -> heal(state, effect, cat)
         is Effect.RemoveStatus -> removeStatus(state, effect)
         is Effect.Composite -> HandlerOutcome(state, spawn = effect.effects)
+        is Effect.RefillMana -> refillMana(state, effect, cat)
     }
 
 /**
@@ -142,6 +143,15 @@ private fun heal(state: GameState, effect: Effect.Heal, cat: Catalog): HandlerOu
     val newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
     val actualHealed = newCurrent - health.current
     return HandlerOutcome(newState, listOf(GameEvent.Healed(target.id, actualHealed, effect.source)))
+}
+
+private fun refillMana(state: GameState, effect: Effect.RefillMana, cat: Catalog): HandlerOutcome {
+    val entity = state.byId[effect.who] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
+    val resources = entity.resources ?: return HandlerOutcome(state)
+    val maxMana = entity.stats(cat).maxMana
+    if (resources.mana == maxMana) return HandlerOutcome(state)
+    val newState = state.withEntity(effect.who) { it.copy(resources = it.resources!!.copy(mana = maxMana)) }
+    return HandlerOutcome(newState, listOf(GameEvent.ManaRefilled(effect.who, maxMana)))
 }
 
 private fun removeStatus(state: GameState, effect: Effect.RemoveStatus): HandlerOutcome {
@@ -499,11 +509,19 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
 
     val nextActive = working.byId.getValue(nextActiveId)
     val stats = nextActive.stats(cat)
+    // AP/Quick/Reaction reset every turn — a per-turn tactical budget. Mana does NOT: it's a
+    // per-ENCOUNTER pool (doc10-game-loop.md), refilled only by Effect.RefillMana, not here.
+    // Resetting it every turn made it indistinguishable from AP and removed any reason to ration a
+    // spell across a fight — see KNOWN_ISSUES.md/doc17 1.1.
     working = working.withEntity(nextActiveId) { entity ->
         val resources = entity.resources
-        if (resources == null) entity else entity.copy(resources = resources.copy(ap = stats.maxAp, mana = stats.maxMana, quickUsed = false, reactionUsed = false))
+        if (resources == null) entity else entity.copy(resources = resources.copy(ap = stats.maxAp, quickUsed = false, reactionUsed = false))
     }
-    if (nextActive.resources != null) events += GameEvent.ResourcesReset(nextActiveId, stats.maxAp, stats.maxMana)
+    // mana here is nextActive's PRE-reset (i.e. current, unchanged) value — this event reports the
+    // full resource state after the boundary for UI/animation purposes, it does not claim mana was
+    // reset.
+    val preResetResources = nextActive.resources
+    if (preResetResources != null) events += GameEvent.ResourcesReset(nextActiveId, stats.maxAp, preResetResources.mana)
 
     // step 4
     val tickEffects = nextActive.statuses.flatMap { status ->

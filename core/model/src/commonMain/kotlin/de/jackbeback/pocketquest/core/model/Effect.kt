@@ -105,4 +105,13 @@ sealed interface Effect {
     /** Pure authoring convenience: unpacks into its effects with no state change or event of its own. */
     @Serializable @SerialName("composite")
     data class Composite(val effects: List<Effect>) : Effect
+
+    /**
+     * Mana is a per-encounter pool (docs/10-game-loop.md), not a per-turn one — `endTurn` no
+     * longer touches it. This is the only thing that refills it, pushed by whoever decides an
+     * encounter is over (`:app` today; `:core:run`'s `finishEncounter` once that module exists —
+     * see KNOWN_ISSUES.md 1.1). Refill everyone at once via `Composite(entities.map { RefillMana(it.id) })`.
+     */
+    @Serializable @SerialName("refillMana")
+    data class RefillMana(val who: EntityId) : Effect
 }
