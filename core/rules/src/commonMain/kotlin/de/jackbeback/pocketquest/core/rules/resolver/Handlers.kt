@@ -142,7 +142,9 @@ private fun heal(state: GameState, effect: Effect.Heal, cat: Catalog): HandlerOu
     val newCurrent = (health.current + effect.amount).coerceAtMost(maxHp)
     val newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
     val actualHealed = newCurrent - health.current
-    return HandlerOutcome(newState, listOf(GameEvent.Healed(target.id, actualHealed, effect.source)))
+    val events = mutableListOf<GameEvent>(GameEvent.Healed(target.id, actualHealed, effect.source))
+    if (health.current == 0 && newCurrent > 0) events += GameEvent.Revived(target.id)
+    return HandlerOutcome(newState, events)
 }
 
 private fun refillMana(state: GameState, effect: Effect.RefillMana, cat: Catalog): HandlerOutcome {
@@ -179,7 +181,10 @@ private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog
 
     val events = mutableListOf<GameEvent>()
     events += GameEvent.DamageTaken(target.id, finalAmount, effect.damageType)
-    if (newCurrent == 0) events += GameEvent.Died(target.id)
+    if (newCurrent == 0) {
+        events += GameEvent.Died(target.id)
+        events += GameEvent.Downed(target.id)
+    }
 
     // Damage triggers a CON save (or breaks unconditionally on death) for whichever entity is
     // concentrating, if any is — see docs/03-modifiers-and-status.md.

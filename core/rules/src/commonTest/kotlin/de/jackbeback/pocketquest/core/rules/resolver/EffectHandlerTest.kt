@@ -48,6 +48,17 @@ class EffectHandlerTest {
         assertEquals(0, out.state.byId.getValue(s.id("target")).health!!.current)
         assertEquals(GameEvent.DamageTaken(s.id("target"), 999, DamageType.Fire), out.events[0])
         assertEquals(GameEvent.Died(s.id("target")), out.events[1])
+        assertEquals(GameEvent.Downed(s.id("target")), out.events[2], "docs/17-engine-gaps.md 1.5: 0 HP also fires Downed, alongside Died not instead of it")
+    }
+
+    @Test
+    fun dealDamageDoesNotEmitDownedWhenTheHitDoesNotReduceHpToZero() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(20) }
+        }
+        val out = applyEffect(s.state, Effect.DealDamage(s.id("target"), amount = 7, damageType = DamageType.Fire), emptyMap(), s.catalog)
+        assertTrue(out.events.none { it is GameEvent.Downed })
     }
 
     @Test
@@ -393,6 +404,30 @@ class EffectHandlerTest {
         val out = applyEffect(s.state, Effect.Heal(s.id("target"), amount = 10), emptyMap(), s.catalog)
         assertEquals(20, out.state.byId.getValue(s.id("target")).health!!.current)
         assertEquals(2, (out.events.single() as GameEvent.Healed).amount, "overheal must report what actually landed, not the raw amount")
+    }
+
+    @Test
+    fun healFromZeroHpEmitsRevivedAlongsideHealed() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(0) }
+        }
+        val out = applyEffect(s.state, Effect.Heal(s.id("target"), amount = 5), emptyMap(), s.catalog)
+        assertEquals(5, out.state.byId.getValue(s.id("target")).health!!.current)
+        assertEquals(
+            listOf(GameEvent.Healed(s.id("target"), 5, null), GameEvent.Revived(s.id("target"))),
+            out.events,
+        )
+    }
+
+    @Test
+    fun healAboveZeroHpNeverEmitsRevived() {
+        val s = scenario {
+            archetype("dummy") { hp = 20 }
+            entity("target") { archetype("dummy"); at(0, 0); hp(10) }
+        }
+        val out = applyEffect(s.state, Effect.Heal(s.id("target"), amount = 5), emptyMap(), s.catalog)
+        assertTrue(out.events.none { it is GameEvent.Revived })
     }
 
     @Test

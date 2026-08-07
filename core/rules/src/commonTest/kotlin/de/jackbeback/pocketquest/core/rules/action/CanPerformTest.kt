@@ -34,6 +34,32 @@ class CanPerformTest {
         assertTrue(Rejection.NotYourTurn !in rejections)
     }
 
+    // --- docs/17-engine-gaps.md 1.5: Downed is an absolute gate, even for a Free action ---
+
+    @Test
+    fun downedCasterCannotActEvenViaAFreeAction() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(0) }
+            initiative("hero")
+            actionDef("shout") { cost(ActionCost.Free) }
+        }
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("shout")), ActionCtx(s.id("hero"), emptyList()), s.catalog)
+        assertEquals(listOf(Rejection.Downed), rejections)
+    }
+
+    @Test
+    fun aLivingCasterIsNeverRejectedAsDowned() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            initiative("hero")
+            actionDef("shout") { cost(ActionCost.Free) }
+        }
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("shout")), ActionCtx(s.id("hero"), emptyList()), s.catalog)
+        assertTrue(Rejection.Downed !in rejections)
+    }
+
     @Test
     fun notYourTurnWhenSomeoneElseIsActive() {
         val s = scenario {

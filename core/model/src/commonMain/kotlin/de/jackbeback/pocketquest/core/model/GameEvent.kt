@@ -25,6 +25,18 @@ sealed interface GameEvent {
     @Serializable @SerialName("healed") data class Healed(val target: EntityId, val amount: Int, val source: EntityId? = null) : GameEvent
     @Serializable @SerialName("manaRefilled") data class ManaRefilled(val who: EntityId, val mana: Int) : GameEvent
 
+    /**
+     * Fires alongside (not instead of) [Died] on the >0 -> 0 HP transition — docs/17-engine-gaps.md
+     * 1.5 / docs/10-game-loop.md's "Downed, not dead": a party member reaching 0 HP is revivable,
+     * not removed from play, and needs its own hook distinct from Died for canPerform/animation/AI
+     * to key off. Died is untouched (still what concentration-break-on-death and the turn-boundary
+     * dead-skip react to) — no existing behavior depends on this event yet.
+     */
+    @Serializable @SerialName("downed") data class Downed(val target: EntityId) : GameEvent
+
+    /** The 0 -> >0 HP transition via Heal — the counterpart to [Downed]. */
+    @Serializable @SerialName("revived") data class Revived(val target: EntityId) : GameEvent
+
     /** Emitted instead of throwing/silently no-opping when a handler's re-validation fails — see docs/04-resolver.md. */
     @Serializable @SerialName("fizzled") data class Fizzled(val effect: String, val reason: Rejection) : GameEvent
 }

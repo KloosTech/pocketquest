@@ -22,4 +22,6 @@ sealed interface Rejection {
     @Serializable @SerialName("outOfRange") data class OutOfRange(val distance: Int, val max: Int) : Rejection
     @Serializable @SerialName("noLineOfSight") data object NoLineOfSight : Rejection
     @Serializable @SerialName("noLegalTarget") data object NoLegalTarget : Rejection
+    /** docs/17-engine-gaps.md 1.5 — a Downed (0 HP) entity cannot act, full stop, not even via a Free action. */
+    @Serializable @SerialName("downed") data object Downed : Rejection
 }

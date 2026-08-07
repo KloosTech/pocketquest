@@ -27,6 +27,10 @@ fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCt
     val casterEntity = state.byId[caster] ?: return listOf(Rejection.NoLegalTarget)
     val rejections = mutableListOf<Rejection>()
 
+    // Downed (docs/17-engine-gaps.md 1.5) is an absolute gate — unlike NotYourTurn, it applies
+    // even to a Free action or a reaction, so it's checked before everything else, unconditionally.
+    if (casterEntity.health?.current == 0) rejections += Rejection.Downed
+
     if (def.cost.action != ActionCost.Free) {
         val activeId = state.turn.order.getOrNull(state.turn.activeIndex)
         if (activeId != caster) rejections += Rejection.NotYourTurn
