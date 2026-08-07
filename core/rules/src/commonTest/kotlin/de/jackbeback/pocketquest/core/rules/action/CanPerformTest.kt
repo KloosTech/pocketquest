@@ -84,6 +84,60 @@ class CanPerformTest {
         assertEquals(listOf(Rejection.NotEnoughAp(5, 2)), rejections)
     }
 
+    // --- docs/17-engine-gaps.md 1.3: a Path-targeted move prices itself off the resolved route ---
+
+    @Test
+    fun pathModeMovementPricesOffTheActualRouteNotAStaticTileCount() {
+        val s = scenario {
+            map(10, 10)
+            archetype("dummy") { hp = 10; ap = 3 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(3) }
+            initiative("hero")
+            actionDef("move") {
+                cost(ActionCost.Movement(tiles = 999)) // static field is irrelevant once Path-targeted
+                targeting(TargetMode.Path, Range.Tiles(5), Shape.Single, requiresLoS = false)
+            }
+        }
+        val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 0))
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("move")), ctx, s.catalog)
+        assertTrue(rejections.isEmpty(), "3 AP must cover a real 3-tile route, regardless of the static tiles=999")
+    }
+
+    @Test
+    fun pathModeMovementRejectsWhenApIsLessThanTheResolvedRouteLength() {
+        val s = scenario {
+            map(10, 10)
+            archetype("dummy") { hp = 10; ap = 2 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(2) }
+            initiative("hero")
+            actionDef("move") {
+                cost(ActionCost.Movement(tiles = 0)) // static field is irrelevant once Path-targeted
+                targeting(TargetMode.Path, Range.Tiles(5), Shape.Single, requiresLoS = false)
+            }
+        }
+        val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 0))
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("move")), ctx, s.catalog)
+        assertEquals(listOf(Rejection.NotEnoughAp(3, 2)), rejections)
+    }
+
+    @Test
+    fun pathModeMovementIsBlockedWhenNoRouteExists() {
+        val s = scenario {
+            map(10, 10)
+            archetype("dummy") { hp = 10; ap = 5 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(5) }
+            initiative("hero")
+            actionDef("move") {
+                cost(ActionCost.Movement(tiles = 5))
+                targeting(TargetMode.Path, Range.Tiles(5), Shape.Single, requiresLoS = false)
+            }
+        }
+        val walled = s.state.copy(map = s.state.map.copy(blockedTiles = setOf(GridPos(3, 0))))
+        val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 0))
+        val rejections = canPerform(walled, s.id("hero"), s.catalog.actionDef(actionId("move")), ctx, s.catalog)
+        assertEquals(listOf(Rejection.Blocked(GridPos(3, 0))), rejections)
+    }
+
     @Test
     fun outOfRangeWhenPointExceedsTargetingRange() {
         val s = scenario {

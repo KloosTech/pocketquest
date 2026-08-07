@@ -97,6 +97,41 @@ class PerformTest {
         assertEquals(resultA.resolver.state, resultB.resolver.state)
     }
 
+    // --- docs/17-engine-gaps.md 1.2/1.3: tap-to-move synthesizes a real MoveAlong from the resolved path ---
+
+    private fun moveScenario() = scenario {
+        map(10, 10)
+        seed(1)
+        archetype("dummy") { hp = 10; ap = 3 }
+        entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(3) }
+        initiative("hero")
+        actionDef("move") {
+            cost(ActionCost.Movement(tiles = 999)) // irrelevant once Path-targeted — see CanPerformTest
+            targeting(TargetMode.Path, Range.Tiles(5), Shape.Single, requiresLoS = false)
+        }
+    }
+
+    @Test
+    fun performingAPathMoveActuallyRelocatesTheEntityAndSpendsThePathsApNotTheStaticField() {
+        val s = moveScenario()
+        val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 0))
+        val result = assertIs<StepResult.Completed>(perform(s.state, s.id("hero"), ActionId("move"), ctx, s.catalog))
+
+        val hero = result.resolver.state.byId.getValue(s.id("hero"))
+        assertEquals(GridPos(3, 0), hero.pos)
+        assertEquals(0, hero.resources!!.ap, "3 AP spent on a real 3-tile route, not the static tiles=999")
+        assertEquals(3, result.resolver.emitted.count { it is GameEvent.MoveStepped })
+    }
+
+    @Test
+    fun previewingAPathMoveShowsTheDestinationWithoutMutatingRealState() {
+        val s = moveScenario()
+        val ctx = ActionCtx(s.id("hero"), emptyList(), point = GridPos(3, 0))
+        val result = preview(s.state, s.id("hero"), ActionId("move"), ctx, s.catalog)
+        assertEquals(GridPos(3, 0), result.state.byId.getValue(s.id("hero")).pos)
+        assertEquals(GridPos(0, 0), s.state.byId.getValue(s.id("hero")).pos, "preview must not mutate the input state")
+    }
+
     // --- KNOWN_ISSUES.md #6: ActionStarted must reach collectTriggers ---
 
     private fun counterspellScenario() = scenario {

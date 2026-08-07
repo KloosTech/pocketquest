@@ -9,24 +9,42 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.PreviewResult
+import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.core.rules.resolver.RngMode
 import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import de.jackbeback.pocketquest.core.rules.resolver.collectTriggers
 import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
+import de.jackbeback.pocketquest.core.rules.targeting.findPath
 
 private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId, ctx: ActionCtx, cat: Catalog): List<Effect> {
     val def = cat.actionDef(actionId)
+    val movement = def.cost.action as? ActionCost.Movement
+
+    // A Path-targeted move has no authored EffectTemplate — it's synthesized here from the
+    // resolved route, same as SpendCost is (docs/17-engine-gaps.md 1.2/1.3). canPerform() already
+    // guarantees a non-null path before perform() ever reaches this point; preview() bypasses
+    // canPerform, so an unreachable point here just degrades to "nothing moves, nothing spent"
+    // rather than crashing.
+    val path = if (movement != null && def.targeting.mode == TargetMode.Path) {
+        val origin = state.byId[caster]?.pos
+        val point = ctx.point
+        if (origin != null && point != null) findPath(origin, point, state.map, state.occupancy) else null
+    } else {
+        null
+    }
+
     // Cost is the FIRST effect on the stack, not applied before the loop: an action interrupted
     // by e.g. a counterspell must still have paid, and the mana-bar animation drives off the
     // ResourcesSpent event rather than an out-of-band deduction — see docs/05-actions-and-effects.md.
     val spendCost = Effect.SpendCost(
         who = caster,
-        ap = (def.cost.action as? ActionCost.Movement)?.tiles ?: 0,
+        ap = path?.size ?: (movement?.tiles ?: 0),
         mana = def.cost.mana,
         markQuickUsed = def.cost.action == ActionCost.Quick,
     )
-    return listOf(spendCost) + def.effects.flatMap { it.instantiate(ctx, cat) }
+    val moveEffect = if (path != null) listOf(Effect.MoveAlong(caster, path)) else emptyList()
+    return listOf(spendCost) + moveEffect + def.effects.flatMap { it.instantiate(ctx, cat) }
 }
 
 /**

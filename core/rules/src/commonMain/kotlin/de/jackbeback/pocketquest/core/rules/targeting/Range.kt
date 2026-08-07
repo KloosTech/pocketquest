@@ -22,7 +22,7 @@ fun tilesWithinRange(origin: GridPos, range: Int, map: BattleMap): List<GridPos>
     }
 }
 
-private val EIGHT_DIRECTIONS = listOf(-1 to -1, -1 to 0, -1 to 1, 0 to -1, 0 to 1, 1 to -1, 1 to 0, 1 to 1)
+internal val EIGHT_DIRECTIONS = listOf(-1 to -1, -1 to 0, -1 to 1, 0 to -1, 0 to 1, 1 to -1, 1 to 0, 1 to 1)
 
 /**
  * BFS reachability within [maxSteps] over walkable, unoccupied tiles.
