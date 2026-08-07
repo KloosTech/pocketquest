@@ -35,6 +35,7 @@ kotlin {
             // doc01: :ui may depend on everything below it and is the only module allowed to import Compose.
             implementation(projects.core.content)
             implementation(projects.core.rules)
+            implementation(projects.core.ai)
             implementation(projects.data)
 
             implementation(compose.runtime)

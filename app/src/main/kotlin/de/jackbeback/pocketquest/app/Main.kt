@@ -4,8 +4,6 @@ import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import de.jackbeback.pocketquest.core.content.CatalogLoader
 import de.jackbeback.pocketquest.core.content.CatalogValidator
-import de.jackbeback.pocketquest.core.model.ActionCtx
-import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.Actor
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.BattleMap
@@ -13,7 +11,6 @@ import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
-import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Health
@@ -21,14 +18,9 @@ import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
-import de.jackbeback.pocketquest.core.ai.chooseAction
-import de.jackbeback.pocketquest.core.model.Effect
-import de.jackbeback.pocketquest.core.rules.action.perform
-import de.jackbeback.pocketquest.core.rules.resolver.Resolver
-import de.jackbeback.pocketquest.core.rules.resolver.StepResult
-import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
 import de.jackbeback.pocketquest.data.PocketQuestDatabase
 import de.jackbeback.pocketquest.data.SaveRepository
+import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.ui.runDesktopApp
 import kotlinx.coroutines.runBlocking
 import java.io.File
@@ -104,11 +96,9 @@ private val DEMO_CATALOG_JSON = """
 """.trimIndent()
 
 fun main() {
-    val log = mutableListOf<String>()
-
     val catalog = CatalogLoader.parse(DEMO_CATALOG_JSON)
     CatalogValidator.validate(catalog)
-    log += "Loaded catalog: ${catalog.archetypes.size} archetypes, ${catalog.actions.size} actions, ${catalog.statuses.size} statuses"
+    println("Loaded catalog: ${catalog.archetypes.size} archetypes, ${catalog.actions.size} actions, ${catalog.statuses.size} statuses")
 
     val heroId = EntityId(0)
     val goblinId = EntityId(1)
@@ -122,87 +112,27 @@ fun main() {
         health = Health(12), resources = Resources(ap = 2, mana = 10),
         actor = Actor(Faction.Enemy, Controller.Ai(de.jackbeback.pocketquest.core.model.AiProfileId("default"))),
     )
-    var state = GameState(
+    val initialState = GameState(
         entities = listOf(hero, goblin),
         map = BattleMap(10, 10),
         turn = TurnState(round = 1, order = listOf(heroId, goblinId), activeIndex = 0, phase = TurnPhase.Main),
         rng = RngState(seed = 42, calls = 0),
     )
-    log += "Round 1: hero (fighter, ${hero.health?.current} HP) at ${hero.pos} vs goblin (mage, ${goblin.health?.current} HP) at ${goblin.pos}"
-    val initialState = state
-    val allEvents = mutableListOf<GameEvent>()
 
-    // Records a step's outcome to the log and event list, and returns its resulting Resolver, so
-    // callers can thread `state` through the whole turn loop the same way a real UI/AI driver
-    // would. :ui's AnimationPlayer replays `allEvents` as one sequence once every step is done —
-    // sequential-playback design, not a live incremental loop (see the design discussion).
-    fun record(label: String, result: StepResult): Resolver {
-        when (result) {
-            is StepResult.Completed -> {
-                log += label
-                result.resolver.emitted.forEach { log += "  -> $it" }
-                allEvents += result.resolver.emitted
-            }
-            is StepResult.Rejected -> log += "$label — REJECTED: ${result.reasons}"
-            is StepResult.AwaitingInput -> log += "$label — paused awaiting a decision: ${result.request}"
-        }
-        return result.resolver
-    }
-
-    // Round 1, hero's turn: Strike the goblin.
-    state = record(
-        "hero uses Strike on goblin:",
-        perform(state, heroId, ActionId("strike"), ActionCtx(heroId, listOf(goblinId), point = state.byId.getValue(goblinId).pos), catalog),
-    ).state
-
-    // Hero ends their turn -> goblin's turn begins (doc04's 7-step turn boundary).
-    state = record(
-        "hero ends their turn:",
-        runResolver(Resolver(state, stack = listOf(Effect.EndTurn(heroId))), catalog),
-    ).state
-
-    // Round 1, goblin's turn: :core:ai picks the goblin's action for real — enumerates its
-    // archetype's actions x legal targets, scores each via preview() in Expected mode, plays
-    // the best. No hardcoded "goblin uses Firebolt on hero" anymore.
-    val goblinDecision = chooseAction(state, goblinId, catalog)
-    state = if (goblinDecision != null) {
-        record(
-            "goblin (AI, score=${goblinDecision.score}) uses ${goblinDecision.actionId.raw}:",
-            perform(state, goblinId, goblinDecision.actionId, goblinDecision.ctx, catalog),
-        ).state
-    } else {
-        log += "goblin (AI) has no legal action — passes"
-        state
-    }
-
-    // Goblin ends their turn -> round 2, hero's turn begins. If Firebolt's burn caught, this is
-    // where it ticks: onTurnStart effects fire automatically as part of the SAME turn-boundary
-    // resolution, before this step returns.
-    val resolver = record(
-        "goblin ends their turn:",
-        runResolver(Resolver(state, stack = listOf(Effect.EndTurn(goblinId))), catalog),
-    )
-    state = resolver.state
-
-    log += "Round ${state.turn.round}: hero ${state.byId.getValue(heroId).health?.current} HP, goblin ${state.byId.getValue(goblinId).health?.current} HP"
-
+    // Persistence smoke test against the initial state — the interactive session's own state
+    // evolves live inside :ui now, so there's no longer a fixed "final" resolver to round-trip.
     val dbPath = File("pocketquest-demo.db").absolutePath
     val db = Room.databaseBuilder<PocketQuestDatabase>(name = dbPath)
         .setDriver(BundledSQLiteDriver())
         .build()
     val repository = SaveRepository(db.saveSlotDao())
-
     runBlocking {
+        val resolver = Resolver(initialState)
         repository.save(id = "demo", campaignId = "demo-campaign", updatedAt = System.currentTimeMillis(), label = "Smoke test", resolver = resolver)
         val reloaded = repository.load("demo")
-        log += if (reloaded == resolver) {
-            "Saved to $dbPath and reloaded byte-identical ✓"
-        } else {
-            "MISMATCH after reload — saved != reloaded"
-        }
+        println(if (reloaded == resolver) "Saved to $dbPath and reloaded byte-identical ✓" else "MISMATCH after reload — saved != reloaded")
     }
     db.close()
 
-    log.forEach(::println)
-    runDesktopApp(initialState, state, allEvents, log)
+    runDesktopApp(initialState, catalog)
 }
