@@ -303,10 +303,24 @@ private fun resolveReaction(state: GameState, effect: Effect.ResolveReaction, an
     return if (accept) acceptReaction(state, effect.who, effect.actionId, effect.trigger, cat) else HandlerOutcome(state)
 }
 
+/**
+ * `matchingReaction` already gates on `reactionUsed`/alive/geometry before this is ever called,
+ * but not affordability — that gap let a reaction fire its effects for free (KNOWN_ISSUES.md #3):
+ * `SpendCost` fizzling on insufficient mana doesn't stop the effects spawned right behind it on
+ * the stack, since a fizzle is just an event, not a "cancel the rest" signal. `canPerform` itself
+ * can't be reused here — its `NotYourTurn` check assumes the caster is the active entity, which a
+ * reactor by definition is not. Mana is the only cost a Reaction-cost action ever has (`perform`'s
+ * own SpendCost construction only ever gives Reaction actions an `ap` of 0), so that's the only
+ * check needed here.
+ */
 private fun acceptReaction(state: GameState, who: EntityId, actionId: ActionId, trigger: GameEvent, cat: Catalog): HandlerOutcome {
     val def = cat.actionDef(actionId)
-    val ctx = ActionCtx(who, targetsFor(trigger))
     val spend = Effect.SpendCost(who, mana = def.cost.mana, markReactionUsed = true)
+
+    val available = state.byId[who]?.resources?.mana ?: 0
+    if (available < def.cost.mana) return fizzle(state, spend, Rejection.NotEnoughMana(def.cost.mana, available))
+
+    val ctx = ActionCtx(who, targetsFor(trigger))
     val instantiated = def.effects.flatMap { it.instantiate(ctx, cat) }
     return HandlerOutcome(state, spawn = listOf(spend) + instantiated)
 }
@@ -373,6 +387,11 @@ private fun expireStatuses(state: GameState, moment: TurnMoment, events: Mutable
     return working
 }
 
+private fun isDead(entity: Entity): Boolean {
+    val health = entity.health
+    return health != null && health.current <= 0
+}
+
 /**
  * Doc04's 7-step turn boundary, done atomically (steps 6-7-1-2-3-4; step 5
  * "Main phase: commands accepted" is just a phase flag, not an effect).
@@ -391,14 +410,26 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
     working = expireStatuses(working, TurnMoment.EndOfTurn(endingId, working.turn.round), events)
     events += GameEvent.TurnEnded(endingId)
 
-    // step 7
+    // step 7 — advance past any dead entity still sitting in turn.order (nothing removes them;
+    // that's DestroyEntity's job, which doesn't exist yet — see KNOWN_ISSUES.md #7). Silent skip,
+    // no event: there's no GameEvent for "this entity's turn was skipped" and inventing one is a
+    // bigger change than this fix. A wholly-dead order throws rather than spinning forever.
     val order = working.turn.order
-    val nextIndex = (working.turn.activeIndex + 1) % order.size
+    check(order.isNotEmpty()) { "EndTurn requires a non-empty turn.order" }
+
+    var nextIndex = working.turn.activeIndex
     var round = working.turn.round
-    if (nextIndex == 0) {
-        working = expireStatuses(working, TurnMoment.EndOfRound(round), events)
-        round += 1
-    }
+    var advanced = 0
+    do {
+        nextIndex = (nextIndex + 1) % order.size
+        if (nextIndex == 0) {
+            working = expireStatuses(working, TurnMoment.EndOfRound(round), events)
+            round += 1
+        }
+        advanced++
+        check(advanced <= order.size) { "EndTurn found no living entity in turn.order — every entity is dead" }
+    } while (isDead(working.byId.getValue(order[nextIndex])))
+
     val nextActiveId = order[nextIndex]
     working = working.copy(turn = working.turn.copy(round = round, activeIndex = nextIndex, phase = TurnPhase.Start))
     events += GameEvent.TurnStarted(nextActiveId, round)

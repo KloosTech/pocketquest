@@ -13,6 +13,7 @@ import de.jackbeback.pocketquest.core.rules.fixture.Scenario
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
@@ -174,5 +175,48 @@ class TurnBoundaryTest {
             ),
             out.spawn,
         )
+    }
+
+    // --- KNOWN_ISSUES.md #7: dead entities getting turns, empty/all-dead order ---
+
+    @Test
+    fun endTurnSkipsADeadEntityAndGivesTheTurnToTheNextLivingOne() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 2 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(2) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(0); ap(2) } // already dead
+            entity("orc") { archetype("dummy"); at(2, 0); hp(10); ap(2) }
+            initiative("hero", "goblin", "orc")
+        }
+        val out = applyEffect(s.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(s.id("orc"), out.state.turn.order[out.state.turn.activeIndex])
+        assertTrue(out.events.contains(GameEvent.TurnStarted(s.id("orc"), 1)), "the dead goblin's turn must be skipped, not started")
+        assertTrue(out.events.none { it is GameEvent.ResourcesReset && it.who == s.id("goblin") }, "a dead entity must not get its resources reset either")
+    }
+
+    @Test
+    fun endTurnThrowsRatherThanDivideByZeroOnEmptyOrder() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            initiative("hero")
+        }
+        val brokenState = s.state.copy(turn = s.state.turn.copy(order = emptyList()))
+        assertFailsWith<IllegalStateException> {
+            applyEffect(brokenState, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        }
+    }
+
+    @Test
+    fun endTurnThrowsWhenEveryEntityInOrderIsDead() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(0) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(0) }
+            initiative("hero", "goblin")
+        }
+        assertFailsWith<IllegalStateException> {
+            applyEffect(s.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        }
     }
 }

@@ -17,25 +17,26 @@ import de.jackbeback.pocketquest.core.model.ReactionTriggerKind
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class ReactionsTest {
 
-    private fun opportunityAttackScenario(reactorAi: Boolean = true) = scenario {
+    private fun opportunityAttackScenario(reactorAi: Boolean = true, reactionManaCost: Int = 0, reactorMana: Int = 0) = scenario {
         map(10, 10)
         seed(1)
-        archetype("fighter") { hp = 20; ap = 2; actions("oppAttack") }
+        archetype("fighter") { hp = 20; ap = 2; mana = reactorMana; actions("oppAttack") }
         archetype("runner") { hp = 20 }
         entity("fighter") {
-            archetype("fighter"); at(0, 0); hp(20); ap(2)
+            archetype("fighter"); at(0, 0); hp(20); ap(2); mana(reactorMana)
             if (reactorAi) ai() // else default Human
         }
         entity("runner") { archetype("runner"); at(1, 0); hp(20) }
         initiative("fighter", "runner")
         actionDef("oppAttack") {
-            cost(ActionCost.Reaction)
+            cost(ActionCost.Reaction, mana = reactionManaCost)
             targeting(TargetMode.SingleEntity, Range.Melee, Shape.Single)
             reactionTrigger(ReactionTriggerKind.MoveStepped)
             effect(EffectTemplate.RollAttack(Ref.Caster, Ref.EachTarget, attackBonus = 999, damage = DiceSpec(1, 6, 0), damageType = DamageType.Slashing))
@@ -208,6 +209,37 @@ class ReactionsTest {
         val completed = assertCompleted(result)
         val attackCount = completed.resolver.emitted.count { it is GameEvent.AttackRolled }
         assertEquals(1, attackCount, "the reaction can only fire once before reactionUsed blocks it")
+    }
+
+    // --- KNOWN_ISSUES.md #3: a reaction resolving its effects for free when it can't be paid for ---
+
+    @Test
+    fun acceptReactionFizzlesWithoutRunningEffectsWhenReactorCannotAffordTheCost() {
+        val s = opportunityAttackScenario(reactorAi = true, reactionManaCost = 3, reactorMana = 0)
+        val move = Effect.MoveAlong(s.id("runner"), listOf(GridPos(2, 0)))
+        val result = run(Resolver(s.state, stack = listOf(move)), s.catalog)
+        val completed = assertCompleted(result)
+
+        assertTrue(completed.resolver.emitted.none { it is GameEvent.AttackRolled }, "an unaffordable reaction must not resolve its effects")
+        assertTrue(completed.resolver.emitted.any { it is GameEvent.Fizzled }, "the failed cost must be visible as a Fizzled event")
+        val fighter = completed.resolver.state.byId.getValue(s.id("fighter"))
+        assertEquals(0, fighter.resources!!.mana, "mana must not be deducted when the reaction couldn't be paid for")
+        assertFalse(fighter.resources!!.reactionUsed, "a reaction that never actually happened must not consume the reaction")
+        val runner = completed.resolver.state.byId.getValue(s.id("runner"))
+        assertEquals(20, runner.health!!.current, "the runner must take no damage from a reaction that fizzled on cost")
+    }
+
+    @Test
+    fun acceptReactionStillRunsWhenReactorCanAffordTheCost() {
+        val s = opportunityAttackScenario(reactorAi = true, reactionManaCost = 3, reactorMana = 3)
+        val move = Effect.MoveAlong(s.id("runner"), listOf(GridPos(2, 0)))
+        val result = run(Resolver(s.state, stack = listOf(move)), s.catalog)
+        val completed = assertCompleted(result)
+
+        assertTrue(completed.resolver.emitted.any { it is GameEvent.AttackRolled }, "an affordable reaction must still resolve normally")
+        val fighter = completed.resolver.state.byId.getValue(s.id("fighter"))
+        assertEquals(0, fighter.resources!!.mana, "the cost must actually be spent when it's paid")
+        assertTrue(fighter.resources!!.reactionUsed)
     }
 
     private fun assertCompleted(result: StepResult): StepResult.Completed {

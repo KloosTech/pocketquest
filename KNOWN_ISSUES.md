@@ -91,9 +91,20 @@ any entity whose `pos` is null, rather than defaulting to a fake position.
 
 ## 3. Reactions are free when you can't pay
 
-**Status: Confirmed.**
+**Status: Fixed.** `acceptReaction()` now checks the reactor's mana
+against the reaction's cost *before* spawning `spend + instantiated`,
+returning a `Fizzled` outcome (via the same `fizzle()` helper `spendCost`
+itself uses) instead of committing to effects it can't pay for.
+`canPerform` itself couldn't be reused here — its `NotYourTurn` check
+assumes the caster is the active entity, which a reactor by definition
+never is. Mana is the only cost a Reaction-cost action can have (a
+Reaction's `SpendCost` never carries an `ap` component — see
+`Perform.kt`'s `initialStack`), so that's the only check needed.
+Regression tests:
+`ReactionsTest.acceptReactionFizzlesWithoutRunningEffectsWhenReactorCannotAffordTheCost`
+and `...StillRunsWhenReactorCanAffordTheCost`.
 
-`acceptReaction()` (`Handlers.kt:306`) never calls `canPerform`:
+Original finding: `acceptReaction()` (`Handlers.kt:306`) never called `canPerform`:
 
 ```kotlin
 private fun acceptReaction(state: GameState, who: EntityId, actionId: ActionId, trigger: GameEvent, cat: Catalog): HandlerOutcome {
@@ -241,7 +252,24 @@ it), rather than a value the Resolver starts with.
 
 ## 7. Turn boundary: divide-by-zero on empty order, dead entities still get turns
 
-**Status: Confirmed, latent (neither path is currently reachable, both are unguarded).**
+**Status: Fixed.** `endTurn()` now: (1) `check()`s `turn.order` is
+non-empty before the `% order.size` — throws with a clear message
+instead of an `ArithmeticException`; (2) advances past any dead entity
+(`health != null && health.current <= 0`) in a loop instead of always
+taking `activeIndex + 1` — a dead entity gets no `TurnStarted`/
+`ResourcesReset`/status-tick, silently, since no `GameEvent` exists yet
+for "this entity's turn was skipped" and inventing one was more than
+this fix needed; (3) `check()`s the skip-loop doesn't run more than
+`order.size` times, so a wholly-dead order throws rather than hanging.
+Chose silent-skip over a design alternative (e.g. removing dead entities
+from `order` outright) since nothing currently removes entities from
+`GameState.entities` either — this stays consistent with "nothing is
+removed until `DestroyEntity` exists," just consistently skipped.
+Regression tests: `TurnBoundaryTest.endTurnSkipsADeadEntityAndGivesThe
+TurnToTheNextLivingOne`, `...ThrowsRatherThanDivideByZeroOnEmptyOrder`,
+`...ThrowsWhenEveryEntityInOrderIsDead`.
+
+Original finding (neither path was reachable yet, both were unguarded):
 
 `endTurn()` (`Handlers.kt:383`):
 
