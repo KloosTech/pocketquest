@@ -65,6 +65,7 @@ import de.jackbeback.pocketquest.core.model.WallEdge
 import de.jackbeback.pocketquest.core.model.opposite
 import de.jackbeback.pocketquest.core.rules.content.compressTerrainToRuns
 import de.jackbeback.pocketquest.core.rules.content.expandTerrainRuns
+import de.jackbeback.pocketquest.ui.drawWallHatch
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -80,7 +81,6 @@ import kotlin.math.roundToInt
 private const val TILE_PX = 32f
 private const val PARTY_SPRITE_PATH = "assets/normalized/characters/hero_a_idle.png"
 private const val PROPS_DIR = "assets/normalized/"
-private const val EXTERIOR_OVERLAY_PATH = "assets/normalized/overlays/Dungeon 1cm Grits_Alpha.png"
 private const val CANVAS_PADDING = 48f
 
 /** What a click currently paints. [Wall] toggles the nearest tile edge rather than a cell; [Prop] places/erases a footprint-sized piece of furniture anchored at the clicked cell. */
@@ -174,6 +174,7 @@ private fun descriptionFor(asset: ManifestAsset?): String = when (asset) {
 /** A sub-region of a floor-texture sheet to stamp into one cell — picked once per cell so neighbouring tiles get visually varied swatches from the same sheet. */
 private data class FloorPatch(val sheet: ImageBitmap, val srcOffset: IntOffset, val srcSize: IntSize)
 
+/** The Wall branch here is only ever reached for the small toolbar swatch icon and for a map with `wallHatch = false` — the main canvas draws Wall cells via the shared procedural [drawWallHatch] instead, called separately before this loop runs (see [MapCanvas]). */
 private fun DrawScope.drawTerrainCell(tile: TileType, rect: Rect, floorPatch: FloorPatch?) {
     when {
         tile == TileType.Wall -> drawRect(INK, rect.topLeft, rect.size)
@@ -190,17 +191,17 @@ private fun DrawScope.drawTerrainCell(tile: TileType, rect: Rect, floorPatch: Fl
 }
 
 private fun DrawScope.drawFloor(rect: Rect, floorPatch: FloorPatch?) {
-    if (floorPatch != null) {
-        drawImage(
-            floorPatch.sheet,
-            srcOffset = floorPatch.srcOffset,
-            srcSize = floorPatch.srcSize,
-            dstOffset = IntOffset(rect.left.roundToInt(), rect.top.roundToInt()),
-            dstSize = IntSize(rect.width.roundToInt(), rect.height.roundToInt()),
-        )
-    } else {
-        drawRect(PAPER, rect.topLeft, rect.size)
-    }
+    if (floorPatch != null) drawPatch(rect, floorPatch) else drawRect(PAPER, rect.topLeft, rect.size)
+}
+
+private fun DrawScope.drawPatch(rect: Rect, patch: FloorPatch) {
+    drawImage(
+        patch.sheet,
+        srcOffset = patch.srcOffset,
+        srcSize = patch.srcSize,
+        dstOffset = IntOffset(rect.left.roundToInt(), rect.top.roundToInt()),
+        dstSize = IntSize(rect.width.roundToInt(), rect.height.roundToInt()),
+    )
 }
 
 private fun DrawScope.drawHatch(rect: Rect, angleDegrees: Float, spacing: Float, color: Color) {
@@ -350,6 +351,19 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                     },
                 )
             }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                InkLabel("WALL TEXTURE")
+                // Procedural (drawWallHatch, shared with :ui) draws live — no sprite/manifest id to
+                // pick, just on/off. BattleMapDef.wallHatch defaults true, matching floorTexture's
+                // "auto-applied, overridable" precedent this replaces.
+                InkSelect(
+                    selected = map.wallHatch,
+                    options = listOf(true, false),
+                    label = { if (it) "Hatched" else "Plain (flat fill)" },
+                    onSelect = { hatched -> updateMap { it.copy(wallHatch = hatched) } },
+                    modifier = Modifier.padding(start = 8.dp),
+                )
+            }
             InkLabel("TERRAIN", modifier = Modifier.padding(top = 8.dp))
             Row {
                 listOf(TileType.Floor, TileType.Wall, TileType.Difficult, TileType.Hazard).forEach { t ->
@@ -373,6 +387,16 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                     label = { it?.let { a -> "${a.id} (${a.tilesW}x${a.tilesH})" } ?: "Erase" },
                     onSelect = { asset -> tool = PaintTool.Prop(asset) },
                     modifier = Modifier.width(200.dp),
+                    itemContent = { asset ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                            if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                            BasicText(
+                                asset?.let { "${it.id} (${it.tilesW}x${it.tilesH})" } ?: "Erase",
+                                style = TextStyle(color = INK, fontSize = 13.sp),
+                            )
+                        }
+                    },
                 )
                 if (currentAsset != null) {
                     val bmp = remember(currentAsset.file) { SpriteLoader.load(PROPS_DIR + currentAsset.file) }
@@ -482,7 +506,6 @@ private fun MapCanvas(
         val sheet = SpriteLoader.load(PROPS_DIR + meta.file) ?: return@remember null
         sheet to (meta.tilesW ?: 1)
     }
-    val exteriorOverlay = remember { SpriteLoader.load(EXTERIOR_OVERLAY_PATH) }
     var camera by remember(map.id) { mutableStateOf(Offset(-CANVAS_PADDING, -CANVAS_PADDING)) }
     var zoom by remember(map.id) { mutableStateOf(1f) }
     var lastPressPos by remember { mutableStateOf(Offset.Zero) }
@@ -499,22 +522,6 @@ private fun MapCanvas(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // doc16's reference battlemat sits on a hatched "table" outside the room walls — a static
-        // background crop, unaffected by pan/zoom (it's the table the mat sits on, not the mat).
-        if (exteriorOverlay != null) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val cropW = size.width.roundToInt().coerceAtMost(exteriorOverlay.width)
-                val cropH = size.height.roundToInt().coerceAtMost(exteriorOverlay.height)
-                drawImage(
-                    exteriorOverlay,
-                    srcOffset = IntOffset.Zero,
-                    srcSize = IntSize(cropW, cropH),
-                    dstOffset = IntOffset.Zero,
-                    dstSize = IntSize(cropW, cropH),
-                )
-            }
-        }
-
         Canvas(
             modifier = Modifier
                 .fillMaxSize()
@@ -554,19 +561,34 @@ private fun MapCanvas(
             fun toScreen(world: Offset) = worldToScreen(world, camera, zoom)
             val screenTile = TILE_PX * zoom
 
+            // Pick a stable-but-varied swatch cell from the floor sheet using the tile's own
+            // position, so neighbouring floor tiles don't all show the identical sub-image.
+            fun patchAt(swatch: Pair<ImageBitmap, Int>?, col: Int, row: Int): FloorPatch? = swatch?.let { (sheet, cols) ->
+                val cell = sheet.width / cols
+                val sc = (col + row) % cols
+                val sr = (col * 3 + row * 5) % cols
+                FloorPatch(sheet, IntOffset(sc * cell, sr * cell), IntSize(cell, cell))
+            }
+            // Punch-through compositing, same as :ui's Board: the hatch is one continuous drawing
+            // covering every Wall cell (drawn first), then every cell paints its own fill on top —
+            // Wall cells skip that second pass entirely when hatched, Floor cells always get it.
+            if (map.wallHatch) {
+                drawWallHatch(
+                    isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
+                    cols = 0 until map.width,
+                    rows = 0 until map.height,
+                    tilePx = TILE_PX,
+                    zoom = zoom,
+                    ink = INK,
+                    toScreen = ::toScreen,
+                )
+            }
             for (col in 0 until map.width) {
                 for (row in 0 until map.height) {
                     val tile = tiles[GridPos(col, row)] ?: TileType.Floor
                     val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                    // Pick a stable-but-varied swatch cell from the floor sheet using the tile's own
-                    // position, so neighbouring floor tiles don't all show the identical sub-image.
-                    val patch = floorSwatch?.let { (sheet, cols) ->
-                        val cell = sheet.width / cols
-                        val sc = (col + row) % cols
-                        val sr = (col * 3 + row * 5) % cols
-                        FloorPatch(sheet, IntOffset(sc * cell, sr * cell), IntSize(cell, cell))
-                    }
-                    drawTerrainCell(tile, rect, patch)
+                    if (tile == TileType.Wall && map.wallHatch) continue
+                    drawTerrainCell(tile, rect, patchAt(floorSwatch, col, row))
                 }
             }
             // Grid lines drawn after terrain fill (not before) so a filled Floor/Wall/hazard cell

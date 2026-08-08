@@ -51,5 +51,9 @@ fun compressTerrainToRuns(tiles: Map<GridPos, TileType>, width: Int, height: Int
     return runs
 }
 
-/** Expands [BattleMapDef.terrain] into the runtime [BattleMap] the resolver's targeting/pathfinding actually reads. */
-fun BattleMapDef.toBattleMap(): BattleMap = BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet())
+/**
+ * Expands [BattleMapDef.terrain] into the runtime [BattleMap] the resolver's targeting/pathfinding
+ * actually reads. `props`/`floorTexture`/`wallHatch` carry straight across unchanged — pure
+ * rendering data `:ui`'s Board reads off `state.map`, never touched by the resolver.
+ */
+fun BattleMapDef.toBattleMap(): BattleMap = BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet(), props, floorTexture, wallHatch)

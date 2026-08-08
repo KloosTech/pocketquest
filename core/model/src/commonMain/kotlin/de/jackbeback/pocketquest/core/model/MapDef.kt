@@ -21,6 +21,15 @@ data class BattleMapDef(
     val paper: PaperStyle = PaperStyle.Default,
     /** References a manifest floor-texture id (assets.json's `kind: "floor"` entries) — null renders plain parchment. Purely a Map editor/rendering concern, no rules-engine consumer. */
     val floorTexture: String? = null,
+    /**
+     * Whether Wall-type cells render as procedural hand-drawn crosshatch (`:ui`'s `drawWallHatch`)
+     * instead of a flat fill — defaults on, since it's the intended look for every map, including
+     * every one already saved before this field existed. Not a sprite/manifest reference (an earlier
+     * sprite-sheet attempt looked visibly tiled — hand-drawn crosshatch can't be chopped into
+     * independent cell-aligned squares), just an on/off switch; the hatch itself is drawn live, not
+     * loaded. Purely a Map editor/rendering concern, no rules-engine consumer, same as floorTexture.
+     */
+    val wallHatch: Boolean = true,
 )
 
 /**

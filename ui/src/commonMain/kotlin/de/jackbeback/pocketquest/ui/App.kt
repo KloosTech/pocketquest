@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -35,8 +36,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -44,6 +47,8 @@ import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
@@ -59,9 +64,13 @@ import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.PreviewResult
+import de.jackbeback.pocketquest.core.model.PropLayer
 import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.TargetMode
+import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.WallEdge
+import de.jackbeback.pocketquest.ui.assets.GameAssetManifest
+import de.jackbeback.pocketquest.ui.assets.GameSpriteLoader
 import de.jackbeback.pocketquest.core.rules.action.allActions
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.action.preview
@@ -275,6 +284,64 @@ private fun CombatLogPanel(log: List<LogEntry>, onClose: () -> Unit) {
     }
 }
 
+/** A resolved sheet + its column count — matches a manifest floor-texture entry's shape. */
+private data class TexSheet(val bitmap: ImageBitmap, val cols: Int)
+
+private data class PropSprite(val bitmap: ImageBitmap, val tilesW: Int, val tilesH: Int)
+
+/**
+ * Every image [Board] needs for one [BattleMap] — a floor-texture sheet plus a sprite per distinct
+ * prop id actually placed on this map (not the whole catalog of placeable props, no point decoding
+ * ones this map never uses). Wall rendering has no image at all — [drawWallHatch] draws it live.
+ * Null fields mean "not configured" or "failed to load," and [Board] falls back to today's
+ * flat-color rendering for those — same "missing asset just means no image" contract
+ * `GameSpriteLoader` already establishes, never a crash.
+ */
+private data class MapAssets(val floor: TexSheet?, val props: Map<String, PropSprite>)
+
+/**
+ * Loads once per distinct [map] (`produceState`'s key in [Board]'s caller) — `:designer`'s
+ * `MapEditorPanel.kt` proved this exact shape already (`floorSwatch`/prop-thumbnail lookups), this
+ * is the same idea via [GameSpriteLoader]'s suspend/Compose-Resources loading instead of raw files.
+ */
+private suspend fun loadMapAssets(map: BattleMap): MapAssets {
+    val manifest = GameAssetManifest.load()
+    val floor = map.floorTexture?.let { id ->
+        val meta = manifest.floorTexture(id) ?: return@let null
+        GameSpriteLoader.load(meta.file)?.let { TexSheet(it, meta.tilesW ?: 1) }
+    }
+    val props = map.props.map { it.prop.raw }.distinct().mapNotNull { id ->
+        val meta = manifest.prop(id) ?: return@mapNotNull null
+        val bitmap = GameSpriteLoader.load(meta.file) ?: return@mapNotNull null
+        id to PropSprite(bitmap, meta.tilesW ?: 1, meta.tilesH ?: 1)
+    }.toMap()
+    return MapAssets(floor, props)
+}
+
+/**
+ * Picks a stable-but-varied sub-cell from a multi-cell texture sheet using the tile's own grid
+ * position, so neighbouring cells don't all show the identical sub-image — the exact technique
+ * `MapEditorPanel.kt`'s `floorSwatch`/`FloorPatch` already proved for the editor's own preview,
+ * ported rather than reinvented.
+ */
+private fun subPatch(sheet: TexSheet, col: Int, row: Int): Pair<IntOffset, IntSize> {
+    val cell = sheet.bitmap.width / sheet.cols
+    val sc = (col + row) % sheet.cols
+    val sr = (col * 3 + row * 5) % sheet.cols
+    return IntOffset(sc * cell, sr * cell) to IntSize(cell, cell)
+}
+
+private fun DrawScope.drawTexturedCell(sheet: TexSheet, col: Int, row: Int, rect: Rect) {
+    val (srcOffset, srcSize) = subPatch(sheet, col, row)
+    drawImage(
+        sheet.bitmap,
+        srcOffset = srcOffset,
+        srcSize = srcSize,
+        dstOffset = IntOffset(rect.left.roundToInt(), rect.top.roundToInt()),
+        dstSize = IntSize(rect.width.roundToInt(), rect.height.roundToInt()),
+    )
+}
+
 /**
  * doc07: "the grid is one Canvas, not 400 composables." Grid lines and
  * blocked tiles come from [BattleMap] (static for the battle); token
@@ -291,6 +358,7 @@ private fun CombatLogPanel(log: List<LogEntry>, onClose: () -> Unit) {
 @Composable
 private fun Board(
     map: BattleMap,
+    mapAssets: MapAssets?,
     world: VisualWorld,
     colors: Map<EntityId, Color>,
     legalTiles: Set<GridPos>,
@@ -353,10 +421,12 @@ private fun Board(
     ) {
         val camera = world.camera.value
         val zoom = world.zoom.value
-        drawGrid(map, camera, zoom)
+        drawGrid(map, mapAssets, camera, zoom)
+        drawProps(map, mapAssets, PropLayer.Floor, camera, zoom)
         threatTiles.forEach { pos -> drawThreatHatch(pos, camera, zoom) }
         legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
         selectedTile?.let { pos -> drawSelectedTile(pos, camera, zoom) }
+        drawProps(map, mapAssets, PropLayer.Object, camera, zoom)
         world.entities.forEach { (id, entity) ->
             drawEntity(entity, colors[id] ?: Color.Gray, camera, zoom)
         }
@@ -366,6 +436,23 @@ private fun Board(
         world.markers.forEach { marker ->
             drawMarker(marker.marker, camera, zoom)
         }
+        drawProps(map, mapAssets, PropLayer.Overhead, camera, zoom)
+    }
+}
+
+/** [layer]-filtered pass over [BattleMap.props] — called three times from [Board] (Floor before highlights, Object before entities, Overhead after everything) so a single prop list drives every z-order slice without three separate stored lists. */
+private fun DrawScope.drawProps(map: BattleMap, mapAssets: MapAssets?, layer: PropLayer, camera: Offset, zoom: Float) {
+    val assets = mapAssets ?: return
+    val screenTile = TILE_PX * zoom
+    map.props.forEach { placement ->
+        if (placement.layer != layer) return@forEach
+        val sprite = assets.props[placement.prop.raw] ?: return@forEach
+        val topLeft = worldToScreen(Offset(placement.at.col * TILE_PX, placement.at.row * TILE_PX), camera, zoom, size)
+        drawImage(
+            sprite.bitmap,
+            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+            dstSize = IntSize((sprite.tilesW * screenTile).roundToInt(), (sprite.tilesH * screenTile).roundToInt()),
+        )
     }
 }
 
@@ -378,11 +465,44 @@ private fun visibleTileBounds(map: BattleMap, camera: Offset, zoom: Float, viewp
     return cols to rows
 }
 
-private fun DrawScope.drawGrid(map: BattleMap, camera: Offset, zoom: Float) {
+private fun DrawScope.drawGrid(map: BattleMap, mapAssets: MapAssets?, camera: Offset, zoom: Float) {
     val viewport = size
     val (cols, rows) = visibleTileBounds(map, camera, zoom, viewport)
     if (cols.isEmpty() || rows.isEmpty()) return
     fun toScreen(world: Offset) = worldToScreen(world, camera, zoom, viewport)
+    val screenTile = TILE_PX * zoom
+
+    // Terrain fill drawn before grid lines (below) so a textured/flat-filled cell never paints over
+    // the line under it — MapEditorPanel.kt's own drawTerrainCell/grid-line split settled this
+    // ordering first, ported here rather than rediscovering it via the same "grid lines missing" bug.
+    //
+    // drawWallHatch clips each Wall cell's strokes to that cell's own rect (found live: an earlier
+    // whole-viewport "continuous field + punch every floor cell on top" version scanned the entire
+    // visible area every frame regardless of how little of it was actually walls, heavy enough to
+    // stutter panning/clicking) — no bleed past a wall cell's edge, so floor cells need no special
+    // handling here at all, same as before this feature existed.
+    if (map.wallHatch) drawWallHatch(isWall = { map.tileAt(it) == TileType.Wall }, cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
+    val floorSheet = mapAssets?.floor
+    if (floorSheet != null) {
+        for (col in cols.first..cols.last) {
+            for (row in rows.first..rows.last) {
+                val pos = GridPos(col, row)
+                if (map.tileAt(pos) == TileType.Wall) continue
+                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                drawTexturedCell(floorSheet, col, row, rect)
+            }
+        }
+    }
+    if (!map.wallHatch) {
+        for (col in cols.first..cols.last) {
+            for (row in rows.first..rows.last) {
+                val pos = GridPos(col, row)
+                if (map.tileAt(pos) != TileType.Wall) continue
+                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                drawRect(color = INK, topLeft = rect.topLeft, size = rect.size)
+            }
+        }
+    }
 
     val yTop = toScreen(Offset(0f, rows.first * TILE_PX)).y
     val yBottom = toScreen(Offset(0f, (rows.last + 1) * TILE_PX)).y
@@ -395,11 +515,6 @@ private fun DrawScope.drawGrid(map: BattleMap, camera: Offset, zoom: Float) {
     for (row in rows.first..rows.last + 1) {
         val y = toScreen(Offset(0f, row * TILE_PX)).y
         drawLine(INK_FAINT, Offset(xLeft, y), Offset(xRight, y))
-    }
-    val screenTile = TILE_PX * zoom
-    map.walls.forEach { pos ->
-        if (pos.col !in cols || pos.row !in rows) return@forEach
-        drawRect(color = INK, topLeft = toScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX)), size = Size(screenTile, screenTile))
     }
     // doc16's thin room-divider walls (WallEdge, layered on top of the whole-cell TileType.Wall
     // above) blocked movement/LoS correctly from the moment the engine gained them, but nothing
@@ -525,6 +640,9 @@ fun App(initialState: GameState, catalog: Catalog) {
     var viewportSize by remember { mutableStateOf(Size.Zero) }
     var threatOverlayOn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
+    // Reloads only when the map itself changes (a new encounter), not on every state update within
+    // one — floorTexture/wallHatch/props are static for the battle, same as BattleMap's terrain.
+    val mapAssets by produceState<MapAssets?>(initialValue = null, state.map) { value = loadMapAssets(state.map) }
 
     // doc15: "a toggle that hatches every tile an enemy could reach and attack next turn" —
     // recomputed only when the toggle flips or the game state actually changes, not on every
@@ -672,6 +790,7 @@ fun App(initialState: GameState, catalog: Catalog) {
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Board(
                 map = state.map,
+                mapAssets = mapAssets,
                 world = world,
                 colors = colors,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),

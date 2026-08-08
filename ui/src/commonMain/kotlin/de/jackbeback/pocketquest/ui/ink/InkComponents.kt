@@ -60,9 +60,23 @@ fun InkTextField(value: String, onValueChange: (String) -> Unit, modifier: Modif
     )
 }
 
-/** A minimal dropdown select — no `compose.material` `DropdownMenu`. Scrolls once its option list grows past a few entries (e.g. picking one of 74 props). */
+/**
+ * A minimal dropdown select — no `compose.material` `DropdownMenu`. Scrolls once its option list
+ * grows past a few entries (e.g. picking one of 74 props). [itemContent], when given, replaces the
+ * plain [label] text for each row in the OPEN list only — the closed button always shows [label] of
+ * [selected], since a thumbnail-sized button would be a much bigger layout change than a "make
+ * browsing the open list easier" ask calls for. Defaults to null so every existing call site (plain
+ * text options) is unaffected.
+ */
 @Composable
-fun <T> InkSelect(selected: T, options: List<T>, label: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
+fun <T> InkSelect(
+    selected: T,
+    options: List<T>,
+    label: (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    itemContent: (@Composable (T) -> Unit)? = null,
+) {
     var open by remember { mutableStateOf(false) }
     Box(modifier = modifier) {
         Box(
@@ -91,7 +105,7 @@ fun <T> InkSelect(selected: T, options: List<T>, label: (T) -> String, onSelect:
                             }
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                     ) {
-                        BasicText(label(option), style = TextStyle(color = INK, fontSize = 13.sp))
+                        if (itemContent != null) itemContent(option) else BasicText(label(option), style = TextStyle(color = INK, fontSize = 13.sp))
                     }
                 }
             }

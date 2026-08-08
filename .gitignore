@@ -25,5 +25,10 @@ captures
 
 assets/normalized/
 
+# Design reference material only (Geomorph crosshatch scans) — not consumed by any build step,
+# the wall hatch is drawn procedurally, not extracted from these. Kept locally for design reference.
+assets/*.png
+assets/geomorph collection part 1/
+
 # Claude Code local session state, not project source
 /.claude/

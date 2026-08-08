@@ -80,6 +80,10 @@ data class BattleMap(
     val height: Int,
     val terrain: Map<GridPos, TileType> = emptyMap(),
     val wallEdges: Set<WallEdge> = emptySet(),
+    /** Carried straight from [BattleMapDef] purely for `:ui`'s Board to render — no rules-engine consumer, same as `floorTexture`/`wallHatch` below. */
+    val props: List<PropPlacement> = emptyList(),
+    val floorTexture: String? = null,
+    val wallHatch: Boolean = true,
 ) {
     fun inBounds(pos: GridPos): Boolean =
         pos.col in 0 until width && pos.row in 0 until height

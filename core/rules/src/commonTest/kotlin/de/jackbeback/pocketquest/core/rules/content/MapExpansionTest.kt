@@ -3,6 +3,9 @@ package de.jackbeback.pocketquest.core.rules.content
 import de.jackbeback.pocketquest.core.model.BattleMapDef
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.MapId
+import de.jackbeback.pocketquest.core.model.PropId
+import de.jackbeback.pocketquest.core.model.PropLayer
+import de.jackbeback.pocketquest.core.model.PropPlacement
 import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.TerrainRun
 import de.jackbeback.pocketquest.core.model.TileType
@@ -85,5 +88,26 @@ class MapExpansionTest {
         val map = def.toBattleMap()
         assertEquals(setOf(edge), map.wallEdges)
         assertTrue(map.hasWallEdge(GridPos(2, 1), Side.West), "mirrored lookup still resolves after the authored->runtime round trip")
+    }
+
+    @Test
+    fun battleMapDefToBattleMapCarriesDecorationFieldsThrough() {
+        val placement = PropPlacement(PropId("chest1x1"), GridPos(1, 1), PropLayer.Object)
+        val def = BattleMapDef(
+            id = MapId("room"), width = 4, height = 4,
+            props = listOf(placement), floorTexture = "stonytile5x5", wallHatch = false,
+        )
+        val map = def.toBattleMap()
+        assertEquals(listOf(placement), map.props)
+        assertEquals("stonytile5x5", map.floorTexture)
+        assertEquals(false, map.wallHatch)
+    }
+
+    @Test
+    fun battleMapDefToBattleMapDefaultsWallHatchOn() {
+        // Every map saved before wallHatch existed decodes with this default — "on by default,
+        // overridable" only works if the fallback here matches BattleMapDef's own.
+        val def = BattleMapDef(id = MapId("room"), width = 4, height = 4)
+        assertEquals(true, def.toBattleMap().wallHatch)
     }
 }
