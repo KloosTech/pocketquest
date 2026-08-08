@@ -38,13 +38,17 @@ data class ItemDef(
      * unchanged); non-empty is enforced by `:core:rules`' `canEquip`.
      */
     val validSlots: Set<Slot> = emptySet(),
+    /** doc13-encounters-and-events.md: a shop's sell price is a fraction of this, independent of whatever `ShopEntry.price` a specific shop listing set — needed so a looted (never-bought) item still has a sell value. Defaults 0, matching every pre-existing `ItemDef` (nothing sellable until authored otherwise). */
+    val basePrice: Int = 0,
+    /** doc11-run-state.md: how an equipped item grants actions/modifiers beyond its own `modifiers` list — resolves through the same `Entity.grantedActions()`/`stats()` pipeline a `FeatureDef` already feeds (doc17 1.6/1.7). Null means the item is passive-only. */
+    val grantsFeature: FeatureId? = null,
 )
 
 /**
- * doc11-run-state.md: a level-up choice. `Progression.features: List<FeatureId>` (the run layer,
- * not built yet) is what a real leveling flow would populate; the engine-level primitive this
- * catalog entry feeds — Entity.features resolved through stats() and grantedActions() — doesn't
- * need that layer to exist, same as every other ModifierSource here.
+ * A reusable bundle of modifiers + granted actions, attached to an entity via any
+ * `ModifierSource` — an archetype's innate features, or (doc11-run-state.md) an equipped
+ * `ItemDef.grantsFeature`. No leveling in this game (docs/10-game-loop.md "No leveling"), so
+ * there is no level-up flow that assigns these; they're purely a content-authoring building block.
  */
 @Serializable
 data class FeatureDef(

@@ -26,6 +26,8 @@ Game design and product layer:
 | --- | --- |
 | [10-game-loop.md](10-game-loop.md) | Run structure, the three layers, resource economy, party rules |
 | [11-run-state.md](11-run-state.md) | `RunState` above `GameState`, encounter handoff, resume |
+| [12-progression.md](12-progression.md) | The Meta layer: roster, permadeath, currency, unlocks |
+| [13-encounters-and-events.md](13-encounters-and-events.md) | Node graph content: encounter pools, events, shops |
 | [15-battle-ui.md](15-battle-ui.md) | Screen anatomy, targeting state machine, prompts, camera |
 | [16-art-direction.md](16-art-direction.md) | Visual language, scaling rules, map resources, the designer |
 | [17-engine-gaps.md](17-engine-gaps.md) | Everything the loop needs that the engine lacks, by dependency |
@@ -33,7 +35,7 @@ Game design and product layer:
 
 | [19-placeholders.md](19-placeholders.md) | Generated placeholder art and the missing-asset registry |
 
-Not yet written: 12 (progression), 13 (encounters and events), 14 (UI shell).
+Not yet written: 14 (UI shell).
 
 ---
 

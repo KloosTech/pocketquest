@@ -34,30 +34,59 @@ import de.jackbeback.pocketquest.core.rules.stat.stats
  * a live `d20` per spawned entity, highest first, ties broken by spawn order (stable sort).
  */
 fun startEncounter(catalog: Catalog, encounter: EncounterSpec, party: List<ArchetypeId>, seed: Long = 0L): GameState {
+    val partyEntities = party.map { archetype ->
+        val preliminary = Entity(EntityId(0), archetype, pos = null, health = null, resources = null, actor = Actor(Faction.Player, Controller.Human))
+        val stats = preliminary.stats(catalog)
+        preliminary.copy(health = Health(stats.maxHp), resources = Resources(ap = stats.maxAp, mana = stats.maxMana))
+    }
+    return buildEncounterState(catalog, encounter, RngState(seed = seed), partyEntities).first
+}
+
+/**
+ * docs/11-run-state.md's `startEncounter(run: RunState, ...)` needs party [Entity]s already carrying
+ * equipment/features/hp/mana from `PartyMember` (built by `:core:run`'s `PartyMember.toEntity`), and
+ * needs the run's own evolving [RngState] rather than a restart-from-seed — this is that entry
+ * point. Returns, alongside the [GameState], the spawned [EntityId] per input `party` index (`null`
+ * where a member was silently dropped for lack of a spawn tile, same truncation as the plain
+ * [startEncounter] overload) so the caller can build its own member-to-entity mapping.
+ */
+fun startEncounterWithParty(
+    catalog: Catalog,
+    encounter: EncounterSpec,
+    party: List<Entity>,
+    rng: RngState,
+): Pair<GameState, List<EntityId?>> = buildEncounterState(catalog, encounter, rng, party)
+
+private fun buildEncounterState(
+    catalog: Catalog,
+    encounter: EncounterSpec,
+    initialRng: RngState,
+    partyEntities: List<Entity>,
+): Pair<GameState, List<EntityId?>> {
     val mapDef = catalog.mapDef(encounter.mapId)
     val battleMap = mapDef.toBattleMap()
     val tilesByRole: Map<SpawnRole, MutableList<GridPos>> =
         mapDef.spawns.groupBy({ it.role }, { it.tiles }).mapValues { (_, lists) -> lists.flatten().toMutableList() }
 
     var nextId = 0L
-    var rng = RngState(seed = seed)
+    var rng = initialRng
     val entities = mutableListOf<Entity>()
     val initiative = mutableMapOf<EntityId, Int>()
+    val partySpawnIds = MutableList<EntityId?>(partyEntities.size) { null }
 
-    fun spawn(archetype: ArchetypeId, pos: GridPos, faction: Faction, controller: Controller) {
-        val id = EntityId(nextId++)
-        val preliminary = Entity(id, archetype, pos, health = null, resources = null, actor = Actor(faction, controller))
-        val stats = preliminary.stats(catalog)
-        entities += preliminary.copy(health = Health(stats.maxHp), resources = Resources(ap = stats.maxAp, mana = stats.maxMana))
+    fun rollInitiative(id: EntityId) {
         val (advanced, roll) = rng.d20()
         rng = advanced
         initiative[id] = roll
     }
 
     val partyTiles = tilesByRole[SpawnRole.Party] ?: mutableListOf()
-    party.forEachIndexed { i, archetype ->
+    partyEntities.forEachIndexed { i, member ->
         val pos = partyTiles.getOrNull(i) ?: return@forEachIndexed
-        spawn(archetype, pos, Faction.Player, Controller.Human)
+        val id = EntityId(nextId++)
+        entities += member.copy(id = id, pos = pos)
+        partySpawnIds[i] = id
+        rollInitiative(id)
     }
 
     for (enemySpawn in encounter.enemies) {
@@ -68,16 +97,21 @@ fun startEncounter(catalog: Catalog, encounter: EncounterSpec, party: List<Arche
         val profile = catalog.archetype(enemySpawn.archetype).aiProfile
         repeat(enemySpawn.count) {
             val pos = tiles.removeFirstOrNull() ?: return@repeat
-            spawn(enemySpawn.archetype, pos, Faction.Enemy, Controller.Ai(profile))
+            val id = EntityId(nextId++)
+            val preliminary = Entity(id, enemySpawn.archetype, pos, health = null, resources = null, actor = Actor(Faction.Enemy, Controller.Ai(profile)))
+            val stats = preliminary.stats(catalog)
+            entities += preliminary.copy(health = Health(stats.maxHp), resources = Resources(ap = stats.maxAp, mana = stats.maxMana))
+            rollInitiative(id)
         }
     }
 
     val order = entities.map { it.id }.sortedByDescending { initiative.getValue(it) }
-    return GameState(
+    val state = GameState(
         entities = entities,
         map = battleMap,
         turn = TurnState(round = 1, order = order, activeIndex = 0, phase = TurnPhase.Start),
         rng = rng,
         nextEntityId = nextId,
     )
+    return state to partySpawnIds
 }

@@ -5,10 +5,14 @@ import androidx.room.Database
 import androidx.room.RoomDatabase
 import androidx.room.RoomDatabaseConstructor
 
-@Database(entities = [SaveSlotRow::class], version = 1)
+// version 3: added run_slot (docs/11-run-state.md) — no migration path from 2, no real installs
+// exist yet to migrate; Room.databaseBuilder callers use fallbackToDestructiveMigration.
+@Database(entities = [SaveSlotRow::class, MetaStateRow::class, RunSlotRow::class], version = 3)
 @ConstructedBy(PocketQuestDatabaseConstructor::class)
 abstract class PocketQuestDatabase : RoomDatabase() {
     abstract fun saveSlotDao(): SaveSlotDao
+    abstract fun metaStateDao(): MetaStateDao
+    abstract fun runSlotDao(): RunSlotDao
 }
 
 /**

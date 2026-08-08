@@ -4,12 +4,20 @@ import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import kotlinx.serialization.json.Json
 
 /**
+ * `allowStructuredMapKeys` — `BattleMap.terrain: Map<GridPos, TileType>` keys by a data class, not
+ * a primitive/enum; the plain default `Json` instance rejects that at encode time (never surfaced
+ * until a real save round-tripped a map with actual painted terrain — every fixture/demo state
+ * before that used an empty `terrain` map, which never exercises a real map key at all).
+ */
+private val SNAPSHOT_JSON = Json { allowStructuredMapKeys = true }
+
+/**
  * The only place a [Resolver] gets turned into bytes and back — everything
  * else in :core:rules stays pure/in-memory. `updatedAt` is a caller-supplied
  * epoch-millis timestamp rather than this module reaching for a platform
  * clock itself, keeping :data's own surface minimal.
  */
-class SaveRepository(private val dao: SaveSlotDao, private val json: Json = Json) {
+class SaveRepository(private val dao: SaveSlotDao, private val json: Json = SNAPSHOT_JSON) {
 
     suspend fun save(
         id: String,

@@ -21,7 +21,7 @@ A run spans many sessions. Two consequences that are easy to underestimate:
 | Layer | Lifetime | Owns | Module |
 | --- | --- | --- | --- |
 | **Meta** | Forever | Champions roster, unlocks, idle accrual, settings | `:core:meta` |
-| **Run** | One roguelike attempt | Party, map graph position, inventory, gold, XP | `:core:run` |
+| **Run** | One roguelike attempt | Party, map graph position, inventory, gold | `:core:run` |
 | **Encounter** | One battle | `GameState`, `Resolver`, initiative, grid | `:core:rules` |
 
 Strict containment: Meta knows nothing about a `GameState`. Run owns an
@@ -35,10 +35,21 @@ reaches `:core:rules`, determinism and replay go with it.
 ## Run anatomy
 
 ```
-Character select ─► Act 1 ─► Act 2 ─► Act 3 ─► Boss ─► Champion
-   (new or                │        │        │
-    from roster)          └─ node graph, player picks the path
+Character select ─► Act 1 ─► Act 2 ─► Act 3 ─► Boss ─► Champion(s) banked
+  (solo, or up to 3              │        │        │
+   from roster once              └─ node graph, player picks the path
+   Party mode is unlocked)
 ```
+
+**Party mode is a one-time meta unlock, not available from the start.** Your
+first-ever character's first run is always solo — no picking a party, no
+mid-run recruitment. Only once that solo run is *completed* (success, per
+[12-progression.md](12-progression.md)'s unlock list — a failed solo run does
+not unlock it) does Party mode become available: every run after that picks
+up to 3 Champions off the roster **before** the run starts. There is no
+mid-run recruitment node — the roster is where new party members come from, not an
+Event outcome. (This supersedes this doc's earlier "starts at one character,
+grows via recruitment" framing — see the Party section below.)
 
 Node types on the graph:
 
@@ -47,7 +58,7 @@ Node types on the graph:
 | `Combat` | Standard encounter, scaled to party size and act |
 | `Elite` | Harder encounter, better loot |
 | `Event` | Text prompt, 2–3 choices, immediate consequences |
-| `Rest` | Safe node: recover, potentially level up |
+| `Rest` | Safe node: recover HP |
 | `Shop` | Spend gold on potions, gear, mana restoration |
 | `Boss` | Act finale; the Act 3 boss ends the run |
 
@@ -56,8 +67,12 @@ prompt plus a list of outcomes; only its consequences (heal, grant item, start
 an encounter, recruit) touch the layers below. Forcing them through the effect
 stack would be the same category error as v1's implicit system ordering.
 
-Run ends on: Act 3 boss defeated (**success** → champion), or the whole party
-downed (**failure**), or level 12 reached (**success**, the "god status" cap).
+Run ends on: Act 3 boss defeated (**success** → survivors banked as Champions,
+run gold deposited to the permanent stash — [12-progression.md](12-progression.md)),
+or the whole party downed (**failure** — permadeath, see below: downed members
+do not return, and none of the run's held gold is banked).
+
+No leveling, no level-based win condition — see "No leveling" below.
 
 ## Locked decisions
 
@@ -152,9 +167,12 @@ Two implementation notes:
 
 ## Party
 
-Starts at one character. Grows to a maximum of **three** (see the time budget —
-four does not fit the session constraint). Recruitment is a run reward: an
-`Event` or `Rest` node offering a companion.
+Solo until Party mode unlocks (see "Run anatomy" above), then a party of up to
+**three** Champions picked from the roster **before** the run starts — no
+mid-run recruitment. Three stays the hard cap for the reasons already
+established below (time budget, party-bar/initiative-tracker screen space):
+Party mode doesn't relax that, it only changes *when* the party is assembled
+(upfront from a persistent roster, not "starts at one and grows").
 
 Target roles are the standard trinity, but they must be expressible on a grid:
 
@@ -190,6 +208,18 @@ Required:
 
 Death saves are deliberately out of scope for v1 — they add a per-turn ritual
 that costs session time and gives the player nothing to decide.
+
+### Permadeath
+
+Downed (above) is the *within-encounter* recovery mechanic. Permadeath is the
+*run-level* stake: if the whole party ends up downed simultaneously (the run's
+one and only failure condition), every member of that run's party is removed
+from the roster for good — no revival, no "recovers after the run." The run's
+held gold is forfeited too (it was never banked — see
+[12-progression.md](12-progression.md)). This is deliberately harsh: the
+counterweight is gear, not a safety net. A build that's actually vulnerable to
+a wipe should feel like a real bet, and itemization (rarity, defensive gear,
+consumables) is where that risk gets managed, not a soft-fail mechanic.
 
 ## Time budget
 
@@ -259,17 +289,40 @@ Resume rules:
 
 ## What a run produces
 
-On success, the character joins the **Champions** roster with its final level,
-gear and a record of the run. Champions are a Meta-layer resource that generates
-passive income over wall-clock time and can be sent on background missions.
+No leveling (see below), so a run's only lasting output is **gear and
+currency** — there's no "final level" to record anymore.
 
-Open decision: whether the whole surviving party is promoted or only the
-character the run started with. Promoting all three is more generous and makes
-recruitment more valuable; promoting one keeps the roster meaningful and matches
-the "champion" framing. Not decided here.
+- **The very first run (solo, ungated character)**: on success, that character
+  becomes the roster's first Champion — this is how the roster is bootstrapped
+  — and Party mode unlocks. On failure, permadeath applies: back to character
+  creation.
+- **Every run after that (Party mode)**: the party was already drawn *from*
+  the roster, so there's no "promotion" question — on success, every surviving
+  member simply returns to the roster carrying whatever gear they found, and
+  the run's held gold deposits into the shared permanent stash
+  ([12-progression.md](12-progression.md)). On failure, every member of that
+  run's party is gone (permadeath) and the gold is forfeited.
+
+Champions are also a Meta-layer resource that generates passive income over
+wall-clock time and can be sent on background missions — unchanged, still a
+sibling mechanic to runs, not something a run produces directly.
+
+## No leveling
+
+Power comes entirely from gear, consumables, and event/shop choices — no XP,
+no character level, no level-based win condition. This replaces every earlier
+mention in this doc and in [11-run-state.md](11-run-state.md) of
+`Progression.level`/`xp`, level-up-at-Rest, and "level 12 reached" as a success
+condition. The only win condition is the Act 3 boss.
+
+Why: leveling and gear are two competing power-progression systems that would
+need separate balancing, and gear alone already gives shops/loot/events
+something concrete to hand out. Revisit only if playtesting shows gear-only
+progression feels flat over a full run.
 
 ## Next documents
 
 - [11-run-state.md](11-run-state.md) — the data model for all of the above
-- [13-encounters-and-events.md](13-encounters-and-events.md) — node graph and event schema
+- [12-progression.md](12-progression.md) — the Meta layer: roster, permadeath, currency, unlocks
+- [13-encounters-and-events.md](13-encounters-and-events.md) — node graph, events, and shops
 - [17-engine-gaps.md](17-engine-gaps.md) — the engine work this document implies

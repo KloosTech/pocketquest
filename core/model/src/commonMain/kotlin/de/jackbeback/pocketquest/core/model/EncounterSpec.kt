@@ -16,10 +16,20 @@ data class EncounterSpec(
     val mapId: MapId,
     val enemies: List<EnemySpawn> = emptyList(),
     val scaling: EncounterScaling = EncounterScaling(),
+    val goldMin: Int = 0,
+    val goldMax: Int = 0,
+    val loot: List<LootEntry> = emptyList(),
 )
 
 @Serializable
 data class EnemySpawn(val archetype: ArchetypeId, val role: SpawnRole = SpawnRole.Enemy, val count: Int = 1)
+
+/**
+ * docs/11-run-state.md's finishEncounter step 3 ("loot rolled from run.rng into the inventory") —
+ * each entry is an independent Bernoulli roll at [chance], not a weighted pick from the list.
+ */
+@Serializable
+data class LootEntry(val item: ItemId, val chance: Double = 1.0)
 
 /**
  * doc11: "enemies instantiated from the EncounterSpec, scaled by act and party size" — no formula

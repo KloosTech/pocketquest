@@ -26,6 +26,7 @@ import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.FeatureDef
 import de.jackbeback.pocketquest.core.model.FeatureId
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.ItemDef
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.Range
@@ -172,6 +173,22 @@ class CatalogValidatorTest {
         CatalogValidator.validate(catalog)
     }
 
+    @Test
+    fun itemGrantingAnUndefinedFeatureFailsValidation() {
+        val item = ItemDef(id = ItemId("wandOfSparks"), name = "Wand of Sparks", grantsFeature = FeatureId("sparkTraining"))
+        val catalog = Catalog(items = mapOf(item.id to item))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
+        assertTrue(e.problems.single().contains("Item 'wandOfSparks' grants unknown feature 'sparkTraining'"))
+    }
+
+    @Test
+    fun itemGrantingAKnownFeaturePassesValidation() {
+        val feature = FeatureDef(id = FeatureId("sparkTraining"), name = "Spark Training")
+        val item = ItemDef(id = ItemId("wandOfSparks"), name = "Wand of Sparks", grantsFeature = feature.id)
+        val catalog = Catalog(items = mapOf(item.id to item), features = mapOf(feature.id to feature))
+        CatalogValidator.validate(catalog)
+    }
+
     // --- Encounter / Map (docs/16-art-direction.md's Encounter and Map editors) ---
 
     private fun mapDef(id: String = "room1", enemyTiles: Int = 1) = BattleMapDef(
@@ -197,6 +214,18 @@ class CatalogValidatorTest {
         val catalog = Catalog(maps = mapOf(map.id to map), encounters = mapOf(encounter.id to encounter))
         val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
         assertTrue(e.problems.any { it.contains("unknown archetype 'goblin'") }, "expected an unknown-archetype problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun encounterReferencingAnUndefinedLootItemFailsValidation() {
+        val map = mapDef()
+        val encounter = EncounterSpec(
+            id = EncounterId("goblinAmbush"), name = "Goblin Ambush", mapId = map.id,
+            loot = listOf(de.jackbeback.pocketquest.core.model.LootEntry(de.jackbeback.pocketquest.core.model.ItemId("potion"))),
+        )
+        val catalog = Catalog(maps = mapOf(map.id to map), encounters = mapOf(encounter.id to encounter))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
+        assertTrue(e.problems.any { it.contains("unknown loot item 'potion'") }, "expected an unknown-loot-item problem, got: ${e.problems}")
     }
 
     @Test

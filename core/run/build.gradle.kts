@@ -4,8 +4,6 @@ plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
     alias(libs.plugins.serialization)
-    alias(libs.plugins.ksp)
-    alias(libs.plugins.room)
 }
 
 kotlin {
@@ -26,40 +24,29 @@ kotlin {
         iosSimulatorArm64(),
     ).forEach { iosTarget ->
         iosTarget.binaries.framework {
-            baseName = "Data"
+            baseName = "CoreRun"
             isStatic = true
         }
     }
 
     sourceSets {
         commonMain.dependencies {
-            // :core:content doesn't exist yet (doc01's graph shows :data -> :core:content,
-            // but persisting a Resolver needs :core:rules' types directly) — depend on
-            // :core:rules directly until :core:content exists to mediate.
+            // docs/11-run-state.md's module diagram: :core:run starts/finishes encounters
+            // (:core:rules) against catalog content (:core:content). Deliberately NOT
+            // :core:meta — siblings, not parent/child (docs/10-game-loop.md); MemberId is its
+            // own type here, not core:meta's ChampionId, so nothing forces that dependency.
             implementation(projects.core.rules)
-            implementation(projects.core.meta)
-            implementation(projects.core.run)
+            implementation(projects.core.content)
             implementation(libs.kotlinx.serialization.json)
-            implementation(libs.room.runtime)
-        }
-        val desktopMain by getting {
-            dependencies {
-                implementation(libs.sqlite.bundled)
-            }
-        }
-        iosMain.dependencies {
-            implementation(libs.sqlite.bundled)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
-            implementation(libs.kotlinx.coroutines.core)
-            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }
 
 android {
-    namespace = "de.jackbeback.pocketquest.data"
+    namespace = "de.jackbeback.pocketquest.core.run"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
 
     defaultConfig {
@@ -69,15 +56,4 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-}
-
-dependencies {
-    add("kspAndroid", libs.room.compiler)
-    add("kspIosArm64", libs.room.compiler)
-    add("kspIosSimulatorArm64", libs.room.compiler)
-    add("kspDesktop", libs.room.compiler)
-}
-
-room {
-    schemaDirectory("$projectDir/schemas")
 }

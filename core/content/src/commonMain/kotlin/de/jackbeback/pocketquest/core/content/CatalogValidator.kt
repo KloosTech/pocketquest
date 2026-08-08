@@ -63,6 +63,14 @@ object CatalogValidator {
             }
         }
 
+        for (item in catalog.items.values) {
+            item.grantsFeature?.let { featureId ->
+                if (featureId !in catalog.features) {
+                    problems += "Item '${item.id.raw}' grants unknown feature '${featureId.raw}'"
+                }
+            }
+        }
+
         for (feature in catalog.features.values) {
             for (actionId in feature.grantsActions) {
                 if (actionId !in catalog.actions) {
@@ -84,6 +92,11 @@ object CatalogValidator {
             for (spawn in encounter.enemies) {
                 if (spawn.archetype !in catalog.archetypes) {
                     problems += "Encounter '${encounter.id.raw}' references unknown archetype '${spawn.archetype.raw}'"
+                }
+            }
+            for (entry in encounter.loot) {
+                if (entry.item !in catalog.items) {
+                    problems += "Encounter '${encounter.id.raw}' references unknown loot item '${entry.item.raw}'"
                 }
             }
             val neededByRole = encounter.enemies.groupBy { it.role }.mapValues { (_, spawns) -> spawns.sumOf { it.count } }

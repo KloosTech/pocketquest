@@ -8,7 +8,7 @@ The layer between Meta and an encounter. Everything in
 `GameState` is deliberately a *battle* state: entities on a grid, initiative,
 RNG, an effect stack. It is created when an encounter starts and discarded when
 it ends. A run outlives dozens of them and owns things a battle has no concept
-of — a map graph, gold, an inventory, XP.
+of — a map graph, gold, an inventory.
 
 Putting run data into `GameState` would mean serializing the whole inventory
 into every mid-combat autosave, and passing gold through the resolver. Keeping
@@ -52,10 +52,9 @@ data class RunState(
 
 @Serializable
 data class PartyMember(
-    val memberId: MemberId,
+    val memberId: MemberId,               // == the source ChampionRecord's id — see "Champions handoff"
     val name: String,
     val archetype: ArchetypeId,
-    val progression: Progression,         // level, XP, chosen features
     val hp: Int,                          // persists across encounters
     val mana: Int,                        // refilled by finishEncounter; stored so a
                                           // mid-encounter save round-trips cleanly
@@ -63,14 +62,12 @@ data class PartyMember(
     val controller: Controller,           // the per-character AI/manual toggle
     val condition: MemberCondition,       // Healthy | Downed
 )
-
-@Serializable
-data class Progression(
-    val level: Int,
-    val xp: Int,
-    val features: List<FeatureId>,        // each contributes Modifiers + granted actions
-)
 ```
+
+No `Progression`/level/XP — see [10-game-loop.md](10-game-loop.md)'s "No
+leveling." Power comes from `equipment` alone; `FeatureDef`s an item grants
+still flow through the existing `grantedActions()`/`stats()` machinery
+(doc17 1.6/1.7), there's just no level-driven feature unlock feeding it.
 
 ### HP and mana live here, not in `Entity`
 
@@ -82,25 +79,25 @@ the only place that may do so.
 AP is *not* on `PartyMember` — it is a per-turn budget with no meaning outside an
 encounter.
 
-## Levelling without breaking `Archetype`
+## Gear without breaking `Archetype`
 
-`Archetype` is static per-kind data ([02-state-model.md](02-state-model.md)) and
-a level-12 hero cannot be a fixed archetype. `Progression.features` resolves
-this without touching that principle:
+`Archetype` is static per-kind data ([02-state-model.md](02-state-model.md)) —
+with no leveling, the only thing that ever pushes a `PartyMember` beyond its
+archetype's baseline is `equipment`. This already works without any new
+engine concept:
 
-- A `FeatureId` resolves through the `Catalog` to a `FeatureDef` holding
-  `modifiers: List<Modifier>` and `grantsActions: List<ActionId>`.
-- Features are just another `ModifierSource`, so `stats()` keeps deriving
-  everything and nothing new is stored.
+- An equipped `ItemDef` can carry `modifiers: List<Modifier>` directly and/or
+  reference a `FeatureDef` (which itself holds `modifiers` +
+  `grantsActions: List<ActionId>`) — a sword that grants "Cleave," a wand that
+  grants "Firebolt."
+- Both are just another `ModifierSource`, so `stats()`/`grantedActions()`
+  keep deriving everything and nothing new needs to be stored on the entity.
 
-Two engine changes fall out of this:
-
-1. `Entity` needs a `grantedActions: List<ActionId>` alongside
-   `Archetype.actions`, since the archetype is no longer the only action source.
-2. `stats()` must include feature modifiers in its fixed source order —
-   after archetype innate, before equipment.
-
-Both are listed in [17-engine-gaps.md](17-engine-gaps.md).
+This is already built (doc17 1.6/1.7: `Entity.grantedActions(cat)`, and
+`stats()` includes feature modifiers after archetype innate, before
+equipment) — it was originally justified by leveling, but the same machinery
+is exactly what an item-grants-an-action design needs, so nothing here is
+lost by dropping levels.
 
 ## The encounter handoff
 
@@ -126,14 +123,19 @@ fun finishEncounter(run: RunState, final: GameState, cat: Catalog): RunState
    ([10-game-loop.md](10-game-loop.md)).
 2. Downed members that survived get up at 1 HP
    ([10-game-loop.md](10-game-loop.md)).
-3. XP awarded and level-ups queued (resolved at the next `Rest`, so a level-up
-   never interrupts a fight).
-4. Loot rolled from `run.rng` into the inventory.
-5. `encounter = null`.
+3. Loot rolled from `run.rng` into the inventory; gold reward added to
+   `run.gold` — **not** the permanent stash, which is only credited on
+   `RunOutcome.Success` ([12-progression.md](12-progression.md)).
+4. `encounter = null`.
 
 Mana is refilled here rather than carried over, and this is the *only* place it
 refills. Until `ResourcesReset` stops restoring mana every turn, that
 distinction does not exist and no spell can be rationed across a fight.
+
+If every `PartyMember` ends the encounter downed (a wipe), `finishEncounter`
+does not run this write-back at all — it sets `run.outcome = RunOutcome.Failure`
+directly and hands off to permadeath ([12-progression.md](12-progression.md)),
+since there's nothing to write HP/loot back *to*.
 
 ## Between-encounter actions
 
@@ -151,7 +153,7 @@ This is worth noticing as a win: the alternative designs all required running
 removed the need for a parallel validation path entirely.
 
 `Rest` nodes are the other recovery route and are a run-layer operation, not an
-action: restore a fixed fraction of HP to every member, resolve queued level-ups.
+action: restore a fixed fraction of HP to every member.
 
 ## Persistence
 
@@ -218,10 +220,23 @@ combat must read the `GameState`, not the run.
 
 ## Champions handoff
 
-On `RunOutcome.Success`, the qualifying member(s) are converted to a
-`ChampionRecord` in `:core:meta`: final level, features, equipment, run summary.
-This is a one-way copy — a champion is never a live `PartyMember` again; sending
-one on a background mission is a Meta-layer operation over wall-clock time.
+Unlike an earlier version of this doc, this is **not** a one-way creation —
+in Party mode, every `PartyMember` in `run.party` already came *from* a
+`ChampionRecord` (that's what "pick up to 3 off the roster" means at
+`RunState` construction time). The handoff on `RunOutcome.Success` is a write
+BACK, not a conversion:
 
-Whether all surviving members qualify or only the founding character is still
-open ([10-game-loop.md](10-game-loop.md)).
+1. Each surviving member's `ChampionRecord.equipment` is overwritten with the
+   `PartyMember`'s current `equipment` (whatever they found/bought this run).
+2. `run.gold` is deposited into the permanent stash
+   ([12-progression.md](12-progression.md)) — once, for the whole run, not
+   per member.
+3. `ChampionRecord.status` returns to `Available`.
+
+**Except the very first run** (solo, pre-roster): there's no source
+`ChampionRecord` yet, so success there *does* create the first one —
+see [12-progression.md](12-progression.md)'s unlock flow.
+
+On `RunOutcome.Failure` (permadeath), every `ChampionRecord` that was in
+`run.party` is deleted from the roster, and `run.gold` is discarded —
+[10-game-loop.md](10-game-loop.md)'s "Permadeath."

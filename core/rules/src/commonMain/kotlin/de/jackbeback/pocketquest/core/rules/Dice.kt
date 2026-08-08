@@ -45,6 +45,19 @@ fun RngState.roll(dice: DiceSpec): Pair<RngState, RollResult> {
     return copy(calls = calls + 1) to RollResult(rolls, dice.modifier)
 }
 
+/** Uniform int in `min..max` inclusive; `min >= max` short-circuits to [min] without consuming the RNG. */
+fun RngState.rollRange(min: Int, max: Int): Pair<RngState, Int> {
+    if (min >= max) return this to min
+    val rng = rngFor(this)
+    return copy(calls = calls + 1) to rng.nextInt(min, max + 1)
+}
+
+/** A single Bernoulli trial at [probability] (0.0..1.0). */
+fun RngState.chance(probability: Double): Pair<RngState, Boolean> {
+    val rng = rngFor(this)
+    return copy(calls = calls + 1) to (rng.nextDouble() < probability)
+}
+
 fun resolveAdvantage(sides: Set<AdvSide>): RollMode = when {
     AdvSide.Advantage in sides && AdvSide.Disadvantage in sides -> RollMode.Normal
     AdvSide.Advantage in sides -> RollMode.Advantage
