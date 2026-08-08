@@ -112,6 +112,47 @@ class CanPerformTest {
         assertEquals(listOf(Rejection.NotEnoughAp(5, 2)), rejections)
     }
 
+    // --- Cost.apCost: the flat AP price for non-Movement actions (user-reported: the Cost editor
+    // had no AP field at all, because canPerform never checked one for Main/Quick/Reaction/Free) ---
+
+    @Test
+    fun notEnoughApForANonMovementActionsFlatCost() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 1 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(1) }
+            initiative("hero")
+            actionDef("heavySwing") { cost(ActionCost.Main, apCost = 2) }
+        }
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("heavySwing")), ActionCtx(s.id("hero"), emptyList()), s.catalog)
+        assertEquals(listOf(Rejection.NotEnoughAp(2, 1)), rejections)
+    }
+
+    @Test
+    fun enoughApForANonMovementActionsFlatCostProducesNoApRejection() {
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 2 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(2) }
+            initiative("hero")
+            actionDef("stab") { cost(ActionCost.Main, apCost = 2) }
+        }
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("stab")), ActionCtx(s.id("hero"), emptyList()), s.catalog)
+        assertTrue(rejections.none { it is Rejection.NotEnoughAp })
+    }
+
+    @Test
+    fun anUnauthoredApCostDefaultsToZeroAndNeverRejects() {
+        // Backward compatibility: every action authored before Cost.apCost existed must keep costing
+        // 0 AP, exactly as it did when Main/Quick/Reaction/Free had no AP check at all.
+        val s = scenario {
+            archetype("dummy") { hp = 10; ap = 0 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); ap(0) }
+            initiative("hero")
+            actionDef("stab") { cost(ActionCost.Main) }
+        }
+        val rejections = canPerform(s.state, s.id("hero"), s.catalog.actionDef(actionId("stab")), ActionCtx(s.id("hero"), emptyList()), s.catalog)
+        assertTrue(rejections.none { it is Rejection.NotEnoughAp })
+    }
+
     // --- docs/17-engine-gaps.md 1.3: a Path-targeted move prices itself off the resolved route ---
 
     @Test

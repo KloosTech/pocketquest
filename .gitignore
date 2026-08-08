@@ -24,3 +24,6 @@ captures
 /app/pocketquest-demo.db*
 
 assets/normalized/
+
+# Claude Code local session state, not project source
+/.claude/

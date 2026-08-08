@@ -27,6 +27,16 @@ class PathfindingTest {
     }
 
     @Test
+    fun aStraightCardinalMoveDoesNotZigzagThroughATiedDiagonal() {
+        // (0,0) -> (0,2): straight-down and a diagonal-left-then-diagonal-right detour tie on cost
+        // (diagonal == cardinal here) — found live, a straight 2-tile drop rendered as one diagonal
+        // step each way instead of walking straight down. Cardinal-first tie-break must win.
+        val map = BattleMap(10, 10)
+        val path = findPath(GridPos(0, 0), GridPos(0, 2), map, emptyMap())!!
+        assertEquals(listOf(GridPos(0, 1), GridPos(0, 2)), path)
+    }
+
+    @Test
     fun fromEqualsToReturnsAnEmptyPath() {
         val map = BattleMap(10, 10)
         assertEquals(emptyList(), findPath(GridPos(2, 2), GridPos(2, 2), map, emptyMap()))

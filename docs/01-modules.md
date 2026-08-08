@@ -48,9 +48,20 @@ Rules, read top to bottom:
    a special case inside it.
 5. `:data` owns Room and is the only module that may perform IO.
 6. `:ui` may depend on everything below it, and is the only module allowed to
-   import Compose.
+   import Compose *within this graph* — the player-facing `:app`/`:ui` tree.
+   `:designer` ([16-art-direction.md](16-art-direction.md)'s desktop content-
+   authoring tool) is a deliberate, doc-sanctioned exception: it is a sibling
+   tool outside this graph, not a descendant of `:ui`, and imports Compose
+   directly (depending on `:core:rules`/`:core:content` so it can run
+   `preview()` and `CatalogValidator` live) for the same reason v1's own
+   designer was never part of its player-facing app either.
 7. **No module may depend on `:ui`.** If something in `:core` needs a UI
-   concept, the concept is in the wrong place.
+   concept, the concept is in the wrong place. `:designer` is again the one
+   documented exception: its Playtest launcher opens the real battle window
+   (`de.jackbeback.pocketquest.ui.App`) in a second Compose Desktop `Window`
+   inside the same process, rather than shelling out to a separate `:app`
+   build/run — this rule still holds for every module inside the player-facing
+   graph itself (`:core:*`, `:data`), it only ever bent for the sibling tool.
 
 ## Multiplatform shape
 

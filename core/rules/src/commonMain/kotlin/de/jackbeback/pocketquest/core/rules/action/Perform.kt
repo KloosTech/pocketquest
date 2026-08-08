@@ -40,7 +40,7 @@ private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId,
     // ResourcesSpent event rather than an out-of-band deduction — see docs/05-actions-and-effects.md.
     val spendCost = Effect.SpendCost(
         who = caster,
-        ap = path?.pathCost(state.map) ?: (movement?.tiles ?: 0),
+        ap = path?.pathCost(state.map) ?: (movement?.tiles ?: def.cost.apCost),
         mana = def.cost.mana,
         markQuickUsed = def.cost.action == ActionCost.Quick,
     )

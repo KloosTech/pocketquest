@@ -164,6 +164,51 @@ class RollEffectTest {
     }
 
     @Test
+    fun rollAttackLiveModeHitEmitsTheDamageRollBreakdown() {
+        // User-reported: the battle log showed "4 damage" once and "3 damage" the next time with no
+        // way to tell whether that was dice variance or a resistance/modifier change. A hit under
+        // RngMode.Live must now also emit the individual dice results, not just the final total.
+        val seed = seedRollingD20(10) // any non-1 roll hits this AC; natural 1 always fumbles regardless of bonus
+        val s = scenario {
+            seed(seed)
+            archetype("attacker") { hp = 10 }
+            archetype("easyTarget") { hp = 10; ac = 1 } // trivially low AC — any non-fumble roll hits
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("easyTarget"); at(1, 0); hp(10) }
+        }
+        val spec = DiceSpec(1, 6, 3)
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 50, damage = spec, damageType = DamageType.Bludgeoning)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Live)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events[0])
+        assertTrue(rolled.hit)
+        val damageRolled = assertIs<GameEvent.DamageRolled>(out.events[1])
+        assertEquals(s.id("hero"), damageRolled.attacker)
+        assertEquals(s.id("goblin"), damageRolled.target)
+        assertEquals(3, damageRolled.modifier)
+        assertEquals(DamageType.Bludgeoning, damageRolled.damageType)
+        assertEquals(1, damageRolled.rolls.size, "1d6+3 rolls exactly one die")
+        assertTrue(damageRolled.rolls.single() in 1..6)
+        val dealt = assertIs<Effect.DealDamage>(out.spawn.single())
+        assertEquals(damageRolled.rolls.sum() + damageRolled.modifier, dealt.amount, "the breakdown must reconstruct the exact same total the damage effect carries")
+    }
+
+    @Test
+    fun rollAttackExpectedModeNeverEmitsADamageRollBreakdown() {
+        // Expected mode's damage total is a computed average, not a real roll — there are no
+        // discrete dice to report, so DamageRolled must not fire (it would be fabricated data).
+        val s = scenario {
+            archetype("attacker") { hp = 10 }
+            archetype("easyTarget") { hp = 10; ac = 1 }
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("easyTarget"); at(1, 0); hp(10) }
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 50, damage = DiceSpec(1, 6, 3), damageType = DamageType.Bludgeoning)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+        assertTrue(out.events.none { it is GameEvent.DamageRolled })
+    }
+
+    @Test
     fun rollAttackOnDeadTargetFizzles() {
         val s = scenario {
             archetype("dummy") { hp = 10 }

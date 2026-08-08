@@ -39,7 +39,7 @@ fun findPath(
 
         for ((dc, dr) in EIGHT_DIRECTIONS) {
             val next = GridPos(current.pos.col + dc, current.pos.row + dr)
-            if (!map.inBounds(next) || blocked(next)) continue
+            if (!map.inBounds(next) || blocked(next) || !map.canCross(current.pos, next)) continue
             val tentativeG = current.g + moveCost(next)
             if (tentativeG > maxCost) continue
             if (tentativeG < (gCost[next] ?: Int.MAX_VALUE)) {

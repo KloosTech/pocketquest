@@ -6,10 +6,18 @@ import de.jackbeback.pocketquest.core.model.Actor
 import de.jackbeback.pocketquest.core.model.ActionCost
 import de.jackbeback.pocketquest.core.model.ActionDef
 import de.jackbeback.pocketquest.core.model.ActionId
+import de.jackbeback.pocketquest.core.model.AiActionCategory
+import de.jackbeback.pocketquest.core.model.AiCondition
+import de.jackbeback.pocketquest.core.model.AiGoal
+import de.jackbeback.pocketquest.core.model.AiProfileDef
+import de.jackbeback.pocketquest.core.model.AiProfileId
+import de.jackbeback.pocketquest.core.model.AiTargetPreference
+import de.jackbeback.pocketquest.core.model.AiTier
 import de.jackbeback.pocketquest.core.model.Archetype
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.chebyshevDistanceTo
 import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.Cost
 import de.jackbeback.pocketquest.core.model.DamageType
@@ -29,6 +37,7 @@ import de.jackbeback.pocketquest.core.model.Ref
 import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.Shape
+import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.StatusDef
 import de.jackbeback.pocketquest.core.model.StatusId
@@ -37,6 +46,7 @@ import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.model.Targeting
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
+import de.jackbeback.pocketquest.core.model.WallEdge
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -213,6 +223,20 @@ class ChooseActionTest {
     }
 
     @Test
+    fun neverAttacksAnAllyEvenWhenItIsTheOnlyLegalTarget() {
+        // TargetFilter left at "Any" (faction = null, the model default) — a real content gap found
+        // live: an enemy with no true enemy in range but an ally in range would otherwise pick this
+        // as its "least bad" legal option since defaultScoredChoice had no floor against negative
+        // scores. Passing the turn must beat hurting your own side.
+        val cat = baseCatalog(strikeAction("strike", targeting = meleeAutoHit.copy(filter = TargetFilter())), archetypes = mapOf(ArchetypeId("goblin") to archetype("goblin", listOf("strike"))))
+        val s = state(
+            entity(heroId, GridPos(0, 0), 20, Faction.Enemy, "goblin"),
+            entity(enemyAId, GridPos(1, 0), 10, Faction.Enemy, "goblin"),
+        )
+        assertNull(chooseAction(s, heroId, cat))
+    }
+
+    @Test
     fun returnsNullWhenTheOnlyActionCostsMoreManaThanAvailable() {
         val pricey = strikeAction("pricey").let { it.copy(cost = it.cost.copy(mana = 5)) }
         val cat = baseCatalog(pricey, archetypes = mapOf(ArchetypeId("hero") to archetype("hero", listOf("pricey"))))
@@ -221,5 +245,169 @@ class ChooseActionTest {
             entity(enemyAId, GridPos(1, 0), 10, Faction.Enemy, "hero"),
         )
         assertNull(chooseAction(s, heroId, cat))
+    }
+
+    // --- docs/21-ai-behavior-spec.md: tiered profiles ---
+
+    private fun healAction(id: String = "heal", amount: Int = 8) = ActionDef(
+        id = ActionId(id), name = id,
+        cost = Cost(action = ActionCost.Main),
+        targeting = Targeting(TargetMode.SingleEntity, Range.Tiles(4), Shape.Single, TargetFilter(faction = Faction.Enemy), requiresLoS = false),
+        effects = listOf(EffectTemplate.Heal(Ref.EachTarget, amount)),
+    )
+
+    private fun moveAction() = ActionDef(
+        id = ActionId("move"), name = "move",
+        cost = Cost(action = ActionCost.Movement(6)),
+        targeting = Targeting(TargetMode.Path, Range.Tiles(8), Shape.Single, requiresLoS = false),
+        effects = emptyList(),
+    )
+
+    @Test
+    fun aHigherTierHealsAHurtAllyInsteadOfAttacking() {
+        val cat = Catalog(
+            archetypes = mapOf(
+                ArchetypeId("medic") to archetype("medic", listOf("heal", "strike"))
+                    .copy(aiProfile = AiProfileId("medic")),
+            ),
+            actions = mapOf(ActionId("heal") to healAction(), ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("medic") to AiProfileDef(
+                    AiProfileId("medic"), "Medic",
+                    tiers = listOf(AiTier(AiCondition.AnyAllyHpBelow(50), AiGoal.UseAction(AiActionCategory.Heal, AiTargetPreference.LowestHpPercent))),
+                ),
+            ),
+        )
+        val medic = entity(EntityId(3), GridPos(2, 2), 10, Faction.Enemy, "medic")
+        val hurtAlly = entity(EntityId(4), GridPos(3, 2), 3, Faction.Enemy, "medic") // 30% HP — below the 50% threshold
+        val player = entity(heroId, GridPos(2, 3), 10, Faction.Player, "medic")
+
+        val decision = chooseAction(state(medic, hurtAlly, player), medic.id, cat)
+        assertEquals(ActionId("heal"), decision?.actionId, "the hurt-ally tier must win over the default attack-scoring fallback")
+        assertEquals(listOf(hurtAlly.id), decision?.ctx?.targets)
+    }
+
+    @Test
+    fun aTierThatCantResolveFallsThroughToTheNextTierNotToNothing() {
+        val cat = Catalog(
+            archetypes = mapOf(
+                ArchetypeId("fighter") to archetype("fighter", listOf("strike")) // no heal action known — tier 1's goal can never resolve
+                    .copy(aiProfile = AiProfileId("brawler")),
+            ),
+            actions = mapOf(ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("brawler") to AiProfileDef(
+                    AiProfileId("brawler"), "Brawler",
+                    tiers = listOf(
+                        AiTier(AiCondition.Always, AiGoal.UseAction(AiActionCategory.Heal, AiTargetPreference.LowestHpPercent)),
+                        AiTier(AiCondition.Always, AiGoal.UseAction(AiActionCategory.Damage, AiTargetPreference.LowestHpPercent)),
+                    ),
+                ),
+            ),
+        )
+        val brawler = entity(EntityId(3), GridPos(0, 0), 10, Faction.Enemy, "fighter")
+        val player = entity(heroId, GridPos(1, 0), 10, Faction.Player, "fighter")
+
+        val decision = chooseAction(state(brawler, player), brawler.id, cat)
+        assertEquals(ActionId("strike"), decision?.actionId, "tier 1 (Heal) matched Always but had no legal heal action — must fall through to tier 2, not return null")
+    }
+
+    @Test
+    fun retreatMovesAwayFromTheNearestEnemyRatherThanScoringAnAttack() {
+        val cat = Catalog(
+            archetypes = mapOf(
+                ArchetypeId("coward") to archetype("coward", listOf("move", "strike"))
+                    .copy(aiProfile = AiProfileId("coward")),
+            ),
+            actions = mapOf(ActionId("move") to moveAction(), ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("coward") to AiProfileDef(
+                    AiProfileId("coward"), "Coward",
+                    tiers = listOf(AiTier(AiCondition.SelfHpBelow(50), AiGoal.Retreat)),
+                ),
+            ),
+        )
+        val coward = entity(EntityId(3), GridPos(5, 5), 2, Faction.Enemy, "coward") // 20% HP — below the 50% threshold
+        val player = entity(heroId, GridPos(4, 5), 10, Faction.Player, "coward") // adjacent — a free, guaranteed-hit strike is available
+
+        val decision = chooseAction(state(coward, player), coward.id, cat)
+        assertEquals(ActionId("move"), decision?.actionId, "low HP must trigger Retreat instead of the available (and normally-preferred) attack")
+        val destination = decision?.ctx?.point
+        requireNotNull(destination)
+        assertTrue(destination.chebyshevDistanceTo(player.pos!!) > GridPos(5, 5).chebyshevDistanceTo(player.pos!!), "must move farther from the threat, not stay put or move closer")
+    }
+
+    @Test
+    fun approachMovesTowardTheNearestEnemyWhenNothingIsInRange() {
+        val cat = Catalog(
+            archetypes = mapOf(
+                ArchetypeId("brute") to archetype("brute", listOf("move", "strike"))
+                    .copy(aiProfile = AiProfileId("hunter")),
+            ),
+            actions = mapOf(ActionId("move") to moveAction(), ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("hunter") to AiProfileDef(
+                    AiProfileId("hunter"), "Hunter",
+                    tiers = listOf(AiTier(AiCondition.Always, AiGoal.Approach)),
+                ),
+            ),
+        )
+        val brute = entity(EntityId(3), GridPos(0, 0), 10, Faction.Enemy, "brute")
+        val player = entity(heroId, GridPos(9, 9), 10, Faction.Player, "brute") // far outside melee range
+
+        val decision = chooseAction(state(brute, player), brute.id, cat)
+        assertEquals(ActionId("move"), decision?.actionId)
+        val destination = decision?.ctx?.point
+        requireNotNull(destination)
+        assertTrue(destination.chebyshevDistanceTo(player.pos!!) < GridPos(0, 0).chebyshevDistanceTo(player.pos!!), "must move closer to the distant enemy, not stay put or move away")
+    }
+
+    @Test
+    fun approachRoutesAroundAWallInsteadOfOscillatingAgainstIt() {
+        // A wall blocks crossing between col 4 and col 5 for rows 0..3 only (a gap lower down) —
+        // found live: ranking reachableTiles by straight-line Chebyshev distance to the enemy picked
+        // whichever reachable tile LOOKED closest even though the wall made it a dead end, so the AI
+        // pinned itself against the wall and alternated one tile down / one tile up forever instead
+        // of detouring through the gap.
+        val wallEdges = (0..3).map { row -> WallEdge(GridPos(4, row), Side.East) }.toSet()
+        val map = BattleMap(10, 10, wallEdges = wallEdges)
+        val cat = Catalog(
+            archetypes = mapOf(ArchetypeId("hunter") to archetype("hunter", listOf("move", "strike")).copy(aiProfile = AiProfileId("hunter"))),
+            actions = mapOf(ActionId("move") to moveAction(), ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("hunter") to AiProfileDef(AiProfileId("hunter"), "Hunter", tiers = listOf(AiTier(AiCondition.Always, AiGoal.Approach))),
+            ),
+        )
+        val enemy = entity(heroId, GridPos(5, 0), 10, Faction.Player, "hunter")
+        var hunter = entity(EntityId(3), GridPos(4, 0), 10, Faction.Enemy, "hunter") // already pinned against the wall, mirroring the reported live state
+
+        fun stateWith(hunterPos: GridPos) = GameState(
+            entities = listOf(hunter.copy(pos = hunterPos), enemy),
+            map = map,
+            turn = TurnState(round = 1, order = listOf(hunter.id, enemy.id), activeIndex = 0, phase = TurnPhase.Main),
+            rng = RngState(seed = 1, calls = 0),
+        )
+
+        val first = chooseAction(stateWith(hunter.pos!!), hunter.id, cat)
+        requireNotNull(first?.ctx?.point) { "must find a route through the gap, not give up" }
+        assertTrue(first.ctx.point != GridPos(4, 0), "must not stand still at the wall-pinned tile")
+
+        val second = chooseAction(stateWith(first.ctx.point!!), hunter.id, cat)
+        requireNotNull(second?.ctx?.point)
+        assertTrue(second.ctx.point != GridPos(4, 0), "must not backtrack to the original wall-pinned tile on the very next turn")
+    }
+
+    @Test
+    fun anArchetypeWithNoAuthoredProfileBehavesExactlyLikeTheOriginalScorer() {
+        // "medic" archetype here never sets aiProfile — stays at the zero-config default, and
+        // catalog.aiProfiles is empty entirely. Must fall straight to defaultScoredChoice, proving
+        // this whole system is additive: existing content is unaffected until it opts in.
+        val cat = baseCatalog(strikeAction("strike"), archetypes = mapOf(ArchetypeId("hero") to archetype("hero", listOf("strike"))))
+        val s = state(
+            entity(heroId, GridPos(0, 0), 20, Faction.Player, "hero"),
+            entity(enemyAId, GridPos(1, 0), 10, Faction.Enemy, "hero"),
+        )
+        val decision = chooseAction(s, heroId, cat)
+        assertEquals(ActionId("strike"), decision?.actionId)
     }
 }

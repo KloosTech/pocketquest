@@ -1,0 +1,219 @@
+{
+    "archetypes": {
+        "archetype1": {
+            "id": "archetype1",
+            "name": "Warrior",
+            "abilities": {
+                "str": 13,
+                "dex": 10,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 10,
+            "baseAc": 10,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "action2",
+                "move"
+            ],
+            "aiProfile": "profile1"
+        },
+        "archetype2": {
+            "id": "archetype2",
+            "name": "Goblin",
+            "abilities": {
+                "str": 10,
+                "dex": 10,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 4,
+            "baseAc": 10,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "move",
+                "action2"
+            ],
+            "aiProfile": "profile1"
+        }
+    },
+    "actions": {
+        "move": {
+            "id": "move",
+            "name": "Move",
+            "cost": {
+                "action": {
+                    "type": "movement",
+                    "tiles": 6
+                }
+            },
+            "targeting": {
+                "mode": "Path",
+                "range": {
+                    "type": "tiles",
+                    "n": 8
+                },
+                "shape": {
+                    "type": "single"
+                },
+                "requiresLoS": false
+            },
+            "effects": []
+        },
+        "action2": {
+            "id": "action2",
+            "name": "Basic Punch",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SingleEntity",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "single"
+                },
+                "filter": {
+                    "excludeSelf": true
+                }
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "eachTarget"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 0,
+                    "damage": {
+                        "count": 1,
+                        "sides": 4,
+                        "modifier": 2
+                    },
+                    "damageType": "Bludgeoning"
+                }
+            ]
+        }
+    },
+    "maps": {
+        "map1": {
+            "id": "map1",
+            "width": 10,
+            "height": 10,
+            "wallEdges": [
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 0
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 1
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 3
+                    },
+                    "side": "West"
+                }
+            ],
+            "spawns": [
+                {
+                    "role": "Party",
+                    "tiles": [
+                        {
+                            "col": 1,
+                            "row": 1
+                        }
+                    ]
+                },
+                {
+                    "role": "Enemy",
+                    "tiles": [
+                        {
+                            "col": 8,
+                            "row": 1
+                        },
+                        {
+                            "col": 8,
+                            "row": 2
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "encounters": {
+        "encounter1": {
+            "id": "encounter1",
+            "name": "Encounter 1",
+            "mapId": "map1",
+            "enemies": [
+                {
+                    "archetype": "archetype2"
+                },
+                {
+                    "archetype": "archetype2"
+                }
+            ],
+            "scaling": {
+                "extraEnemiesPerPartySize": 2
+            }
+        }
+    },
+    "aiProfiles": {
+        "profile1": {
+            "id": "profile1",
+            "name": "Basic Goblin",
+            "tiers": [
+                {
+                    "condition": {
+                        "type": "enemyCountInRange",
+                        "range": 1,
+                        "atLeast": 1
+                    },
+                    "goal": {
+                        "type": "useAction",
+                        "category": "Damage",
+                        "targetPreference": "LowestHpPercent"
+                    }
+                },
+                {
+                    "condition": {
+                        "type": "always"
+                    },
+                    "goal": {
+                        "type": "approach"
+                    }
+                }
+            ]
+        }
+    }
+}

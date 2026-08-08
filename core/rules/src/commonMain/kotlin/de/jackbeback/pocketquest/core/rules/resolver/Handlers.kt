@@ -117,14 +117,17 @@ private fun expectedD20(advantage: RollMode): Int = when (advantage) {
     RollMode.Disadvantage -> 7
 }
 
-private fun rollDice(state: GameState, mode: RngMode, spec: DiceSpec): Pair<Double, GameState> = when (mode) {
+private data class DiceRoll(val total: Double, val state: GameState, val rolls: List<Int>)
+
+/** [DiceRoll.rolls] is only ever non-empty under [RngMode.Live] — [RngMode.Expected] has no discrete dice, only a computed average, so there's nothing real to report per die. */
+private fun rollDice(state: GameState, mode: RngMode, spec: DiceSpec): DiceRoll = when (mode) {
     RngMode.Live -> {
         val (next, result) = state.rng.roll(spec)
-        result.total.toDouble() to state.copy(rng = next)
+        DiceRoll(result.total.toDouble(), state.copy(rng = next), result.rolls)
     }
     RngMode.Expected -> {
         val avgPerDie = (spec.sides + 1) / 2.0
-        (spec.count * avgPerDie + spec.modifier) to state
+        DiceRoll(spec.count * avgPerDie + spec.modifier, state, emptyList())
     }
 }
 
@@ -554,10 +557,15 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
     // anything about that content. Doubling only the dice, not the flat modifier, is the actual 5e
     // rule: 1d8+3 crits as 2d8+3, not (1d8+3)*2.
     val damageSpec = if (critical) effect.damage.copy(count = effect.damage.count * 2) else effect.damage
-    val (dmgValue, afterDamageRoll) = rollDice(afterD20, mode, damageSpec)
+    val damageRoll = rollDice(afterD20, mode, damageSpec)
     val tags = if (critical) effect.tags + DamageTag.Critical else effect.tags
-    val spawn = listOf(Effect.DealDamage(effect.target, dmgValue.roundToInt(), effect.damageType, source = effect.attacker, tags = tags))
-    return HandlerOutcome(afterDamageRoll, listOf(rolledEvent), spawn)
+    val spawn = listOf(Effect.DealDamage(effect.target, damageRoll.total.roundToInt(), effect.damageType, source = effect.attacker, tags = tags))
+    val damageRolledEvent = if (damageRoll.rolls.isNotEmpty()) {
+        listOf(GameEvent.DamageRolled(attacker.id, target.id, damageRoll.rolls, damageSpec.modifier, effect.damageType))
+    } else {
+        emptyList()
+    }
+    return HandlerOutcome(damageRoll.state, listOf(rolledEvent) + damageRolledEvent, spawn)
 }
 
 private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mode: RngMode): HandlerOutcome {

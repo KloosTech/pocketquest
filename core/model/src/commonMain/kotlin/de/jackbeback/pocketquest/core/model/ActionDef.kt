@@ -13,8 +13,15 @@ sealed interface ActionCost {
     @Serializable @SerialName("free") data object Free : ActionCost
 }
 
+/**
+ * [apCost] is the AP the entity's shared [Resources.ap] pool is actually charged — orthogonal to
+ * [action]'s slot (Main/Quick/Reaction/Free still gate *whether* this can be used this turn,
+ * [apCost] is just its price). Ignored for [ActionCost.Movement], which already prices itself off
+ * tiles/path cost (`canPerform`/`Perform.kt`) — authoring both would double-charge the same pool.
+ * Defaults to 0, matching every action authored before this field existed.
+ */
 @Serializable
-data class Cost(val action: ActionCost, val mana: Int = 0, val charges: ItemId? = null, val hpCost: Int = 0)
+data class Cost(val action: ActionCost, val mana: Int = 0, val charges: ItemId? = null, val hpCost: Int = 0, val apCost: Int = 0)
 
 /**
  * The authored, Ref-templated counterpart to [Effect] — resolved to concrete

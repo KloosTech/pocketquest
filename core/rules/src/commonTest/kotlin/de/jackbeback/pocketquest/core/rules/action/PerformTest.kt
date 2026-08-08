@@ -54,6 +54,32 @@ class PerformTest {
     }
 
     @Test
+    fun performSpendsCostApCostForANonMovementAction() {
+        // User-reported: the Cost editor had no AP field at all — Main/Quick/Reaction/Free actions
+        // spent zero AP no matter what. Cost.apCost is the fix; this pins down that perform() actually
+        // deducts it, not just that canPerform() checks it.
+        val s = scenario {
+            map(10, 10)
+            seed(42)
+            archetype("dummy") { hp = 20; ap = 2; mana = 0 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20); ap(2) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(20) }
+            initiative("hero", "goblin")
+            actionDef("heavySwing") {
+                cost(ActionCost.Main, apCost = 2)
+                targeting(TargetMode.SingleEntity, Range.Melee, Shape.Single)
+                effect(EffectTemplate.DealDamage(Ref.EachTarget, 5, DamageType.Slashing))
+            }
+        }
+        val ctx = ActionCtx(s.id("hero"), targets = listOf(s.id("goblin")), point = GridPos(1, 0))
+        val result = perform(s.state, s.id("hero"), ActionId("heavySwing"), ctx, s.catalog)
+
+        val completed = assertIs<StepResult.Completed>(result)
+        val hero = completed.resolver.state.byId.getValue(s.id("hero"))
+        assertEquals(0, hero.resources!!.ap) // 2 - 2
+    }
+
+    @Test
     fun performRejectsWithoutMutatingStateWhenCanPerformFails() {
         val s = meleeAttackScenario()
         // point out of melee range

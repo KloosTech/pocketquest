@@ -155,7 +155,9 @@ fun preview(state: GameState, caster: EntityId, actionId: ActionId,
 This structurally rules out the "it said 12 damage and dealt 8" class of bug,
 because the preview *is* the execution with a different RNG mode. And it hands
 the AI its evaluation function for free: enumerate legal actions, run each in
-`Expected` mode, score the resulting event list.
+`Expected` mode, score the resulting event list. See
+[21-ai-behavior-spec.md](21-ai-behavior-spec.md) for how per-archetype tiered
+priorities layer on top of that same enumeration rather than replacing it.
 
 ## Execution
 

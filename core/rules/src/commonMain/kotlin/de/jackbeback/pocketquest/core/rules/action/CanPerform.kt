@@ -48,6 +48,13 @@ fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCt
     // 1.3), not the ActionDef's static `tiles` — that field only still means something for a
     // flat movement-budget cost with no destination to path to (SelfOnly Movement, e.g. "dash").
     val movement = def.cost.action as? ActionCost.Movement
+    // Non-Movement actions charge `Cost.apCost` flat against the same AP pool Movement already
+    // draws from (Movement prices itself below instead — see Cost.apCost's own doc comment on why
+    // authoring both would double-charge).
+    if (movement == null) {
+        val ap = resources?.ap ?: 0
+        if (ap < def.cost.apCost) rejections += Rejection.NotEnoughAp(def.cost.apCost, ap)
+    }
     if (movement != null && def.targeting.mode != TargetMode.Path) {
         val ap = resources?.ap ?: 0
         if (ap < movement.tiles) rejections += Rejection.NotEnoughAp(movement.tiles, ap)

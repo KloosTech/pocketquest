@@ -17,4 +17,6 @@ data class Archetype(
     val innateModifiers: List<Modifier> = emptyList(),
     val innateDamageSteps: List<DamageStep> = emptyList(),
     val innateHealSteps: List<HealStep> = emptyList(),
+    /** docs/21-ai-behavior-spec.md: "different enemies, different AIs" is per-archetype, not per-spawn. `"standard"` is the always-ships-with-a-real-entry built-in default (see `Catalog.defaultAiProfile`), so an archetype that never sets this still behaves exactly as before this field existed. */
+    val aiProfile: AiProfileId = AiProfileId("standard"),
 )

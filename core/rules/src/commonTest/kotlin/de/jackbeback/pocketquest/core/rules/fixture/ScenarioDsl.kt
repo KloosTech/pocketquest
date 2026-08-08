@@ -263,6 +263,7 @@ class ItemDefBuilder(private val name: String) {
     var twoHanded: Boolean = false
     private val damageSteps = mutableListOf<DamageStep>()
     private val healSteps = mutableListOf<HealStep>()
+    private var validSlots: Set<Slot> = emptySet()
 
     fun modifier(m: Modifier) {
         mods += m
@@ -276,7 +277,11 @@ class ItemDefBuilder(private val name: String) {
         healSteps += s
     }
 
-    fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList(), twoHanded, damageSteps.toList(), healSteps.toList())
+    fun validSlots(vararg slots: Slot) {
+        validSlots = slots.toSet()
+    }
+
+    fun build(): ItemDef = ItemDef(ItemId(name), name, mods.toList(), twoHanded, damageSteps.toList(), healSteps.toList(), validSlots)
 }
 
 class FeatureDefBuilder(private val name: String) {
@@ -365,8 +370,8 @@ class ActionDefBuilder(private val name: String) {
     private val effectTemplates = mutableListOf<EffectTemplate>()
     private var reactionTrigger: ReactionTrigger? = null
 
-    fun cost(action: ActionCost, mana: Int = 0) {
-        cost = Cost(action, mana)
+    fun cost(action: ActionCost, mana: Int = 0, apCost: Int = 0) {
+        cost = Cost(action, mana, apCost = apCost)
     }
 
     fun targeting(

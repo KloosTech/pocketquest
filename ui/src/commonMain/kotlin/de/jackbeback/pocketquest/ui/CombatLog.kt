@@ -6,6 +6,12 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.Rejection
+import de.jackbeback.pocketquest.ui.ink.ACCENT
+import de.jackbeback.pocketquest.ui.ink.DANGER
+import de.jackbeback.pocketquest.ui.ink.FATAL
+import de.jackbeback.pocketquest.ui.ink.INK_FAINT
+import de.jackbeback.pocketquest.ui.ink.OK
+import de.jackbeback.pocketquest.ui.ink.WARNING
 
 /** doc15's "include the dice" plus the user's explicit color-coding ask: damage red, heal green, buffs/status yellow. */
 enum class LogCategory { Damage, Heal, Status, Death, Blocked, Info }
@@ -13,12 +19,12 @@ enum class LogCategory { Damage, Heal, Status, Death, Blocked, Info }
 data class LogEntry(val text: String, val category: LogCategory)
 
 fun LogCategory.color(): Color = when (this) {
-    LogCategory.Damage -> Color(0xFFB71C1C)
-    LogCategory.Heal -> Color(0xFF2E7D32)
-    LogCategory.Status -> Color(0xFFF9A825)
-    LogCategory.Death -> Color(0xFF4E0A0A)
-    LogCategory.Blocked -> Color(0xFFEF6C00)
-    LogCategory.Info -> Color(0xFF9A8764) // matches App.kt's INK_FAINT
+    LogCategory.Damage -> DANGER
+    LogCategory.Heal -> OK
+    LogCategory.Status -> ACCENT
+    LogCategory.Death -> FATAL
+    LogCategory.Blocked -> WARNING
+    LogCategory.Info -> INK_FAINT
 }
 
 private fun GameState.nameOf(id: EntityId, cat: Catalog): String =
@@ -44,6 +50,11 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
             LogEntry("${name(event.attacker)} attacks ${name(event.target)}: $verdict ($total vs AC ${event.ac})", LogCategory.Info)
         }
         is GameEvent.DamageTaken -> LogEntry("${name(event.target)} takes ${event.amount} ${event.damageType.name.lowercase()} damage.", LogCategory.Damage)
+        is GameEvent.DamageRolled -> {
+            val dice = event.rolls.joinToString("+")
+            val mod = if (event.modifier != 0) (if (event.modifier > 0) " +${event.modifier}" else " ${event.modifier}") else ""
+            LogEntry("Damage roll: [$dice]$mod = ${event.rolls.sum() + event.modifier}.", LogCategory.Info)
+        }
         is GameEvent.Healed -> {
             val by = event.source?.let { if (it != event.target) " by ${name(it)}" else "" } ?: ""
             LogEntry("${name(event.target)} heals ${event.amount} HP$by.", LogCategory.Heal)
@@ -51,8 +62,8 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
         is GameEvent.Died -> null
         is GameEvent.Downed -> LogEntry("${name(event.target)} is downed!", LogCategory.Death)
         is GameEvent.Revived -> LogEntry("${name(event.target)} is revived!", LogCategory.Heal)
-        is GameEvent.StatusApplied -> LogEntry("${name(event.target)} gains ${event.status.raw} ×${event.stacks}.", LogCategory.Status)
-        is GameEvent.StatusExpired -> LogEntry("${event.status.raw} fades from ${name(event.target)}.", LogCategory.Status)
+        is GameEvent.StatusApplied -> LogEntry("${name(event.target)} gains ${cat.statusDef(event.status).name} ×${event.stacks}.", LogCategory.Status)
+        is GameEvent.StatusExpired -> LogEntry("${cat.statusDef(event.status).name} fades from ${name(event.target)}.", LogCategory.Status)
         is GameEvent.SaveRolled -> {
             val total = event.d20 + event.mod
             val verdict = if (event.success) "succeeds" else "fails"
@@ -67,7 +78,7 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
         is GameEvent.ConcentrationBroken -> LogEntry("${name(event.who)}'s concentration breaks.", LogCategory.Info)
         is GameEvent.DamageRedirected -> LogEntry("Damage is redirected from ${name(event.from)} to ${name(event.to)}!", LogCategory.Info)
         is GameEvent.ReactionTriggered -> LogEntry("${name(event.who)} reacts!", LogCategory.Info)
-        is GameEvent.ActionStarted -> LogEntry("${name(event.who)} uses ${event.actionId.raw}.", LogCategory.Info)
+        is GameEvent.ActionStarted -> LogEntry("${name(event.who)} uses ${cat.actionDef(event.actionId).name}.", LogCategory.Info)
         is GameEvent.TurnStarted -> LogEntry("— ${name(event.who)}'s turn (round ${event.round}) —", LogCategory.Info)
         is GameEvent.TurnEnded -> null // TurnStarted already marks the boundary; a matching "ended" line is redundant noise every single turn.
         is GameEvent.ManaRefilled -> LogEntry("${name(event.who)}'s mana is refilled.", LogCategory.Heal)

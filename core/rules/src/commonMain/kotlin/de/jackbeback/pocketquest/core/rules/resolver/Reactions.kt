@@ -76,6 +76,7 @@ fun GameEvent.kind(): ReactionTriggerKind = when (this) {
     is GameEvent.Teleported -> ReactionTriggerKind.Teleported
     is GameEvent.EntitySpawned -> ReactionTriggerKind.EntitySpawned
     is GameEvent.EntityDestroyed -> ReactionTriggerKind.EntityDestroyed
+    is GameEvent.DamageRolled -> ReactionTriggerKind.DamageRolled
 }
 
 /** Which entities this event's reaction naturally concerns — feeds the reaction's ActionCtx.targets. */
@@ -105,6 +106,7 @@ internal fun targetsFor(event: GameEvent): List<EntityId> = when (event) {
     is GameEvent.Teleported -> listOf(event.who)
     is GameEvent.EntitySpawned -> listOf(event.entityId)
     is GameEvent.EntityDestroyed -> listOf(event.target)
+    is GameEvent.DamageRolled -> listOf(event.attacker, event.target)
 }
 
 /**

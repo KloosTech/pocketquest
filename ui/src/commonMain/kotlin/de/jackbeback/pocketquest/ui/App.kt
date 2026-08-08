@@ -59,7 +59,9 @@ import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.PreviewResult
+import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.TargetMode
+import de.jackbeback.pocketquest.core.model.WallEdge
 import de.jackbeback.pocketquest.core.rules.action.allActions
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.action.preview
@@ -70,6 +72,11 @@ import de.jackbeback.pocketquest.core.rules.stat.stats
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.allThreatenedTiles
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
+import de.jackbeback.pocketquest.ui.ink.INK
+import de.jackbeback.pocketquest.ui.ink.INK_FAINT
+import de.jackbeback.pocketquest.ui.ink.InkButton
+import de.jackbeback.pocketquest.ui.ink.PAPER
+import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -86,14 +93,6 @@ private const val CAMERA_DEAD_ZONE_MARGIN = 0.2f
 /** How much of the viewport an AI actor+target pair must fit within (screen px, at current zoom) before the camera frames both instead of prioritising the target — doc15's "if they do not both fit, prioritise the target." */
 private const val AI_FRAME_FIT_FRACTION = 0.7f
 
-
-// doc16's "ink register" — hand-inked black on parchment, not a Material default. Flat placeholder
-// constants for now, not a real theming system: there's exactly one screen and no second consumer
-// yet to justify one.
-private val PAPER = Color(0xFFF4ECD8)
-private val PAPER_SHEET = Color(0xFFE7D9B8)
-private val INK = Color(0xFF2B241C)
-private val INK_FAINT = Color(0xFF9A8764)
 
 private fun colorFor(faction: Faction?): Color = when (faction) {
     Faction.Player -> Color(0xFF2196F3)
@@ -112,20 +111,6 @@ private sealed interface Selection {
     data object None : Selection
     data class ActionPicked(val actionId: ActionId, val legal: Set<GridPos>) : Selection
     data class TargetPicked(val actionId: ActionId, val ctx: ActionCtx, val preview: PreviewResult) : Selection
-}
-
-/** doc15's "ink register" button — a bordered box, not a Material default. */
-@Composable
-private fun InkButton(label: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Box(
-        modifier = modifier
-            .border(1.dp, INK)
-            .background(PAPER)
-            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        BasicText(label, style = TextStyle(color = INK, fontSize = 14.sp))
-    }
 }
 
 /**
@@ -242,7 +227,7 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
     if (entity.statuses.isNotEmpty()) {
         Spacer(modifier = Modifier.size(8.dp))
         entity.statuses.forEach { status ->
-            BasicText("${status.def.raw} ×${status.stacks} (${status.expiry})", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
+            BasicText("${catalog.statusDef(status.def).name} ×${status.stacks} (${status.expiry})", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
         }
     }
     Spacer(modifier = Modifier.size(12.dp))
@@ -415,6 +400,25 @@ private fun DrawScope.drawGrid(map: BattleMap, camera: Offset, zoom: Float) {
     map.walls.forEach { pos ->
         if (pos.col !in cols || pos.row !in rows) return@forEach
         drawRect(color = INK, topLeft = toScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX)), size = Size(screenTile, screenTile))
+    }
+    // doc16's thin room-divider walls (WallEdge, layered on top of the whole-cell TileType.Wall
+    // above) blocked movement/LoS correctly from the moment the engine gained them, but nothing
+    // ever drew them here — a playtest launched from :designer showed an invisible wall.
+    map.wallEdges.forEach { edge ->
+        if (edge.pos.col !in cols || edge.pos.row !in rows) return@forEach
+        val (a, b) = wallSegment(edge)
+        drawLine(INK, toScreen(a), toScreen(b), strokeWidth = 4f * zoom)
+    }
+}
+
+private fun wallSegment(edge: WallEdge): Pair<Offset, Offset> {
+    val x0 = edge.pos.col * TILE_PX
+    val y0 = edge.pos.row * TILE_PX
+    return when (edge.side) {
+        Side.North -> Offset(x0, y0) to Offset(x0 + TILE_PX, y0)
+        Side.South -> Offset(x0, y0 + TILE_PX) to Offset(x0 + TILE_PX, y0 + TILE_PX)
+        Side.East -> Offset(x0 + TILE_PX, y0) to Offset(x0 + TILE_PX, y0 + TILE_PX)
+        Side.West -> Offset(x0, y0) to Offset(x0, y0 + TILE_PX)
     }
 }
 
@@ -634,6 +638,16 @@ fun App(initialState: GameState, catalog: Catalog) {
     val active = activeId?.let { state.byId[it] }
     val isHumanTurn = active?.actor?.controller is Controller.Human
 
+    // Every prior demo/test fixture happened to start on a human's turn, so runAiTurns() only ever
+    // needed a reactive trigger from the human's own "End Turn" button. A real startEncounter's
+    // initiative roll has no such bias — when it rolls an AI-controlled entity first, nothing had
+    // ever kicked off its turn, and the board just sat on "Enemy turn..." forever. Reacting to
+    // activeId directly (which also fires on first composition) covers that turn-1 case for free,
+    // so the explicit call after the button's own endTurn() is now redundant and removed below.
+    LaunchedEffect(state.turn.round, activeId) {
+        if (activeId != null && !isHumanTurn) runAiTurns()
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
         TurnOrderStrip(
@@ -740,7 +754,7 @@ fun App(initialState: GameState, catalog: Catalog) {
                         Row {
                             active.allActions(catalog).forEach { actionId ->
                                 InkButton(
-                                    actionId.raw,
+                                    catalog.actionDef(actionId).name,
                                     modifier = Modifier.padding(end = 8.dp),
                                     onClick = {
                                         inspected = null
@@ -772,21 +786,22 @@ fun App(initialState: GameState, catalog: Catalog) {
                             InkButton(
                                 "End Turn",
                                 onClick = {
-                                    scope.launch {
-                                        endTurn(activeId)
-                                        runAiTurns()
-                                    }
+                                    // runAiTurns() no longer needs an explicit call here — the
+                                    // LaunchedEffect(activeId) above reacts the moment endTurn()
+                                    // advances the active entity, whether it's this button or the
+                                    // encounter's very first turn that turns out to need it.
+                                    scope.launch { endTurn(activeId) }
                                 },
                             )
                         }
                     }
                     is Selection.ActionPicked -> {
-                        BasicText("${sel.actionId.raw}: pick a highlighted tile", style = TextStyle(color = INK, fontSize = 14.sp))
+                        BasicText("${catalog.actionDef(sel.actionId).name}: pick a highlighted tile", style = TextStyle(color = INK, fontSize = 14.sp))
                         Spacer(modifier = Modifier.size(8.dp))
                         InkButton("Cancel", onClick = { selection = Selection.None })
                     }
                     is Selection.TargetPicked -> {
-                        BasicText("${sel.actionId.raw} expects ${sel.preview.events.size} events", style = TextStyle(color = INK, fontSize = 14.sp))
+                        BasicText("${catalog.actionDef(sel.actionId).name} expects ${sel.preview.events.size} events", style = TextStyle(color = INK, fontSize = 14.sp))
                         Spacer(modifier = Modifier.size(8.dp))
                         Row {
                             InkButton(

@@ -22,7 +22,16 @@ fun tilesWithinRange(origin: GridPos, range: Int, map: BattleMap): List<GridPos>
     }
 }
 
-internal val EIGHT_DIRECTIONS = listOf(-1 to -1, -1 to 0, -1 to 1, 0 to -1, 0 to 1, 1 to -1, 1 to 0, 1 to 1)
+/**
+ * Cardinal directions listed before diagonals: [findPath]'s A* has zero extra cost for a diagonal
+ * step, so a straight cardinal move and a diagonal detour reaching the same tile can tie on `f`.
+ * `open.minBy { it.f }` returns the first-encountered minimum, so expansion order is a real
+ * tie-break — cardinal-first means a straight 2-tile drop resolves as two straight steps instead of
+ * a diagonal zigzag (found live: "moved 1 diagonal bottom left then 1 diagonal bottom right" for a
+ * straight-down move). Doesn't change [reachableTiles]'s result (a set, order-independent) or any
+ * move's actual AP cost — purely which equal-cost route gets walked.
+ */
+internal val EIGHT_DIRECTIONS = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0, -1 to -1, -1 to 1, 1 to -1, 1 to 1)
 
 /**
  * Every tile reachable from [origin] for at most [maxCost], over walkable, unoccupied tiles.
@@ -42,6 +51,7 @@ fun reachableTiles(origin: GridPos, maxCost: Int, map: BattleMap, occupancy: Map
             val next = GridPos(current.col + dc, current.row + dr)
             if (!map.isWalkable(next)) continue
             if (occupancy.containsKey(next)) continue
+            if (!map.canCross(current, next)) continue
             val tentative = costSoFar + map.moveCost(next)
             if (tentative > maxCost) continue
             if (tentative < (bestCost[next] ?: Int.MAX_VALUE)) {

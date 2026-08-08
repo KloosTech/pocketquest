@@ -193,6 +193,11 @@ than at runtime.
 
 ## The desktop designer
 
+See [20-desktop-designer-spec.md](20-desktop-designer-spec.md) for the
+detailed, per-editor spec written after actually building Map/Encounter/
+Archetype and playtesting through them — status, gaps, and build order for
+everything below.
+
 Content is authored in the tool, not by hand in JSON. This is a hard
 requirement, and it has a consequence worth stating early: **every schema in
 docs 12–18 must be designed as something a tool can edit**, not just something a

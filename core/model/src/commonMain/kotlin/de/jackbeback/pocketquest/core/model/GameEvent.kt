@@ -14,6 +14,8 @@ sealed interface GameEvent {
     @Serializable @SerialName("statusExpired") data class StatusExpired(val target: EntityId, val status: StatusId) : GameEvent
     /** docs/17-engine-gaps.md 3.6: [critical] is a natural 20 — always a hit, doubled damage dice. A natural 1 is always a miss (no separate flag needed — it just folds into [hit] being false). */
     @Serializable @SerialName("attackRolled") data class AttackRolled(val attacker: EntityId, val target: EntityId, val d20: Int, val mod: Int, val ac: Int, val hit: Boolean, val critical: Boolean = false) : GameEvent
+    /** The individual damage-dice results behind a [DamageTaken]'s final `amount` — found live: two hits with the same weapon landed for different totals and there was no way to tell dice variance from a resistance/modifier swing without this. Emitted only for a real (`RngMode.Live`) roll; `RngMode.Expected`'s averaged preview/AI-scoring rolls have no discrete dice to show. */
+    @Serializable @SerialName("damageRolled") data class DamageRolled(val attacker: EntityId, val target: EntityId, val rolls: List<Int>, val modifier: Int, val damageType: DamageType) : GameEvent
     @Serializable @SerialName("saveRolled") data class SaveRolled(val target: EntityId, val ability: Ability, val d20: Int, val mod: Int, val dc: Int, val success: Boolean) : GameEvent
     @Serializable @SerialName("turnStarted") data class TurnStarted(val who: EntityId, val round: Int) : GameEvent
     @Serializable @SerialName("turnEnded") data class TurnEnded(val who: EntityId) : GameEvent

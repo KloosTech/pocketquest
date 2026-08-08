@@ -18,6 +18,9 @@ sealed interface EquipRejection {
 
     /** Equipping anything into OffHand while MainHand holds a two-handed weapon. */
     data class MainHandHoldsTwoHanded(val weapon: ItemId) : EquipRejection
+
+    /** doc20: `ItemDef.validSlots` — empty means unconstrained, so this only ever fires for an item that names a restricted slot set the target isn't in. */
+    data class SlotNotValidForItem(val item: ItemId, val slot: Slot) : EquipRejection
 }
 
 sealed interface EquipResult {
@@ -39,6 +42,10 @@ sealed interface EquipResult {
 fun canEquip(entity: Entity, slot: Slot, item: ItemInstance, cat: Catalog): List<EquipRejection> {
     val rejections = mutableListOf<EquipRejection>()
     val itemDef = cat.itemDef(item.def)
+
+    if (itemDef.validSlots.isNotEmpty() && slot !in itemDef.validSlots) {
+        rejections += EquipRejection.SlotNotValidForItem(item.def, slot)
+    }
 
     if (item.attuned) {
         val attunedElsewhere = entity.equipment.slots.entries.count { (s, i) -> s != slot && i.attuned }

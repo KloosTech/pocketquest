@@ -155,6 +155,46 @@ class EquipTest {
     }
 
     @Test
+    fun validSlotsRejectsEquippingIntoADisallowedSlot() {
+        val s = scenario {
+            map(5, 5)
+            archetype("hero") { hp = 20 }
+            itemDef("ring") { validSlots(Slot.Ring1, Slot.Ring2) }
+            entity("hero") { archetype("hero"); at(0, 0) }
+        }
+        val hero = s.entity("hero")
+        val result = equip(hero, Slot.Helm, ItemInstance(ItemId("ring")), s.catalog)
+        val rejected = assertIs<EquipResult.Rejected>(result)
+        assertEquals(listOf(EquipRejection.SlotNotValidForItem(ItemId("ring"), Slot.Helm)), rejected.reasons)
+    }
+
+    @Test
+    fun validSlotsAllowsEquippingIntoAnAllowedSlot() {
+        val s = scenario {
+            map(5, 5)
+            archetype("hero") { hp = 20 }
+            itemDef("ring") { validSlots(Slot.Ring1, Slot.Ring2) }
+            entity("hero") { archetype("hero"); at(0, 0) }
+        }
+        val hero = s.entity("hero")
+        val result = equip(hero, Slot.Ring2, ItemInstance(ItemId("ring")), s.catalog)
+        assertIs<EquipResult.Equipped>(result)
+    }
+
+    @Test
+    fun emptyValidSlotsMeansUnconstrained() {
+        val s = scenario {
+            map(5, 5)
+            archetype("hero") { hp = 20 }
+            itemDef("ring") {}
+            entity("hero") { archetype("hero"); at(0, 0) }
+        }
+        val hero = s.entity("hero")
+        val result = equip(hero, Slot.Helm, ItemInstance(ItemId("ring")), s.catalog)
+        assertIs<EquipResult.Equipped>(result, "no validSlots set at all — every pre-existing ItemDef must keep working unchanged")
+    }
+
+    @Test
     fun unequippingATwoHandedWeaponFreesOffHand() {
         val s = scenario {
             map(5, 5)
