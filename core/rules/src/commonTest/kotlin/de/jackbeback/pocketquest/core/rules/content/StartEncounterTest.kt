@@ -93,4 +93,15 @@ class StartEncounterTest {
         val state = startEncounter(catalog(map, encounter), encounter, party = listOf(hero.id, hero.id))
         assertTrue(state.nextEntityId >= 2, "future SpawnEntity calls must not collide with ids already used here")
     }
+
+    @Test
+    fun fogOfWarMapStartsWithThePartysOwnVisibilityAlreadyRevealed() {
+        // Without this, every enemy — even one standing right next to the party's own spawn —
+        // would skip its very first turn, since a fresh fogOfWar map otherwise starts fully dark.
+        val map = BattleMapDef(id = MapId("room"), width = 5, height = 5, spawns = listOf(SpawnZone(SpawnRole.Party, listOf(GridPos(0, 0)))))
+        val encounter = EncounterSpec(EncounterId("e1"), "E1", map.id)
+        val state = startEncounter(catalog(map, encounter), encounter, party = listOf(hero.id))
+        assertTrue(state.revealedTiles.isNotEmpty())
+        assertTrue(GridPos(1, 0) in state.revealedTiles, "adjacent to the party's own spawn tile")
+    }
 }

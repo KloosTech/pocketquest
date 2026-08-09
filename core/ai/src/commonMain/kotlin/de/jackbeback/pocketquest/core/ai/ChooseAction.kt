@@ -42,6 +42,11 @@ data class AiDecision(val actionId: ActionId, val ctx: ActionCtx, val score: Int
  */
 fun chooseAction(state: GameState, entityId: EntityId, cat: Catalog): AiDecision? {
     val entity = state.byId[entityId] ?: return null
+    // Fog of war: an entity standing on a tile the party has never revealed does nothing this turn —
+    // same "no legal decision" outcome the caller already treats as "pass the turn," not a new code
+    // path. `revealedTiles` is only ever non-empty on a map with fogOfWar on (updateRevealedTiles'
+    // own no-op rule), so this never fires on a map with fog off without needing a separate check.
+    if (entity.pos != null && entity.pos !in state.revealedTiles && state.map.fogOfWar) return null
     val archetype = cat.archetype(entity.archetype)
     val profile = cat.aiProfileOrDefault(archetype.aiProfile)
     for (tier in profile.tiers) {

@@ -110,4 +110,13 @@ class MapExpansionTest {
         val def = BattleMapDef(id = MapId("room"), width = 4, height = 4)
         assertEquals(true, def.toBattleMap().wallHatch)
     }
+
+    @Test
+    fun battleMapDefToBattleMapCarriesFogOfWarThroughAndDefaultsOn() {
+        val default = BattleMapDef(id = MapId("room"), width = 4, height = 4)
+        assertEquals(true, default.toBattleMap().fogOfWar, "every map saved before fogOfWar existed decodes with this default")
+
+        val fogOff = BattleMapDef(id = MapId("room"), width = 4, height = 4, fogOfWar = false)
+        assertEquals(false, fogOff.toBattleMap().fogOfWar)
+    }
 }

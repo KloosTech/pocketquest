@@ -11,8 +11,10 @@ import kotlin.math.abs
  * ([BattleMap.blocksLoS], doc17 1.4 — distinct from walkable: rubble can block movement without
  * blocking sight, tall grass the reverse) lies on the straight line between them (endpoints
  * excluded, so a target standing on a visible tile is always reachable once LoS to that tile is
- * clear), AND no [WallEdge] crosses the straight sightline between the two cell centres. Adapted
- * from v1's LineOfSight.kt (kept as reference only).
+ * clear), AND no [WallEdge] crosses the straight sightline between the two cell centres. Strict —
+ * no partial/"peek through" mode; fog-of-war's own wall-tile reveal is a separate adjacency rule
+ * in Visibility.kt, not a softened version of this. Adapted from v1's LineOfSight.kt (kept as
+ * reference only).
  */
 fun hasLineOfSight(from: GridPos, to: GridPos, map: BattleMap): Boolean {
     if (from == to) return true

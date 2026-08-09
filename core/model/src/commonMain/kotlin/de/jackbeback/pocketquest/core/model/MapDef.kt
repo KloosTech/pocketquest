@@ -32,6 +32,13 @@ data class BattleMapDef(
      * loaded. Purely a Map editor/rendering concern, no rules-engine consumer, same as floorTexture.
      */
     val wallHatch: Boolean = true,
+    /**
+     * Fog of war (unlike every other flag on this class) IS a rules-engine consumer, not purely
+     * Map editor/rendering — `:core:rules`' visibility computation and the AI's "hidden enemies
+     * skip their turn" check both read this off the runtime [BattleMap] it's carried into. Defaults
+     * on, matching every map authored before this field existed.
+     */
+    val fogOfWar: Boolean = true,
 )
 
 /**

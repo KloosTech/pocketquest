@@ -57,11 +57,16 @@ class SerializationRoundTripTest {
             status("lyra", "bless", stacks = 2, concentration = true, source = "lyra", expiry = Expiry.EndOfRound(4))
         }
         // Advance rng/version/id counters past their defaults so the round-trip actually exercises them.
+        // revealedTiles (Set<GridPos>) is the one field here with no Map-key-serialization precedent
+        // in this file — GridPos as a Set element (not a Map key) needs no allowStructuredMapKeys,
+        // unlike BattleMap.terrain's Map<GridPos, TileType>, but worth a real assertion rather than
+        // assuming that distinction holds.
         val state = s.state.copy(
             rng = s.state.rng.copy(calls = 7),
             version = 3,
             nextDecisionId = 5,
             nextLinkId = 2,
+            revealedTiles = setOf(GridPos(0, 0), GridPos(2, 5)),
         )
 
         val encoded = json.encodeToString(GameState.serializer(), state)

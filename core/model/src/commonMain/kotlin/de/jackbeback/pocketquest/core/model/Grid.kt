@@ -84,6 +84,17 @@ data class BattleMap(
     val props: List<PropPlacement> = emptyList(),
     val floorTexture: String? = null,
     val wallHatch: Boolean = true,
+    /**
+     * Carried from [BattleMapDef.fogOfWar] — unlike the rendering-only flags above, this one IS read
+     * by `:core:rules`' visibility computation and the AI's hidden-enemy skip-turn check. Defaults
+     * OFF here, opposite of [BattleMapDef]'s own default-on: that default is an authoring choice for
+     * real content, this one is the bare engine primitive countless tests construct directly with no
+     * fog intent at all (and no `startEncounter` call to populate `revealedTiles` for them) — those
+     * must not silently start "fully dark" and skip every enemy's turn just because this field
+     * exists now. `toBattleMap()` always passes `fogOfWar` explicitly, so a real authored map's
+     * default-on carries through regardless of this constructor default.
+     */
+    val fogOfWar: Boolean = false,
 ) {
     fun inBounds(pos: GridPos): Boolean =
         pos.col in 0 until width && pos.row in 0 until height

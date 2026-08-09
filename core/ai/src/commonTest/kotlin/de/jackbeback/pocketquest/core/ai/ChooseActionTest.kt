@@ -410,4 +410,42 @@ class ChooseActionTest {
         val decision = chooseAction(s, heroId, cat)
         assertEquals(ActionId("strike"), decision?.actionId)
     }
+
+    @Test
+    fun anEnemyOnAnUnrevealedTileSkipsItsTurnEntirely() {
+        // Adjacent (a legal melee target either way) so the only thing that can make this null is
+        // the fog check itself, not an out-of-range target. meleeHitsPlayers, not meleeAutoHit — the
+        // ENEMY is the caster here, so its filter must accept a Player-faction target.
+        val cat = baseCatalog(strikeAction("strike", targeting = meleeHitsPlayers), archetypes = mapOf(ArchetypeId("hero") to archetype("hero", listOf("strike"))))
+        val s = state(
+            entity(heroId, GridPos(0, 0), 20, Faction.Player, "hero"),
+            entity(enemyAId, GridPos(1, 0), 10, Faction.Enemy, "hero"),
+        ).copy(map = BattleMap(10, 10, fogOfWar = true))
+        // No revealedTiles at all — the enemy's own tile was never revealed.
+        assertNull(chooseAction(s, enemyAId, cat), "an enemy standing on a never-revealed tile must do nothing")
+    }
+
+    @Test
+    fun anEnemyOnARevealedTileActsNormally() {
+        val cat = baseCatalog(strikeAction("strike", targeting = meleeHitsPlayers), archetypes = mapOf(ArchetypeId("hero") to archetype("hero", listOf("strike"))))
+        val enemyPos = GridPos(1, 0)
+        // enemyA listed first — state()'s activeIndex=0 makes whichever entity comes first the
+        // active turn-taker, and chooseAction is called for enemyAId here.
+        val s = state(
+            entity(enemyAId, enemyPos, 10, Faction.Enemy, "hero"),
+            entity(heroId, GridPos(0, 0), 20, Faction.Player, "hero"),
+        ).copy(map = BattleMap(10, 10, fogOfWar = true), revealedTiles = setOf(enemyPos))
+        assertEquals(ActionId("strike"), chooseAction(s, enemyAId, cat)?.actionId)
+    }
+
+    @Test
+    fun fogOfWarOffNeverSkipsAnyoneEvenWithNoRevealedTiles() {
+        val cat = baseCatalog(strikeAction("strike", targeting = meleeHitsPlayers), archetypes = mapOf(ArchetypeId("hero") to archetype("hero", listOf("strike"))))
+        // enemyA listed first — see note above, chooseAction is called for enemyAId.
+        val s = state(
+            entity(enemyAId, GridPos(1, 0), 10, Faction.Enemy, "hero"),
+            entity(heroId, GridPos(0, 0), 20, Faction.Player, "hero"),
+        ) // state()'s BattleMap(10, 10) already defaults fogOfWar off
+        assertEquals(ActionId("strike"), chooseAction(s, enemyAId, cat)?.actionId)
+    }
 }
