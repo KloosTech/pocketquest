@@ -12,6 +12,8 @@ import kotlinx.serialization.Serializable
 @Serializable
 data class BattleMapDef(
     val id: MapId,
+    /** Author-facing display name — `id` stays the stable reference key everywhere else (encounters, catalog maps). Blank for any map saved before this field existed; display sites fall back to `id.raw` in that case rather than showing an empty label. */
+    val name: String = "",
     val width: Int,
     val height: Int,
     val terrain: List<TerrainRun> = emptyList(),

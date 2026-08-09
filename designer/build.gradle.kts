@@ -26,6 +26,7 @@ dependencies {
     // doc16-sanctioned exception above: :designer stays outside the player-facing graph, but now
     // also consumes it, the same way v1's designer previewed real gameplay screens.
     implementation(projects.ui)
+    implementation(libs.kotlinx.coroutines.core)
 
     implementation(compose.desktop.currentOs)
     implementation(compose.foundation)

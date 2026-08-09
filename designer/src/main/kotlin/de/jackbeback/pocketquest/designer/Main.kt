@@ -23,7 +23,7 @@ import de.jackbeback.pocketquest.ui.App as BattleApp
 fun main() = application {
     var playtest by remember { mutableStateOf<Pair<GameState, Catalog>?>(null) }
 
-    Window(onCloseRequest = ::exitApplication, title = "PocketQuest Designer", state = WindowState(size = DpSize(1100.dp, 750.dp))) {
+    Window(onCloseRequest = ::exitApplication, title = "PocketQuest Designer", state = WindowState(size = DpSize(1800.dp, 750.dp))) {
         DesignerApp(onPlaytest = { state, catalog -> playtest = state to catalog })
     }
 

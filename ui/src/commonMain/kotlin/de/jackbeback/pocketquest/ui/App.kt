@@ -124,21 +124,23 @@ private sealed interface Selection {
 }
 
 /**
- * doc15: "who acts next, always visible" — pinned above the board, never scrolls away. One token
- * per `state.turn.order` entry (true interleaved initiative, not side-based phases — every actor,
- * not just the party, belongs here), the active one ringed. No tap-to-inspect yet (doc15's
- * Inspect state isn't built), so these tokens are read-only for now. [onCenterOnActive] is doc15's
- * Camera section's own explicit ask: "a 'centre on active' button in the turn strip for when the
- * player has panned away." [onOpenLog] is doc15's battle log ask: "reachable from the turn strip" —
- * placed at the strip's own trailing end, past every turn token, per the user's explicit request.
- * [threatOverlayOn]/[onToggleThreat] is doc15's threat overlay toggle — "the highest-value quality-
- * of-life feature there is, and it is cheap."
+ * doc15: "who acts next, always visible" — now an overlay pinned to the top of the board itself
+ * (not a separate row above it, per the user's explicit ask), so it stays on screen without shrinking
+ * the map's own viewport. One token per `state.turn.order` entry (true interleaved initiative, not
+ * side-based phases — every actor, not just the party, belongs here), the active one ringed.
+ * [onSelectEntity] replaces doc15's original "a 'centre on active' button" — every token is now
+ * clickable and centers the camera on THAT entity, not only the currently-active one, a strictly more
+ * useful version of the same ask (per the user's explicit request to remove the separate button).
+ * [onOpenLog] is doc15's battle log ask: "reachable from the turn strip" — placed at the strip's own
+ * trailing end, past every turn token, per the user's explicit request. [threatOverlayOn]/
+ * [onToggleThreat] is doc15's threat overlay toggle — "the highest-value quality-of-life feature
+ * there is, and it is cheap."
  */
 @Composable
 private fun TurnOrderStrip(
     state: GameState,
     colors: Map<EntityId, Color>,
-    onCenterOnActive: () -> Unit,
+    onSelectEntity: (EntityId) -> Unit,
     onOpenLog: () -> Unit,
     threatOverlayOn: Boolean,
     onToggleThreat: () -> Unit,
@@ -148,7 +150,6 @@ private fun TurnOrderStrip(
         modifier = modifier.fillMaxWidth().height(56.dp).background(PAPER_SHEET).padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        InkButton("⌖", modifier = Modifier.padding(end = 10.dp), onClick = onCenterOnActive)
         Box(
             modifier = Modifier
                 .padding(end = 10.dp)
@@ -168,7 +169,10 @@ private fun TurnOrderStrip(
             // visually instead of showing it as a normal live token.
             val alive = (entity.health?.current ?: 1) > 0
             Box(
-                modifier = Modifier.padding(end = 10.dp).size(32.dp),
+                modifier = Modifier
+                    .padding(end = 10.dp)
+                    .size(32.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelectEntity(id) },
                 contentAlignment = Alignment.Center,
             ) {
                 if (id == activeId) {
@@ -473,16 +477,9 @@ private fun DrawScope.drawGrid(map: BattleMap, mapAssets: MapAssets?, camera: Of
     fun toScreen(world: Offset) = worldToScreen(world, camera, zoom, viewport)
     val screenTile = TILE_PX * zoom
 
-    // Terrain fill drawn before grid lines (below) so a textured/flat-filled cell never paints over
-    // the line under it — MapEditorPanel.kt's own drawTerrainCell/grid-line split settled this
-    // ordering first, ported here rather than rediscovering it via the same "grid lines missing" bug.
-    //
-    // drawWallHatch clips each Wall cell's strokes to that cell's own rect (found live: an earlier
-    // whole-viewport "continuous field + punch every floor cell on top" version scanned the entire
-    // visible area every frame regardless of how little of it was actually walls, heavy enough to
-    // stutter panning/clicking) — no bleed past a wall cell's edge, so floor cells need no special
-    // handling here at all, same as before this feature existed.
-    if (map.wallHatch) drawWallHatch(isWall = { map.tileAt(it) == TileType.Wall }, cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
+    // Floor fill drawn before grid lines so a textured cell never paints over the line under it —
+    // MapEditorPanel.kt's own drawTerrainCell/grid-line split settled this ordering first, ported
+    // here rather than rediscovering it via the same "grid lines missing" bug.
     val floorSheet = mapAssets?.floor
     if (floorSheet != null) {
         for (col in cols.first..cols.last) {
@@ -491,16 +488,6 @@ private fun DrawScope.drawGrid(map: BattleMap, mapAssets: MapAssets?, camera: Of
                 if (map.tileAt(pos) == TileType.Wall) continue
                 val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
                 drawTexturedCell(floorSheet, col, row, rect)
-            }
-        }
-    }
-    if (!map.wallHatch) {
-        for (col in cols.first..cols.last) {
-            for (row in rows.first..rows.last) {
-                val pos = GridPos(col, row)
-                if (map.tileAt(pos) != TileType.Wall) continue
-                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                drawRect(color = INK, topLeft = rect.topLeft, size = rect.size)
             }
         }
     }
@@ -516,6 +503,44 @@ private fun DrawScope.drawGrid(map: BattleMap, mapAssets: MapAssets?, camera: Of
     for (row in rows.first..rows.last + 1) {
         val y = toScreen(Offset(0f, row * TILE_PX)).y
         drawLine(INK_FAINT, Offset(xLeft, y), Offset(xRight, y))
+    }
+
+    // Walls drawn LAST, after grid lines, so they always paint fully over whatever grid line just
+    // crossed that cell — previously drawn first, so every grid line was visible on top of a wall
+    // (worst inside a hatched wall: drawWallHatch is only sparse hand-drawn strokes with no solid
+    // backing of its own, so the grid showed clean through the gaps between strokes even once this
+    // was drawn last). An opaque PAPER base fill under the hatch (same background tone used
+    // everywhere else) closes those gaps; a flat (non-hatch) wall is already an opaque INK rect.
+    //
+    // drawWallHatch clips each Wall cell's strokes to that cell's own rect (found live: an earlier
+    // whole-viewport "continuous field + punch every floor cell on top" version scanned the entire
+    // visible area every frame regardless of how little of it was actually walls, heavy enough to
+    // stutter panning/clicking) — no bleed past a wall cell's edge, so floor cells need no special
+    // handling here at all, same as before this feature existed.
+    if (map.wallHatch) {
+        for (col in cols.first..cols.last) {
+            for (row in rows.first..rows.last) {
+                if (map.tileAt(GridPos(col, row)) != TileType.Wall) continue
+                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                drawRect(color = PAPER, topLeft = rect.topLeft, size = rect.size)
+            }
+        }
+        drawWallHatch(isWall = { map.tileAt(it) == TileType.Wall }, cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
+    } else {
+        for (col in cols.first..cols.last) {
+            for (row in rows.first..rows.last) {
+                val pos = GridPos(col, row)
+                if (map.tileAt(pos) != TileType.Wall) continue
+                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                drawRect(color = INK, topLeft = rect.topLeft, size = rect.size)
+            }
+        }
+    }
+    // Automatic outline around every Wall mass — a no-op visually on a flat wall (same INK color as
+    // its own fill) but is what gives a hatched wall the clean solid border authored in :designer,
+    // without a WallEdge hand-placed around every hatch region.
+    for ((a, b) in wallOutlineSegments(map, cols, rows)) {
+        drawLine(INK, toScreen(a), toScreen(b), strokeWidth = 4f * zoom)
     }
     // doc16's thin room-divider walls (WallEdge, layered on top of the whole-cell TileType.Wall
     // above) blocked movement/LoS correctly from the moment the engine gained them, but nothing
@@ -536,6 +561,33 @@ private fun wallSegment(edge: WallEdge): Pair<Offset, Offset> {
         Side.East -> Offset(x0 + TILE_PX, y0) to Offset(x0 + TILE_PX, y0 + TILE_PX)
         Side.West -> Offset(x0, y0) to Offset(x0, y0 + TILE_PX)
     }
+}
+
+private fun GridPos.neighbor(side: Side): GridPos = when (side) {
+    Side.North -> copy(row = row - 1)
+    Side.South -> copy(row = row + 1)
+    Side.East -> copy(col = col + 1)
+    Side.West -> copy(col = col - 1)
+}
+
+/**
+ * Derived, not authored — same as `:designer`'s `MapEditorPanel.kt`'s `wallOutlineSegments`: every
+ * side of a whole-tile [TileType.Wall] cell bordering a non-Wall cell gets a solid outline, so a
+ * painted Wall mass reads as one solid building with a clean border instead of needing a `WallEdge`
+ * hand-placed around every hatch region. Culled to the visible [cols]/[rows] like `drawWallHatch`.
+ */
+private fun wallOutlineSegments(map: BattleMap, cols: IntRange, rows: IntRange): List<Pair<Offset, Offset>> {
+    val segments = mutableListOf<Pair<Offset, Offset>>()
+    for (col in cols) {
+        for (row in rows) {
+            val pos = GridPos(col, row)
+            if (map.tileAt(pos) != TileType.Wall) continue
+            for (side in Side.entries) {
+                if (map.tileAt(pos.neighbor(side)) != TileType.Wall) segments += wallSegment(WallEdge(pos, side))
+            }
+        }
+    }
+    return segments
 }
 
 /** doc16: "Reachable — dotted ink outline, 8% warm tint" — a faint fill plus a dashed ink border, not a flat color fill. */
@@ -768,6 +820,12 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     val activeId = state.turn.order.getOrNull(state.turn.activeIndex)
     val active = activeId?.let { state.byId[it] }
     val isHumanTurn = active?.actor?.controller is Controller.Human
+    // `Path` targeting is the engine's own marker for "this is a movement action" — the resolver's
+    // MoveAlong handling is triggered by the targeting mode itself, not an authored effect (same
+    // reasoning :designer's DefaultContent.kt uses for its "move" action). Tapping the active
+    // entity's own tile is a shortcut for whichever of its actions is Path-targeted, instead of a
+    // separate action-bar button — see onTileTap/the action bar below.
+    val moveActionId = active?.allActions(catalog)?.firstOrNull { catalog.actionDef(it).targeting.mode == TargetMode.Path }
 
     // Every prior demo/test fixture happened to start on a human's turn, so runAiTurns() only ever
     // needed a reactive trigger from the human's own "End Turn" button. A real startEncounter's
@@ -776,22 +834,23 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     // activeId directly (which also fires on first composition) covers that turn-1 case for free,
     // so the explicit call after the button's own endTurn() is now redundant and removed below.
     LaunchedEffect(state.turn.round, activeId) {
-        if (activeId != null && !isHumanTurn) runAiTurns()
+        if (activeId == null) return@LaunchedEffect
+        if (isHumanTurn) {
+            // AI turns already get a hard camera move every action via frameActorAndTarget() below;
+            // a human turn had nothing equivalent — only the passive dead-zone nudge in the
+            // snapshotFlow above, which does nothing if the human's (stationary, since they haven't
+            // acted yet) token already happens to sit inside the dead zone, e.g. after the camera was
+            // last left framing a distant enemy fight. Center on the new active human explicitly,
+            // same animateTo the "centre on active" button already uses, so a player's turn is
+            // always brought on screen the same way an AI's already is.
+            if (canPan) active.pos?.let { pos -> world.camera.animateTo(pos.toOffset(TILE_PX)) }
+        } else {
+            runAiTurns()
+        }
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
     Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
-        TurnOrderStrip(
-            state,
-            colors,
-            onCenterOnActive = {
-                val pos = active?.pos ?: return@TurnOrderStrip
-                scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
-            },
-            onOpenLog = { logOpen = true },
-            threatOverlayOn = threatOverlayOn,
-            onToggleThreat = { threatOverlayOn = !threatOverlayOn },
-        )
         // doc15: the board is a flex viewport (pan+zoom, culled), not sized to the map. BoxWithConstraints
         // gives Board's Canvas an explicit dp size matching the available space, rather than
         // `Modifier.weight(1f)` directly on the Canvas: a Row-weighted Canvas used to draw fine but its
@@ -800,6 +859,10 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
         // a plain fixed-size Canvas elsewhere in the same window received clicks correctly, the same
         // Canvas under `weight(1f)` never did). An ancestor claiming leftover space via weight(), like
         // this Box, is fine — only the Canvas itself may never carry weight() directly.
+        //
+        // The turn strip is drawn INSIDE this same Box, on top of the Board, rather than as its own
+        // row above it (per the user's explicit ask) — it no longer shrinks the board's own viewport
+        // height, it just floats over the top of it.
         BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Board(
                 map = state.map,
@@ -813,7 +876,8 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 modifier = Modifier.size(maxWidth, maxHeight),
                 onViewportSizeChanged = { viewportSize = it },
                 // doc15's targeting state machine: ActionPicked -> tap a legal tile -> TargetPicked;
-                // TargetPicked -> tap elsewhere -> cancels back to Idle (not a re-inspect — the
+                // TargetPicked -> tap the same (highlighted) tile again -> confirms, perform()s it;
+                // TargetPicked -> tap anywhere else -> cancels back to Idle (not a re-inspect — the
                 // player already has a pending action, tapping the board again means "never mind");
                 // Idle -> tap own char/enemy/cell -> Inspect (whatever's on that tile, or nothing).
                 onTileTap = tap@{ pos ->
@@ -825,10 +889,40 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                             val ctx = ActionCtx(activeId, targets, point = pos)
                             selection = Selection.TargetPicked(sel.actionId, ctx, preview(state, activeId, sel.actionId, ctx, catalog))
                         }
-                        is Selection.TargetPicked -> selection = Selection.None
-                        Selection.None -> inspected = state.occupancy[pos]
+                        is Selection.TargetPicked -> {
+                            if (pos == sel.ctx.point) {
+                                scope.launch {
+                                    applyStep(perform(state, activeId!!, sel.actionId, sel.ctx, catalog))
+                                    selection = Selection.None
+                                }
+                            } else {
+                                selection = Selection.None
+                            }
+                        }
+                        Selection.None -> {
+                            // Tapping the active human's own tile is a shortcut for its Move action —
+                            // same as pressing a "Move" button, without needing one in the action bar.
+                            if (isHumanTurn && moveActionId != null && pos == active.pos) {
+                                val legal = legalTargets(state, activeId, catalog.actionDef(moveActionId), catalog)
+                                selection = Selection.ActionPicked(moveActionId, legal)
+                            } else {
+                                inspected = state.occupancy[pos]
+                            }
+                        }
                     }
                 },
+            )
+            TurnOrderStrip(
+                state,
+                colors,
+                onSelectEntity = { id ->
+                    val pos = state.byId[id]?.pos ?: return@TurnOrderStrip
+                    scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
+                },
+                onOpenLog = { logOpen = true },
+                threatOverlayOn = threatOverlayOn,
+                onToggleThreat = { threatOverlayOn = !threatOverlayOn },
+                modifier = Modifier.align(Alignment.TopStart),
             )
         }
         PartyBar(state, catalog)
@@ -884,7 +978,9 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 when (val sel = selection) {
                     is Selection.None -> {
                         Row {
-                            active.allActions(catalog).forEach { actionId ->
+                            // Move no longer gets its own button here — tapping the active entity's
+                            // own tile on the board does the same thing (see onTileTap above).
+                            active.allActions(catalog).filter { it != moveActionId }.forEach { actionId ->
                                 InkButton(
                                     catalog.actionDef(actionId).name,
                                     modifier = Modifier.padding(end = 8.dp),
@@ -933,21 +1029,12 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                         InkButton("Cancel", onClick = { selection = Selection.None })
                     }
                     is Selection.TargetPicked -> {
+                        // No Confirm/Cancel buttons for any action — tapping the highlighted (green)
+                        // tile again on the board confirms it, tapping anywhere else resets it (same
+                        // gesture for every action, not just Move — see onTileTap above).
                         BasicText("${catalog.actionDef(sel.actionId).name} expects ${sel.preview.events.size} events", style = TextStyle(color = INK, fontSize = 14.sp))
                         Spacer(modifier = Modifier.size(8.dp))
-                        Row {
-                            InkButton(
-                                "Confirm",
-                                modifier = Modifier.padding(end = 8.dp),
-                                onClick = {
-                                    scope.launch {
-                                        applyStep(perform(state, activeId, sel.actionId, sel.ctx, catalog))
-                                        selection = Selection.None
-                                    }
-                                },
-                            )
-                            InkButton("Cancel", onClick = { selection = Selection.None })
-                        }
+                        BasicText("Tap the highlighted tile again to confirm — tap elsewhere to cancel.", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
                     }
                 }
             }

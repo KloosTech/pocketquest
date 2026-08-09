@@ -125,7 +125,7 @@ private fun EncounterEditor(encounter: EncounterSpec, catalog: Catalog, onChange
             InkSelect(
                 selected = selectedMap,
                 options = maps,
-                label = { "${it.id.raw} (${it.width}x${it.height})" },
+                label = { "${it.name.ifBlank { it.id.raw }} (${it.width}x${it.height})" },
                 onSelect = { onChange(encounter.copy(mapId = it.id)) },
             )
         }

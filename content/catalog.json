@@ -15,10 +15,11 @@
             "baseAc": 10,
             "speedTiles": 6,
             "baseMaxAp": 2,
-            "baseMaxMana": 0,
+            "baseMaxMana": 10,
             "actions": [
                 "action2",
-                "move"
+                "move",
+                "action3"
             ],
             "aiProfile": "profile1"
         },
@@ -125,6 +126,46 @@
                     "damageType": "Bludgeoning"
                 }
             ]
+        },
+        "action3": {
+            "id": "action3",
+            "name": "Fire Ball",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "mana": 2,
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "Point",
+                "range": {
+                    "type": "tiles",
+                    "n": 4
+                },
+                "shape": {
+                    "type": "sphere",
+                    "radius": 2
+                },
+                "maxTargets": 9
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 0,
+                    "damage": {
+                        "count": 1,
+                        "sides": 6
+                    },
+                    "damageType": "Fire"
+                }
+            ]
         }
     },
     "features": {
@@ -139,6 +180,7 @@
     "maps": {
         "map1": {
             "id": "map1",
+            "name": "Bed Room",
             "width": 10,
             "height": 10,
             "terrain": [
@@ -770,6 +812,1668 @@
                     ]
                 }
             ]
+        },
+        "map2": {
+            "id": "map2",
+            "name": "New Map 2",
+            "width": 22,
+            "height": 22,
+            "terrain": [
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "length": 22,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 1
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 1
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 2
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 2
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 3
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 7,
+                        "row": 3
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 3
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 4
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 8,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 4
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 18,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 8,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 8,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 6
+                    },
+                    "length": 4,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 7
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 7
+                    },
+                    "length": 4,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 7
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 7
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 8
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 8
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 8
+                    },
+                    "length": 8,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 9
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 16,
+                        "row": 9
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 2,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 10
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 10
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 11
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 11
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 11
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 12
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 12
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 16,
+                        "row": 12
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 12
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 13
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 13
+                    },
+                    "length": 12,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 13
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 14
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 14
+                    },
+                    "length": 12,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 14
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 15
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 15
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 16,
+                        "row": 15
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 15
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 16
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 16
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 16
+                    },
+                    "length": 5,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 17
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 17
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 17
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 17
+                    },
+                    "length": 5,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 18
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 18
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 19
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 19
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 7,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 21
+                    },
+                    "length": 22,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                }
+            ],
+            "wallEdges": [
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 0
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 4
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 4
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 4
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 1
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 0
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 7
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 7
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 7
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 6
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 6
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 6
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 5
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 11,
+                        "row": 4
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 10,
+                        "row": 3
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 3
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 5
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 11,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 8
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 8
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 9
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 10
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 11
+                    },
+                    "side": "East"
+                }
+            ],
+            "props": [
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 1,
+                        "row": 20
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 8,
+                        "row": 8
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 18,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 19,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 20,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 5,
+                        "row": 14
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 16,
+                        "row": 20
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 20,
+                        "row": 10
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 20,
+                        "row": 7
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 6,
+                        "row": 1
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 10,
+                        "row": 4
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 11,
+                        "row": 4
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "tableRough1x1",
+                    "at": {
+                        "col": 1,
+                        "row": 17
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "Chair1x1",
+                    "at": {
+                        "col": 1,
+                        "row": 16
+                    },
+                    "layer": "Object"
+                }
+            ],
+            "spawns": [
+                {
+                    "role": "Party",
+                    "tiles": [
+                        {
+                            "col": 19,
+                            "row": 20
+                        },
+                        {
+                            "col": 19,
+                            "row": 18
+                        },
+                        {
+                            "col": 20,
+                            "row": 19
+                        }
+                    ]
+                },
+                {
+                    "role": "Enemy",
+                    "tiles": [
+                        {
+                            "col": 10,
+                            "row": 17
+                        },
+                        {
+                            "col": 10,
+                            "row": 18
+                        },
+                        {
+                            "col": 19,
+                            "row": 14
+                        },
+                        {
+                            "col": 19,
+                            "row": 2
+                        },
+                        {
+                            "col": 19,
+                            "row": 6
+                        },
+                        {
+                            "col": 17,
+                            "row": 3
+                        },
+                        {
+                            "col": 13,
+                            "row": 1
+                        },
+                        {
+                            "col": 11,
+                            "row": 1
+                        },
+                        {
+                            "col": 11,
+                            "row": 2
+                        },
+                        {
+                            "col": 1,
+                            "row": 1
+                        },
+                        {
+                            "col": 2,
+                            "row": 1
+                        },
+                        {
+                            "col": 3,
+                            "row": 1
+                        },
+                        {
+                            "col": 7,
+                            "row": 4
+                        },
+                        {
+                            "col": 7,
+                            "row": 5
+                        },
+                        {
+                            "col": 7,
+                            "row": 6
+                        }
+                    ]
+                }
+            ]
         }
     },
     "encounters": {
@@ -793,6 +2497,17 @@
             "loot": [
                 {
                     "item": "item1"
+                }
+            ]
+        },
+        "encounter2": {
+            "id": "encounter2",
+            "name": "New Encounter 2",
+            "mapId": "map2",
+            "enemies": [
+                {
+                    "archetype": "archetype2",
+                    "count": 4
                 }
             ]
         }

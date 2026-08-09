@@ -7,7 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -229,6 +229,39 @@ private fun wallSegment(edge: WallEdge): Pair<Offset, Offset> {
     }
 }
 
+private fun GridPos.neighbor(side: Side): GridPos = when (side) {
+    Side.North -> copy(row = row - 1)
+    Side.South -> copy(row = row + 1)
+    Side.East -> copy(col = col + 1)
+    Side.West -> copy(col = col - 1)
+}
+
+/**
+ * Derived, not authored: every side of a whole-tile [TileType.Wall] cell that borders a non-Wall
+ * cell (including off the map edge, since a missing [tiles] entry already defaults to Floor) gets a
+ * solid outline — this is what makes a painted Wall mass in the reference screenshot read as one
+ * solid building with a clean border, without the author separately placing a `WallEdge` (the
+ * "Wall (edge)" tool's thin room-divider) around every hatch region by hand. Manually placed
+ * `WallEdge`s (interior thin dividers between two Floor cells) are unrelated and still drawn
+ * separately from `map.wallEdges` — this never reads or writes that list.
+ */
+private fun wallOutlineSegments(tiles: Map<GridPos, TileType>, width: Int, height: Int): List<Pair<Offset, Offset>> {
+    val segments = mutableListOf<Pair<Offset, Offset>>()
+    for (col in 0 until width) {
+        for (row in 0 until height) {
+            val pos = GridPos(col, row)
+            if ((tiles[pos] ?: TileType.Floor) != TileType.Wall) continue
+            for (side in Side.entries) {
+                val neighbor = pos.neighbor(side)
+                if ((tiles[neighbor] ?: TileType.Floor) != TileType.Wall) {
+                    segments += wallSegment(WallEdge(pos, side))
+                }
+            }
+        }
+    }
+    return segments
+}
+
 /**
  * doc16: enemies are ink tokens in the map's own style — "circular, black on parchment", an inner
  * ring for elite and two for boss — not sprites (there are no monster sprites in the pack). Party
@@ -296,7 +329,7 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                             .background(if (map.id == selectedId) PAPER else PAPER_SHEET)
                             .padding(8.dp),
                     ) {
-                        BasicText("${map.id.raw} (${map.width}x${map.height})", style = TextStyle(color = INK, fontSize = 13.sp))
+                        BasicText("${map.name.ifBlank { map.id.raw }} (${map.width}x${map.height})", style = TextStyle(color = INK, fontSize = 13.sp))
                     }
                 }
             }
@@ -315,7 +348,7 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                     var n = catalog.maps.size + 1
                     while (MapId("map$n") in catalog.maps) n++
                     val id = MapId("map$n")
-                    onCatalogChange(catalog.copy(maps = catalog.maps + (id to BattleMapDef(id, w, h))))
+                    onCatalogChange(catalog.copy(maps = catalog.maps + (id to BattleMapDef(id = id, name = "New Map $n", width = w, height = h))))
                     selectedId = id
                 },
             )
@@ -334,6 +367,10 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
 
         Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                InkLabel("NAME", modifier = Modifier.padding(end = 8.dp))
+                InkTextField(map.name, onValueChange = { updateMap { m -> m.copy(name = it) } }, modifier = Modifier.width(220.dp))
+            }
+            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
                 InkLabel("FLOOR TEXTURE")
                 InkSelect(
                     selected = map.floorTexture,
@@ -533,13 +570,19 @@ private fun MapCanvas(
                         lastPressPos = down.position
                     }
                 }
-                // A drag detector on the same node as click detection below: detectDragGestures only
-                // recognizes a drag past its own touch-slop, so a genuine click/tap never triggers it
-                // and clickable still fires normally — same non-interference as :ui's Board comment.
-                .pointerInput(Unit) {
-                    detectDragGestures { change, drag ->
-                        camera -= drag / zoom
-                        change.consume()
+                // Same gesture detector :ui's Board panning uses (detectTransformGestures, not
+                // detectDragGestures — the latter stopped recognizing drags here). Zoom stays solely
+                // the scroll-wheel handler below; this only ever applies pan.
+                //
+                // Keyed on map.id, not Unit: a pointerInput block only restarts when its key changes,
+                // so a Unit key keeps running the FIRST map's coroutine forever — its closure captured
+                // that map's `camera`/`zoom` MutableState instances (remember(map.id) makes a new pair
+                // per map), so dragging after switching maps kept mutating the original map's
+                // (now-invisible) camera instead of the one on screen. This is exactly the bug: "drag
+                // works on the first map, not after switching."
+                .pointerInput(map.id) {
+                    detectTransformGestures { _, pan, _, _ ->
+                        camera -= pan / zoom
                     }
                 }
                 .onPointerEvent(PointerEventType.Move) { event -> hoverPos = event.changes.first().position }
@@ -569,30 +612,20 @@ private fun MapCanvas(
                 val sr = (col * 3 + row * 5) % cols
                 FloorPatch(sheet, IntOffset(sc * cell, sr * cell), IntSize(cell, cell))
             }
-            // Punch-through compositing, same as :ui's Board: the hatch is one continuous drawing
-            // covering every Wall cell (drawn first), then every cell paints its own fill on top —
-            // Wall cells skip that second pass entirely when hatched, Floor cells always get it.
-            if (map.wallHatch) {
-                drawWallHatch(
-                    isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
-                    cols = 0 until map.width,
-                    rows = 0 until map.height,
-                    tilePx = TILE_PX,
-                    zoom = zoom,
-                    ink = INK,
-                    toScreen = ::toScreen,
-                )
-            }
+            // Floor cells only here — Wall cells (hatch or flat fill) are drawn LAST among the
+            // background layers, after grid lines, so they always paint over any grid line segment
+            // that would otherwise show through them. Previously walls were drawn before the grid
+            // lines, which is why the grid was visible through both hatched and solid walls.
             for (col in 0 until map.width) {
                 for (row in 0 until map.height) {
                     val tile = tiles[GridPos(col, row)] ?: TileType.Floor
+                    if (tile == TileType.Wall) continue
                     val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                    if (tile == TileType.Wall && map.wallHatch) continue
                     drawTerrainCell(tile, rect, patchAt(floorSwatch, col, row))
                 }
             }
-            // Grid lines drawn after terrain fill (not before) so a filled Floor/Wall/hazard cell
-            // never paints over the line under it — was the "grid lines missing" bug.
+            // Grid lines drawn after floor fill (not before) so a filled Floor/hazard cell never
+            // paints over the line under it — was the original "grid lines missing" bug.
             val gridTop = toScreen(Offset(0f, 0f)).y
             val gridBottom = toScreen(Offset(0f, map.height * TILE_PX)).y
             for (col in 0..map.width) {
@@ -604,6 +637,44 @@ private fun MapCanvas(
             for (row in 0..map.height) {
                 val y = toScreen(Offset(0f, row * TILE_PX)).y
                 drawLine(INK_FAINT, Offset(gridLeft, y), Offset(gridRight, y))
+            }
+            // Walls last, so they always paint over whatever grid line just crossed that cell. A flat
+            // wall (drawTerrainCell) is already an opaque INK rect, but drawWallHatch itself is ONLY
+            // the sparse hand-drawn strokes — no solid backing — so grid lines were still visible in
+            // the gaps between strokes even with hatch drawn last. An opaque PAPER base fill under the
+            // hatch (same background tone as everywhere else) closes those gaps.
+            if (map.wallHatch) {
+                for (col in 0 until map.width) {
+                    for (row in 0 until map.height) {
+                        if (tiles[GridPos(col, row)] != TileType.Wall) continue
+                        val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                        drawRect(PAPER, rect.topLeft, rect.size)
+                    }
+                }
+                drawWallHatch(
+                    isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
+                    cols = 0 until map.width,
+                    rows = 0 until map.height,
+                    tilePx = TILE_PX,
+                    zoom = zoom,
+                    ink = INK,
+                    toScreen = ::toScreen,
+                )
+            } else {
+                for (col in 0 until map.width) {
+                    for (row in 0 until map.height) {
+                        if (tiles[GridPos(col, row)] != TileType.Wall) continue
+                        val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                        drawTerrainCell(TileType.Wall, rect, null)
+                    }
+                }
+            }
+            // Automatic outline around every Wall mass (see wallOutlineSegments' doc comment) — drawn
+            // for both hatch and flat rendering; a no-op visually on a flat wall (same INK color as
+            // its own fill) but is what gives a hatched wall the clean solid border in the reference
+            // look, without the author placing a WallEdge by hand around every hatch region.
+            for ((a, b) in wallOutlineSegments(tiles, map.width, map.height)) {
+                drawLine(INK, toScreen(a), toScreen(b), strokeWidth = 4f * zoom)
             }
             for (edge in map.wallEdges) {
                 val (a, b) = wallSegment(edge)

@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +36,7 @@ import de.jackbeback.pocketquest.ui.ink.InkButton
 import de.jackbeback.pocketquest.ui.ink.OK
 import de.jackbeback.pocketquest.ui.ink.PAPER
 import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
+import kotlinx.coroutines.delay
 
 /**
  * doc16: "live validation against CatalogValidator, showing referential errors as you type" —
@@ -70,6 +72,13 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
     var loadedFilePath by remember { mutableStateOf(initialPath) }
     var tab by remember { mutableStateOf(DesignerTab.Encounters) }
     val problems = validate(catalog)
+    var justSaved by remember { mutableStateOf(false) }
+    LaunchedEffect(justSaved) {
+        if (justSaved) {
+            delay(500)
+            justSaved = false
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize().background(PAPER)) {
         Row(
@@ -90,11 +99,17 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
                     InkButton(t.name, modifier = Modifier.padding(end = 8.dp), emphasized = t == tab, onClick = { tab = t })
                 }
             }
-            InkButton("Save", modifier = Modifier.padding(end = 8.dp), onClick = {
-                val file = DesignerFileIo.defaultCatalogFile()
-                DesignerFileIo.save(file, catalog)
-                loadedFilePath = file.absolutePath
-            })
+            InkButton(
+                "Save",
+                modifier = Modifier.padding(end = 8.dp),
+                flashColor = if (justSaved) OK else null,
+                onClick = {
+                    val file = DesignerFileIo.defaultCatalogFile()
+                    DesignerFileIo.save(file, catalog)
+                    loadedFilePath = file.absolutePath
+                    justSaved = true
+                },
+            )
             InkButton("Save As…", modifier = Modifier.padding(end = 8.dp), onClick = {
                 val file = DesignerFileIo.chooseSaveFile() ?: return@InkButton
                 DesignerFileIo.save(file, catalog)

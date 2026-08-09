@@ -12,10 +12,8 @@ interaction.
 
 ```
 ┌─────────────────────────────┐
-│ ◀ turn order strip        ⚙ │   56 dp   who acts next, always visible
-├─────────────────────────────┤
-│                             │
-│                             │
+│ ◀ turn order strip        ⚙ │   56 dp   floats over the board's own top edge
+│                             │              (does not shrink its viewport)
 │         board               │   flex    pan + zoom, culled to viewport
 │      (one Canvas)           │
 │                             │
@@ -31,7 +29,9 @@ Three constraints drive this layout:
 
 **The turn order strip is not decoration.** With true interleaved initiative and
 up to eight actors, the player cannot plan a turn without seeing the order. It
-stays pinned at the top and never scrolls away.
+overlays the top of the board (not a separate row that shrinks the board's own
+viewport height) and never scrolls away. Every token is tappable — tapping one
+centers the camera on that entity, not only the currently-active one.
 
 **The bottom third is the thumb zone.** The board's lower portion is covered by
 the sheet whenever it expands, so the camera must keep the active character in
@@ -88,30 +88,38 @@ Mobile has no hover, so every commit needs an explicit confirmation step. That
 is also what replaces undo — see below.
 
 ```
-        ┌──────────────────────────────────────────┐
-        │                  Idle                    │
-        └──┬─────────────┬──────────────┬──────────┘
-   tap own │    tap enemy│     tap action
-   char/   │      /cell  │       in bar
-   empty   ▼             ▼              ▼
-        Inspect       Inspect      ActionSelected
-                                        │  legalTargets() highlighted
-                                   tap a legal tile
-                                        ▼
-                                   TargetPicked
-                                        │  preview() runs
-                                        │  affected tiles + expected outcome
-                             ┌──────────┴──────────┐
-                        Confirm                 Cancel / tap elsewhere
-                             ▼                       ▼
-                        perform()                  Idle
-                             ▼
-                     events → animation → Idle
+        ┌────────────────────────────────────────────────────┐
+        │                        Idle                        │
+        └──┬─────────────┬───────────────────┬───────────────┘
+   tap own │    tap other│      tap own ACTIVE│    tap action
+   (not    │    char/    │      entity's own  │      in bar
+   active) │    empty    │      tile          │
+   ▼       ▼             ▼                    ▼
+        Inspect       Inspect            ActionSelected(Move)   ActionSelected
+                                                │                     │
+                                          legalTargets() highlighted, either way
+                                                │
+                                          tap a legal tile
+                                                ▼
+                                           TargetPicked
+                                                │  preview() runs
+                                                │  affected tiles + expected outcome
+                                                │
+                                    tap the SAME tile again to confirm,
+                                        tap anywhere else resets it
+                                                ▼
+                                           perform() / Idle
+                                                ▼
+                                     events → animation → Idle
 ```
 
-Movement is the same path with `ActionCost.Movement`: tap a reachable tile,
-the path draws with its cost, tap again (or Confirm) to commit. Re-tapping a
-different tile before confirming just re-plans — free, no state change.
+No action has a bottom-sheet Confirm/Cancel button — tapping the same
+(highlighted) tile a `TargetPicked` selection is already on confirms it;
+tapping anywhere else resets straight back to `Idle` rather than re-planning a
+new destination. Movement is the one action with no action-bar button either:
+tapping the active entity's own tile enters `ActionSelected` for it directly,
+skipping the bar entirely, since "move" always means "move this specific
+character."
 
 Two rules that fall out:
 
@@ -185,14 +193,18 @@ and should ship first.
 
 - Follows the active entity, but only when it leaves a comfortable inner
   rectangle — continuous centring is nauseating
-  ([07-animation.md](07-animation.md)).
+  ([07-animation.md](07-animation.md)). A human turn's start gets an explicit
+  hard center (not just the passive rectangle nudge), so a player's turn is
+  always brought fully on screen the same way an AI's already is below.
 - **Never moves while the player is in `ActionSelected` or `TargetPicked`.**
   Moving the board under a targeting gesture is the fastest way to cause a
   mis-tap.
 - During AI turns, pans to keep both the actor and its target on screen; if they
   do not both fit, prioritise the target.
-- A "centre on active" button in the turn strip for when the player has panned
-  away.
+- Every token in the turn strip is tappable — tapping one centers the camera on
+  that entity. This replaced an earlier single "centre on active" button, since
+  a tap-any-token version covers the same need (the player has panned away)
+  plus letting them jump to any entity, not only the currently-active one.
 
 ## Controller toggle and the grace window
 

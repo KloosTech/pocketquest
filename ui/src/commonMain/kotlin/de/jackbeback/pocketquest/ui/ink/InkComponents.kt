@@ -21,6 +21,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -36,12 +37,13 @@ import androidx.compose.ui.unit.sp
  * detection (same reason `PlatformGestures.kt` needed an expect/actual split earlier), and hover
  * isn't a mobile concept anyway. It lives in `ui/desktopMain/.../ink/InkTooltip.kt` instead.
  */
+/** [flashColor], when set, overrides the normal emphasized/plain background entirely — a caller-driven transient state (e.g. "flash green after a successful save") rather than a persistent style. */
 @Composable
-fun InkButton(label: String, modifier: Modifier = Modifier, emphasized: Boolean = false, onClick: () -> Unit) {
+fun InkButton(label: String, modifier: Modifier = Modifier, emphasized: Boolean = false, flashColor: Color? = null, onClick: () -> Unit) {
     Box(
         modifier = modifier
             .border(1.dp, INK)
-            .background(if (emphasized) PAPER_SHEET else PAPER)
+            .background(flashColor ?: if (emphasized) PAPER_SHEET else PAPER)
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 8.dp),
     ) {
