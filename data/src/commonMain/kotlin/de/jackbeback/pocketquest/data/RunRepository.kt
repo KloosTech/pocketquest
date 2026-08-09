@@ -4,11 +4,14 @@ import de.jackbeback.pocketquest.core.run.CURRENT_RUN_SCHEMA
 import de.jackbeback.pocketquest.core.run.RunState
 import kotlinx.serialization.json.Json
 
+/** [RunState.encounter]'s `Resolver.state.map.terrain: Map<GridPos, TileType>` has a non-primitive key — same [SaveRepository] lesson, needed here too the moment a mid-encounter RunState gets saved. */
+private val SNAPSHOT_JSON = Json { allowStructuredMapKeys = true }
+
 /**
  * The only place a [RunState] gets turned into bytes and back — mirrors [SaveRepository]'s shape,
  * with its own independent [RunSnapshotMigrations] chain (docs/11-run-state.md).
  */
-class RunRepository(private val dao: RunSlotDao, private val json: Json = Json) {
+class RunRepository(private val dao: RunSlotDao, private val json: Json = SNAPSHOT_JSON) {
 
     suspend fun save(runId: String, updatedAt: Long, partySummary: String, run: RunState) {
         val snapshot = json.encodeToString(RunState.serializer(), run).encodeToByteArray()

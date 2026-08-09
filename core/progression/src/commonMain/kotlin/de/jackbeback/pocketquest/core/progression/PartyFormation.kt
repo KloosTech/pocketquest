@@ -26,6 +26,15 @@ fun createChampion(meta: MetaState, id: ChampionId, name: String, archetype: Arc
     return meta.copy(roster = meta.roster + (id to record))
 }
 
+/** Shared by [formParty] and the very-first-run bootstrap (`:app`'s composition root) — a fresh, full-health `PartyMember` built from a [ChampionRecord]'s persisted equipment. */
+fun ChampionRecord.toFreshPartyMember(cat: Catalog): PartyMember {
+    val member = PartyMember(
+        memberId = MemberId(id.raw), name = name, archetype = archetype,
+        hp = 0, mana = 0, equipment = equipment, controller = Controller.Human,
+    )
+    return member.atFullHealth(cat)
+}
+
 sealed interface PartyFormationRejection {
     data class TooManyChampions(val requested: Int, val max: Int) : PartyFormationRejection
     data object EmptyParty : PartyFormationRejection
@@ -56,12 +65,6 @@ fun formParty(meta: MetaState, championIds: List<ChampionId>, cat: Catalog): Par
     if (rejections.isNotEmpty()) return PartyFormationResult.Rejected(rejections)
 
     val updatedRoster = meta.roster + records.associate { it.id to it.copy(status = ChampionStatus.OnRun) }
-    val party = records.map { record ->
-        val member = PartyMember(
-            memberId = MemberId(record.id.raw), name = record.name, archetype = record.archetype,
-            hp = 0, mana = 0, equipment = record.equipment, controller = Controller.Human,
-        )
-        member.atFullHealth(cat)
-    }
+    val party = records.map { it.toFreshPartyMember(cat) }
     return PartyFormationResult.Formed(meta.copy(roster = updatedRoster), party)
 }

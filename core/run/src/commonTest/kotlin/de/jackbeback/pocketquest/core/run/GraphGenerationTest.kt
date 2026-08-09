@@ -71,6 +71,13 @@ class GraphGenerationTest {
     }
 
     @Test
+    fun restrictedNodeTypeWeightsNeverProduceAnUnweightedType() {
+        val (graph, _) = generateGraph(RngState(seed = 5L), acts = 3, lanes = 3, nodeTypeWeights = listOf(NodeType.Combat to 1))
+        val nonBossTypes = graph.nodes.values.filter { it.type != NodeType.Boss }.map { it.type }.toSet()
+        assertEquals(setOf(NodeType.Combat), nonBossTypes)
+    }
+
+    @Test
     fun createRunBuildsAPlayableRunFromASeed() {
         val party = listOf(
             PartyMember(MemberId("m1"), "Lyra", de.jackbeback.pocketquest.core.model.ArchetypeId("hero"), hp = 20, mana = 5, controller = de.jackbeback.pocketquest.core.model.Controller.Human),

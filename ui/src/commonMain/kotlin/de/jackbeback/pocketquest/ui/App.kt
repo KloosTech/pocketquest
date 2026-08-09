@@ -74,6 +74,7 @@ import de.jackbeback.pocketquest.ui.assets.GameSpriteLoader
 import de.jackbeback.pocketquest.core.rules.action.allActions
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.action.preview
+import de.jackbeback.pocketquest.core.rules.combatOutcome
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
@@ -627,8 +628,9 @@ private fun DrawScope.drawMarker(marker: Marker, camera: Offset, zoom: Float) {
  * (StepResult.AwaitingInput) is still deferred, nothing in the demo catalog ever triggers it.
  */
 @Composable
-fun App(initialState: GameState, catalog: Catalog) {
+fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -> Unit = {}) {
     var state by remember { mutableStateOf(initialState) }
+    var ended by remember { mutableStateOf(false) }
     val world = remember { VisualWorld(initialState, TILE_PX) }
     val player = remember { AnimationPlayer(world) }
     val colors = remember(initialState) { initialState.entities.associate { it.id to colorFor(it.actor?.faction) } }
@@ -714,6 +716,15 @@ fun App(initialState: GameState, catalog: Catalog) {
             player.awaitDrained()
             world.settle(result.resolver.state)
             state = result.resolver.state
+            // docs/11-run-state.md's encounter handoff needs a real "combat is over" signal to call
+            // finishEncounter from — nothing previously stopped the turn loop once one side was
+            // wiped, so a boss kill (or a party wipe) just kept dealing out empty enemy turns forever.
+            if (!ended) {
+                state.combatOutcome()?.let {
+                    ended = true
+                    onEncounterEnd(state)
+                }
+            }
             true
         }
         is StepResult.Rejected -> {
@@ -730,12 +741,14 @@ fun App(initialState: GameState, catalog: Catalog) {
     }
 
     suspend fun endTurn(who: EntityId) {
+        if (state.combatOutcome() != null) return
         applyStep(runResolver(Resolver(state, stack = listOf(Effect.EndTurn(who))), catalog))
     }
 
     /** Runs every consecutive AI-controlled turn to completion, handing control back once the active entity is human (or nothing is left to do). */
     suspend fun runAiTurns() {
         while (true) {
+            if (state.combatOutcome() != null) return
             val activeId = state.turn.order.getOrNull(state.turn.activeIndex) ?: return
             val active = state.byId[activeId] ?: return
             if (active.actor?.controller is Controller.Human) return

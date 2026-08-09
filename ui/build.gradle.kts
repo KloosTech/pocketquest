@@ -37,6 +37,9 @@ kotlin {
             implementation(projects.core.content)
             implementation(projects.core.rules)
             implementation(projects.core.ai)
+            implementation(projects.core.meta)
+            implementation(projects.core.run)
+            implementation(projects.core.progression)
             implementation(projects.data)
 
             implementation(compose.runtime)
