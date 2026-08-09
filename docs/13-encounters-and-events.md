@@ -134,11 +134,10 @@ Buying: `run.gold -= price`, item added to `RunState.inventory`, blocked if
 gold or [carry capacity](#inventory-and-carry-capacity) is insufficient.
 
 Selling: any item in `RunState.inventory` (looted or bought) can be sold back
-for a fraction of its `ShopEntry.price` — exact fraction not fixed here,
-tune during playtesting. Selling needs the item's "base price" available even
-for looted items never bought from a shop, so `ItemDef` likely needs its own
-`basePrice: Int` rather than deriving sell value only from `ShopEntry`
-instances — flagging as a probable `core:model` addition, not settled here.
+for **50% of `ItemDef.basePrice`** (`core/model/Catalog.kt`, added Pass 0),
+not `ShopEntry.price` — a looted item was never bought from a shop and has no
+`ShopEntry` of its own, so `basePrice` is the only value that exists for
+every item unconditionally. `sellValue(item) = (item.basePrice * 0.5).toInt()`.
 
 ## Inventory and carry capacity
 
@@ -151,22 +150,23 @@ One shared `Inventory` per run (`RunState.inventory`), not per-Champion —
 loot and shop purchases go into a common pool the party manages together,
 matching `RunState`'s existing shape in [11-run-state.md](11-run-state.md).
 
-Capacity is bound to the party's Strength, per your ask — exact formula not
-fixed here, but the shape is: `capacity(run) = f(party.map { it.archetype's
-STR })`, checked whenever an item would be added (loot pickup or a shop
-purchase). Exceeding capacity blocks the pickup/purchase outright rather than
-auto-dropping something — the player chooses what to sell/discard to make
-room, same "no invented data, no silent side effects" pattern the rest of
-this project follows.
+Capacity is bound to the party's Strength: **the sum of every active party
+member's STR score**, checked whenever an item would be added (loot pickup
+or a shop purchase). Exceeding capacity blocks the pickup/purchase outright
+rather than auto-dropping something — the player chooses what to sell/discard
+to make room, same "no invented data, no silent side effects" pattern the
+rest of this project follows.
 
-Open questions, not blocking the shape above:
+```kotlin
+fun carryCapacity(party: List<PartyMember>, cat: Catalog): Int =
+    party.sumOf { cat.archetype(it.archetype).abilities.str }
+```
 
-- Sum of party STR, or the single highest STR member (a "pack mule")? Sum
-  rewards a balanced party, highest rewards dedicating one strong carrier.
-- Does equipped gear count against capacity, or only the unequipped
-  inventory? (Equipped items already occupy `Equipment` slots per-Champion,
-  separate from this shared pool — leaning toward "only unequipped inventory
-  counts," but not locked in.)
+Only `RunState.inventory` (unequipped items) counts against this — equipped
+items already occupy per-Champion `Equipment` slots, a separate pool that
+this capacity doesn't govern. Summing (not "highest STR carries it all")
+rewards a balanced party, matching this project's general "no single stat
+should trivialize a whole system" bias.
 
 ## What this doc doesn't cover
 

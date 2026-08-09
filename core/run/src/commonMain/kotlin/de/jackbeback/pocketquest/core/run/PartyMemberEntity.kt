@@ -7,6 +7,7 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.Health
 import de.jackbeback.pocketquest.core.model.Resources
+import de.jackbeback.pocketquest.core.rules.stat.stats
 
 /**
  * Builds a throwaway [Entity] from a [PartyMember] so `:core:rules`' `stats()`/`grantedActions()`
@@ -31,4 +32,10 @@ fun PartyMember.toEntity(cat: Catalog, id: EntityId = EntityId(0)): Entity {
         equipment = equipment,
         features = grantedFeatures,
     )
+}
+
+/** A fresh `PartyMember` at its derived (equipment-inclusive) max HP/mana — used at party formation, before any encounter has happened to it. */
+fun PartyMember.atFullHealth(cat: Catalog): PartyMember {
+    val stats = toEntity(cat).stats(cat)
+    return copy(hp = stats.maxHp, mana = stats.maxMana)
 }

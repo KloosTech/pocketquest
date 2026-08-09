@@ -4,6 +4,7 @@ import de.jackbeback.pocketquest.core.model.AiCondition
 import de.jackbeback.pocketquest.core.model.AiProfileId
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EffectTemplate
+import de.jackbeback.pocketquest.core.model.RunEffect
 
 /** The zero-config default every [de.jackbeback.pocketquest.core.model.Archetype.aiProfile] starts at — always valid even absent from `catalog.aiProfiles`, matching `Catalog.aiProfileOrDefault`'s own leniency. Any OTHER explicitly-authored id must resolve for real. */
 private val DEFAULT_AI_PROFILE = AiProfileId("standard")
@@ -108,7 +109,38 @@ object CatalogValidator {
             }
         }
 
+        for (shop in catalog.shops.values) {
+            for (entry in shop.stock) {
+                if (entry.item !in catalog.items) {
+                    problems += "Shop '${shop.id.raw}' references unknown item '${entry.item.raw}'"
+                }
+            }
+        }
+
+        for (event in catalog.events.values) {
+            if (event.choices.isEmpty() || event.choices.size > 4) {
+                problems += "Event '${event.id.raw}' has ${event.choices.size} choices, must be 1..4"
+            }
+            for ((i, choice) in event.choices.withIndex()) {
+                for (effect in choice.effects) {
+                    checkRunEffect(effect, "Event '${event.id.raw}' choice $i", catalog, problems)
+                }
+            }
+        }
+
         if (problems.isNotEmpty()) throw CatalogValidationException(problems)
+    }
+
+    private fun checkRunEffect(effect: RunEffect, owner: String, catalog: Catalog, problems: MutableList<String>) {
+        when (effect) {
+            is RunEffect.GrantItem ->
+                if (effect.item !in catalog.items) problems += "$owner references unknown item '${effect.item.raw}'"
+            is RunEffect.LoseItem ->
+                if (effect.item !in catalog.items) problems += "$owner references unknown item '${effect.item.raw}'"
+            is RunEffect.ForceCombat ->
+                if (effect.encounter !in catalog.encounters) problems += "$owner references unknown encounter '${effect.encounter.raw}'"
+            is RunEffect.GrantCurrency, is RunEffect.DamageParty, is RunEffect.HealParty -> Unit
+        }
     }
 
     private fun checkEffectTemplate(template: EffectTemplate, owner: String, catalog: Catalog, problems: MutableList<String>) {

@@ -52,20 +52,33 @@ fun finishEncounter(run: RunState, final: GameState, cat: Catalog): RunState {
     }
 
     var rng = final.rng
+    val capacity = carryCapacity(updatedParty, cat)
+    var carried = run.inventory.items.size
     val lootedItems = mutableListOf<ItemId>()
     for (entry in handle.spec.loot) {
         val (advanced, hit) = rng.chance(entry.chance)
         rng = advanced
-        if (hit) lootedItems += entry.item
+        // docs/13: capacity "blocks the pickup outright" whenever an item would be added — loot is
+        // no exception, it just never enters the inventory rather than failing the whole encounter.
+        if (hit && carried < capacity) {
+            lootedItems += entry.item
+            carried++
+        }
     }
     val (advancedRng, goldReward) = rng.rollRange(handle.spec.goldMin, handle.spec.goldMax)
     rng = advancedRng
+
+    // docs/10-game-loop.md: "Run ends on: Act 3 boss defeated (success...)" — winning the encounter
+    // at the graph's Boss node (`run.position`, unchanged since `startEncounter`) IS the run's win
+    // condition; nothing else sets RunOutcome.Success.
+    val wonTheBoss = run.graph.nodes.getValue(run.position).type == NodeType.Boss
 
     return run.copy(
         party = updatedParty,
         inventory = run.inventory.copy(items = run.inventory.items + lootedItems),
         gold = run.gold + goldReward,
         encounter = null,
+        outcome = if (wonTheBoss) RunOutcome.Success else null,
         rng = rng,
     )
 }

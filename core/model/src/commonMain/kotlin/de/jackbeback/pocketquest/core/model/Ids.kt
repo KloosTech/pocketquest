@@ -16,3 +16,5 @@ import kotlin.jvm.JvmInline
 @JvmInline @Serializable value class MapId(val raw: String)
 @JvmInline @Serializable value class PropId(val raw: String)
 @JvmInline @Serializable value class EncounterId(val raw: String)
+@JvmInline @Serializable value class EventId(val raw: String)
+@JvmInline @Serializable value class ShopId(val raw: String)

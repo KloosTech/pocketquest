@@ -82,12 +82,10 @@ The solo run's `RunOutcome`:
    Champions handoff). A `Failure` deposits nothing — the run's gold was
    never banked, so there's nothing to lose *from the bank*, but nothing
    gained either.
-2. **Idle accrual** — Champions with `status == Available` (or `OnMission`,
-   once that's real) generate a small amount over elapsed wall-clock time,
-   computed once when the app opens (`lastAccrualAt` → now), same "never a
-   live clock inside a deterministic layer" rule as everywhere else in this
-   project. Rate/formula not designed here — first pass can be a flat
-   per-Champion-per-hour constant.
+2. **Idle accrual** — deferred entirely for now. `ChampionRecord.lastAccrualAt`
+   stays on the schema (it's cheap to keep and expensive to add to a shipped
+   save later) but nothing reads it yet — no formula, no passive income, only
+   the run-completion deposit feeds the bank until this gets its own pass.
 
 What the bank buys: nothing decided here either — likely permanent unlocks
 (future `Unlock` cases) and/or a meta-shop distinct from the run's own Shop
@@ -100,11 +98,19 @@ now; the mechanic (one bank, two income streams) is the part that's load-bearing
 here*: on `RunOutcome.Failure`, every `ChampionId` that was in `run.party` is
 removed from `roster` entirely. No "recovering" status, no cooldown — gone.
 If that empties the roster back to zero (every Champion was on this run and
-died), the game is back to "create a first character" — `Unlock.PartyMode`
-stays granted (it's never revoked), but there's no one to play until a new
-Champion exists. Whether a fresh character in that state starts through the
-same solo-gate flow again or can go straight into being roster-eligible is
-undecided — flagging rather than guessing.
+died), the game is back to "create a first character" — and this time
+`Unlock.PartyMode` is revoked along with it. A fresh Champion after a total
+wipe goes back through the same solo-gate flow as the very first character,
+not straight to roster-eligible: losing the whole roster is meant to sting,
+and re-earning `Unlock.PartyMode` is what makes the sting mean something.
+
+This is a **deliberate exception** to `Unlock`'s general monotonicity, not a
+loophole in it — `checkUnlockMonotonicity` (`core/meta/Invariants.kt`) today
+enforces a strict "never revoked" rule with no carve-out, so the Pass 7 code
+path that empties `roster` to zero must revoke `Unlock.PartyMode` as its own
+explicit step *outside* whatever calls `checkUnlockMonotonicity` on ordinary
+transitions — not by weakening that checker to permit revocation generally,
+which would silently allow a real future bug to slip through unnoticed.
 
 ## Persistence
 

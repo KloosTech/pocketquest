@@ -73,6 +73,10 @@ data class Catalog(
     val encounters: Map<EncounterId, EncounterSpec> = emptyMap(),
     /** docs/21-ai-behavior-spec.md. */
     val aiProfiles: Map<AiProfileId, AiProfileDef> = emptyMap(),
+    /** docs/13-encounters-and-events.md's Events section. */
+    val events: Map<EventId, EventDef> = emptyMap(),
+    /** docs/13-encounters-and-events.md's Shops section. */
+    val shops: Map<ShopId, ShopDef> = emptyMap(),
 ) {
     fun archetype(id: ArchetypeId): Archetype =
         archetypes[id] ?: error("Unknown archetype: ${id.raw}")
@@ -94,6 +98,12 @@ data class Catalog(
 
     fun encounterSpec(id: EncounterId): EncounterSpec =
         encounters[id] ?: error("Unknown encounter: ${id.raw}")
+
+    fun eventDef(id: EventId): EventDef =
+        events[id] ?: error("Unknown event: ${id.raw}")
+
+    fun shopDef(id: ShopId): ShopDef =
+        shops[id] ?: error("Unknown shop: ${id.raw}")
 
     /**
      * Deliberately non-throwing, unlike every accessor above — [Archetype.aiProfile] defaults to

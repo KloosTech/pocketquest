@@ -21,6 +21,9 @@ import de.jackbeback.pocketquest.core.model.EffectTemplate
 import de.jackbeback.pocketquest.core.model.EncounterId
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EnemySpawn
+import de.jackbeback.pocketquest.core.model.EventChoice
+import de.jackbeback.pocketquest.core.model.EventDef
+import de.jackbeback.pocketquest.core.model.EventId
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.FeatureDef
@@ -226,6 +229,65 @@ class CatalogValidatorTest {
         val catalog = Catalog(maps = mapOf(map.id to map), encounters = mapOf(encounter.id to encounter))
         val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
         assertTrue(e.problems.any { it.contains("unknown loot item 'potion'") }, "expected an unknown-loot-item problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun eventWithNoChoicesFailsValidation() {
+        val event = EventDef(id = EventId("e1"), title = "T", body = "B", choices = emptyList())
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(events = mapOf(event.id to event))) }
+        assertTrue(e.problems.any { it.contains("has 0 choices, must be 1..4") })
+    }
+
+    @Test
+    fun eventWithMoreThanFourChoicesFailsValidation() {
+        val choice = EventChoice(label = "L", outcomeText = "O")
+        val event = EventDef(id = EventId("e1"), title = "T", body = "B", choices = List(5) { choice })
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(events = mapOf(event.id to event))) }
+        assertTrue(e.problems.any { it.contains("has 5 choices, must be 1..4") })
+    }
+
+    @Test
+    fun eventChoiceGrantingAnUndefinedItemFailsValidation() {
+        val choice = EventChoice(label = "L", outcomeText = "O", effects = listOf(de.jackbeback.pocketquest.core.model.RunEffect.GrantItem(ItemId("potion"))))
+        val event = EventDef(id = EventId("e1"), title = "T", body = "B", choices = listOf(choice))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(events = mapOf(event.id to event))) }
+        assertTrue(e.problems.any { it.contains("unknown item 'potion'") }, "expected an unknown-item problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun eventChoiceForcingAnUndefinedEncounterFailsValidation() {
+        val choice = EventChoice(label = "L", outcomeText = "O", effects = listOf(de.jackbeback.pocketquest.core.model.RunEffect.ForceCombat(EncounterId("ambush"))))
+        val event = EventDef(id = EventId("e1"), title = "T", body = "B", choices = listOf(choice))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(events = mapOf(event.id to event))) }
+        assertTrue(e.problems.any { it.contains("unknown encounter 'ambush'") }, "expected an unknown-encounter problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun eventWithValidReferencesPassesValidation() {
+        val potion = ItemDef(id = ItemId("potion"), name = "Potion")
+        val choice = EventChoice(label = "L", outcomeText = "O", effects = listOf(de.jackbeback.pocketquest.core.model.RunEffect.GrantItem(potion.id)))
+        val event = EventDef(id = EventId("e1"), title = "T", body = "B", choices = listOf(choice))
+        CatalogValidator.validate(Catalog(items = mapOf(potion.id to potion), events = mapOf(event.id to event)))
+    }
+
+    @Test
+    fun shopStockingAnUndefinedItemFailsValidation() {
+        val shop = de.jackbeback.pocketquest.core.model.ShopDef(
+            id = de.jackbeback.pocketquest.core.model.ShopId("s1"), act = 1,
+            stock = listOf(de.jackbeback.pocketquest.core.model.ShopEntry(ItemId("potion"), price = 10)),
+        )
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(shops = mapOf(shop.id to shop))) }
+        assertTrue(e.problems.any { it.contains("unknown item 'potion'") }, "expected an unknown-item problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun shopStockingOnlyDefinedItemsPassesValidation() {
+        val potion = ItemDef(id = ItemId("potion"), name = "Potion")
+        val shop = de.jackbeback.pocketquest.core.model.ShopDef(
+            id = de.jackbeback.pocketquest.core.model.ShopId("s1"), act = 1,
+            stock = listOf(de.jackbeback.pocketquest.core.model.ShopEntry(potion.id, price = 10)),
+        )
+        CatalogValidator.validate(Catalog(items = mapOf(potion.id to potion), shops = mapOf(shop.id to shop)))
     }
 
     @Test

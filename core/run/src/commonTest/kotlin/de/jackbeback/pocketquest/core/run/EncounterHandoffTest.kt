@@ -94,6 +94,28 @@ class EncounterHandoffTest {
     }
 
     @Test
+    fun lootThatWouldExceedCarryCapacityIsNotAdded() {
+        val lowStr = hero.copy(id = ArchetypeId("weakling"), abilities = AbilityScores(1, 10, 10, 10, 10, 10))
+        val cat = Catalog(archetypes = mapOf(lowStr.id to lowStr), maps = mapOf(map.id to map))
+        val runWithFullInventory = RunState(
+            runId = RunId("run1"), seed = 1L, rng = RngState(seed = 1L), act = 1,
+            graph = NodeGraph(mapOf(NodeId("n1") to GraphNode(NodeId("n1"), act = 1, type = NodeType.Combat)), start = NodeId("n1")),
+            position = NodeId("n1"),
+            party = listOf(PartyMember(MemberId("m1"), name = "Lyra", archetype = lowStr.id, hp = 20, mana = 5, controller = Controller.Human)),
+            inventory = Inventory(listOf(ItemId("already-carried"))), // capacity (STR 1) is already full
+        )
+        val started = startEncounter(runWithFullInventory, spec(loot = listOf(LootEntry(ItemId("sword"), chance = 1.0))), cat)
+        val handle = checkNotNull(started.encounter)
+        val entityId = handle.memberToEntity.getValue(MemberId("m1"))
+        val state = handle.resolver.state
+        val final = state.copy(entities = listOf(state.entities.single { it.id == entityId }.copy(health = Health(current = 7))))
+
+        val finished = finishEncounter(started, final, cat)
+
+        assertEquals(listOf(ItemId("already-carried")), finished.inventory.items, "the new sword shouldn't fit — capacity was already full")
+    }
+
+    @Test
     fun aDownedSurvivorGetsUpAtOneHpWhenNotEveryoneWiped() {
         val cat = catalog()
         // Two active fighters, only one goes down — not a wipe, so the down member revives at 1 HP
