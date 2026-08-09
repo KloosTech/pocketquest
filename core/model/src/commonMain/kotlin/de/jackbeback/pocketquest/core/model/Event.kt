@@ -16,12 +16,28 @@ data class EventDef(
     val choices: List<EventChoice>,
 )
 
+/**
+ * A choice either resolves unconditionally ([check] null — [outcomeText]/[effects], the original
+ * shape) or attempts an ability check against [EventCheck.dc]: the party's best-scoring member on
+ * [EventCheck.ability] rolls `d20 + abilityModifier(score)`, same formula `:core:rules`' RollSave
+ * combat handler already uses. Each branch is independently optional — a choice can be "only ever
+ * helps" (empty [failureEffects]) or "only ever hurts" (empty [successEffects]) while still being a
+ * real roll, not just a guaranteed outcome dressed up as one.
+ */
 @Serializable
 data class EventChoice(
     val label: String,
-    val outcomeText: String,
+    val check: EventCheck? = null,
+    val outcomeText: String = "",
     val effects: List<RunEffect> = emptyList(),
+    val successText: String = "",
+    val successEffects: List<RunEffect> = emptyList(),
+    val failureText: String = "",
+    val failureEffects: List<RunEffect> = emptyList(),
 )
+
+@Serializable
+data class EventCheck(val ability: Ability, val dc: Int)
 
 /**
  * Deliberately a small sealed interface, same "type dropdown + inline fields" authoring shape as

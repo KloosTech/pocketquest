@@ -5,6 +5,7 @@ import de.jackbeback.pocketquest.core.model.Archetype
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Controller
+import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
 import kotlin.test.Test
 import kotlin.test.assertEquals

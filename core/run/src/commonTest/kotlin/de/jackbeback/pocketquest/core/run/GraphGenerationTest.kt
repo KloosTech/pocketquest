@@ -1,5 +1,6 @@
 package de.jackbeback.pocketquest.core.run
 
+import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
 import kotlin.test.Test
 import kotlin.test.assertEquals

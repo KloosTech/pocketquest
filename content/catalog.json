@@ -45,6 +45,24 @@
             "aiProfile": "profile1"
         }
     },
+    "items": {
+        "item1": {
+            "id": "item1",
+            "name": "Ring of Punch",
+            "modifiers": [
+                {
+                    "type": "add",
+                    "stat": "Str",
+                    "value": 2
+                }
+            ],
+            "validSlots": [
+                "Ring1"
+            ],
+            "basePrice": 1,
+            "grantsFeature": "feature1"
+        }
+    },
     "actions": {
         "move": {
             "id": "move",
@@ -106,6 +124,15 @@
                     },
                     "damageType": "Bludgeoning"
                 }
+            ]
+        }
+    },
+    "features": {
+        "feature1": {
+            "id": "feature1",
+            "name": "New Feature 1",
+            "grantsActions": [
+                "action2"
             ]
         }
     },
@@ -760,7 +787,14 @@
             ],
             "scaling": {
                 "extraEnemiesPerPartySize": 2
-            }
+            },
+            "goldMin": 12,
+            "goldMax": 24,
+            "loot": [
+                {
+                    "item": "item1"
+                }
+            ]
         }
     },
     "aiProfiles": {

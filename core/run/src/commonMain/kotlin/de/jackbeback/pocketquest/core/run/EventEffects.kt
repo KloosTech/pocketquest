@@ -1,9 +1,13 @@
 package de.jackbeback.pocketquest.core.run
 
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.EventChoice
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RunEffect
 import de.jackbeback.pocketquest.core.model.RunEffectTarget
+import de.jackbeback.pocketquest.core.model.forAbility
+import de.jackbeback.pocketquest.core.rules.abilityModifier
+import de.jackbeback.pocketquest.core.rules.d20
 import de.jackbeback.pocketquest.core.rules.rollRange
 import de.jackbeback.pocketquest.core.rules.stat.stats
 
@@ -50,4 +54,35 @@ private fun applyToTargets(run: RunState, target: RunEffectTarget, transform: (P
     val (rng, targetIds) = resolveTargets(run, target)
     val updatedParty = run.party.map { if (it.memberId in targetIds) transform(it) else it }
     return run.copy(party = updatedParty, rng = rng)
+}
+
+/** [text] is whichever branch's flavor text applies — [outcomeText] unconditionally, or [successText]/[failureText] once a check resolves. */
+data class EventChoiceResolution(val text: String, val run: RunState)
+
+/**
+ * A checkless choice ([EventChoice.check] null) applies [EventChoice.effects] unconditionally — the
+ * original shape. A checked choice has the party's best-scoring member on [EventCheck.ability] roll
+ * `d20 + abilityModifier(derivedScore) >= dc`, the same formula `:core:rules`' RollSave combat
+ * handler uses, then applies only the matching branch's effects — either branch may be empty for a
+ * choice that "only ever helps" or "only ever hurts" while still being a real roll.
+ */
+fun resolveEventChoice(run: RunState, choice: EventChoice, cat: Catalog): EventChoiceResolution {
+    val check = choice.check
+    if (check == null) {
+        var updated = run
+        for (effect in choice.effects) updated = applyRunEffect(updated, effect, cat)
+        return EventChoiceResolution(choice.outcomeText, updated)
+    }
+
+    val scoreByMember = run.party.associateWith { it.toEntity(cat).stats(cat).abilities.forAbility(check.ability) }
+    val roller = scoreByMember.maxBy { it.value }.key
+    val mod = abilityModifier(scoreByMember.getValue(roller))
+    val (advancedRng, rollValue) = run.rng.d20()
+    val success = rollValue + mod >= check.dc
+
+    val effects = if (success) choice.successEffects else choice.failureEffects
+    val text = if (success) choice.successText else choice.failureText
+    var updated = run.copy(rng = advancedRng)
+    for (effect in effects) updated = applyRunEffect(updated, effect, cat)
+    return EventChoiceResolution(text, updated)
 }

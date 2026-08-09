@@ -117,6 +117,22 @@ object CatalogValidator {
             }
         }
 
+        for ((i, pool) in catalog.encounterPools.withIndex()) {
+            for (id in pool.entries) {
+                if (id !in catalog.encounters) problems += "EncounterPool[$i] (act ${pool.act}/${pool.kind}) references unknown encounter '${id.raw}'"
+            }
+        }
+        for ((i, pool) in catalog.eventPools.withIndex()) {
+            for (id in pool.entries) {
+                if (id !in catalog.events) problems += "EventPool[$i] (act ${pool.act}) references unknown event '${id.raw}'"
+            }
+        }
+        for ((i, pool) in catalog.shopPools.withIndex()) {
+            for (id in pool.entries) {
+                if (id !in catalog.shops) problems += "ShopPool[$i] (act ${pool.act}) references unknown shop '${id.raw}'"
+            }
+        }
+
         for (event in catalog.events.values) {
             if (event.choices.isEmpty() || event.choices.size > 4) {
                 problems += "Event '${event.id.raw}' has ${event.choices.size} choices, must be 1..4"
@@ -124,6 +140,12 @@ object CatalogValidator {
             for ((i, choice) in event.choices.withIndex()) {
                 for (effect in choice.effects) {
                     checkRunEffect(effect, "Event '${event.id.raw}' choice $i", catalog, problems)
+                }
+                for (effect in choice.successEffects) {
+                    checkRunEffect(effect, "Event '${event.id.raw}' choice $i (success)", catalog, problems)
+                }
+                for (effect in choice.failureEffects) {
+                    checkRunEffect(effect, "Event '${event.id.raw}' choice $i (failure)", catalog, problems)
                 }
             }
         }

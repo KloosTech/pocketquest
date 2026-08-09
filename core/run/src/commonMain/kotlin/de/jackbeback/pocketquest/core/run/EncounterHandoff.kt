@@ -4,6 +4,7 @@ import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.rules.chance
 import de.jackbeback.pocketquest.core.rules.content.startEncounterWithParty
 import de.jackbeback.pocketquest.core.rules.rollRange

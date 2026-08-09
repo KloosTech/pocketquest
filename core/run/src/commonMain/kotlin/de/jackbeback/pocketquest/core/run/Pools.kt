@@ -2,30 +2,29 @@ package de.jackbeback.pocketquest.core.run
 
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EncounterId
+import de.jackbeback.pocketquest.core.model.EncounterPool
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EventDef
 import de.jackbeback.pocketquest.core.model.EventId
+import de.jackbeback.pocketquest.core.model.EventPool
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.ShopId
+import de.jackbeback.pocketquest.core.model.ShopPool
 import de.jackbeback.pocketquest.core.rules.rollRange
-import kotlinx.serialization.Serializable
 
+/**
+ * [EncounterPool]/[EventPool]/[ShopPool] themselves live in `:core:model` (a `Catalog` entry, same
+ * as `EncounterSpec`/`EventDef`/`ShopDef`) — picking FROM one needs [RngState] rolling and a live
+ * `RunState.rng` to advance, which is `:core:run`'s job, not `:core:model`'s.
+ */
 private fun <T> pickUniform(entries: List<T>, rng: RngState, ownerDescription: String): Pair<RngState, T> {
     require(entries.isNotEmpty()) { "$ownerDescription has no entries to pick from" }
     val (advanced, index) = rng.rollRange(0, entries.size - 1)
     return advanced to entries[index]
 }
 
-/** docs/13-encounters-and-events.md's Content pools section — hand-authored, not generated. */
-@Serializable
-data class EncounterPool(val act: Int, val kind: NodeType, val entries: List<EncounterId>)
-
 fun pickContent(pool: EncounterPool, rng: RngState): Pair<RngState, EncounterId> =
     pickUniform(pool.entries, rng, "pool for act ${pool.act}/${pool.kind}")
-
-/** Event pools follow the same `act -> List<Id>` shape as [EncounterPool] (doc13), minus `kind` — every Event node draws from the same act-matching pool. */
-@Serializable
-data class EventPool(val act: Int, val entries: List<EventId>)
 
 fun pickEvent(pool: EventPool, rng: RngState): Pair<RngState, EventId> =
     pickUniform(pool.entries, rng, "event pool for act ${pool.act}")
@@ -36,10 +35,6 @@ fun resolveEventNode(run: RunState, node: GraphNode, pools: List<EventPool>, cat
     val (advanced, id) = pickEvent(pool, run.rng)
     return cat.eventDef(id) to advanced
 }
-
-/** Shop pools follow the same `act -> List<Id>` shape as [EventPool] (doc13). */
-@Serializable
-data class ShopPool(val act: Int, val entries: List<ShopId>)
 
 fun pickShop(pool: ShopPool, rng: RngState): Pair<RngState, ShopId> =
     pickUniform(pool.entries, rng, "shop pool for act ${pool.act}")

@@ -12,6 +12,16 @@ data class AbilityScores(
     val cha: Int,
 )
 
+/** Picks the field matching [ability] — shared by `:core:rules`' RollSave handler and `:core:run`'s event ability checks, so both roll the same way. */
+fun AbilityScores.forAbility(ability: Ability): Int = when (ability) {
+    Ability.Str -> str
+    Ability.Dex -> dex
+    Ability.Con -> con
+    Ability.Int -> int
+    Ability.Wis -> wis
+    Ability.Cha -> cha
+}
+
 /** Flat, immutable, fully resolved. Computed once per state version — see Entity.stats() in :core:rules. */
 @Serializable
 data class Stats(

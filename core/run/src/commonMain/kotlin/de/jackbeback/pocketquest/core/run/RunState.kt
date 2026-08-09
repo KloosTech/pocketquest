@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Equipment
 import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import kotlinx.serialization.Serializable
@@ -107,9 +108,6 @@ data class GraphNode(
     /** Empty only for the Act 3 Boss node — the run's one and only success condition. */
     val next: List<NodeId> = emptyList(),
 )
-
-@Serializable
-enum class NodeType { Combat, Elite, Event, Rest, Shop, Boss }
 
 /** One shared pool per run, not per-member (docs/13-encounters-and-events.md). Capacity (STR-bound, exact formula still open) is enforced at the call site that adds an item, not modeled as a stored field here. */
 @Serializable

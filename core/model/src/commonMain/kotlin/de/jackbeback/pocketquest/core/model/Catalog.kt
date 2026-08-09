@@ -77,6 +77,10 @@ data class Catalog(
     val events: Map<EventId, EventDef> = emptyMap(),
     /** docs/13-encounters-and-events.md's Shops section. */
     val shops: Map<ShopId, ShopDef> = emptyMap(),
+    /** docs/13-encounters-and-events.md's Content pools section — which authored content a generated node of a given act/kind may resolve to. */
+    val encounterPools: List<EncounterPool> = emptyList(),
+    val eventPools: List<EventPool> = emptyList(),
+    val shopPools: List<ShopPool> = emptyList(),
 ) {
     fun archetype(id: ArchetypeId): Archetype =
         archetypes[id] ?: error("Unknown archetype: ${id.raw}")

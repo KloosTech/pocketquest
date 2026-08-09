@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.ShopDef
 import de.jackbeback.pocketquest.core.model.ShopEntry
+import de.jackbeback.pocketquest.core.model.ShopPool
 import de.jackbeback.pocketquest.core.rules.rollRange
 
 /**

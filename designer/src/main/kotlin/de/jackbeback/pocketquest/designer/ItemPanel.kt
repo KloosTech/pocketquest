@@ -27,6 +27,7 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.FeatureId
 import de.jackbeback.pocketquest.core.model.ItemDef
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.Slot
@@ -34,6 +35,8 @@ import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
 import de.jackbeback.pocketquest.ui.ink.InkButton
 import de.jackbeback.pocketquest.ui.ink.InkLabel
+import de.jackbeback.pocketquest.ui.ink.InkSelect
+import de.jackbeback.pocketquest.ui.ink.InkStepper
 import de.jackbeback.pocketquest.ui.ink.InkTextField
 import de.jackbeback.pocketquest.ui.ink.PAPER
 import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
@@ -86,6 +89,7 @@ fun ItemPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifier: Mo
         if (item != null) {
             ItemEditor(
                 item = item,
+                catalog = catalog,
                 onChange = { updated -> updateItem(item.id) { updated } },
                 onRemove = {
                     onCatalogChange(catalog.copy(items = catalog.items - item.id))
@@ -101,13 +105,27 @@ fun ItemPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifier: Mo
 }
 
 @Composable
-private fun ItemEditor(item: ItemDef, onChange: (ItemDef) -> Unit, onRemove: () -> Unit) {
+private fun ItemEditor(item: ItemDef, catalog: Catalog, onChange: (ItemDef) -> Unit, onRemove: () -> Unit) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkLabel("NAME")
             InkButton("Remove Item", modifier = Modifier.padding(start = 16.dp), onClick = onRemove)
         }
         InkTextField(item.name, onValueChange = { onChange(item.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
+
+        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("BASE PRICE (docs/13: sell value is 50% of this)") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InkStepper(item.basePrice, min = 0, onValueChange = { onChange(item.copy(basePrice = it)) })
+        }
+
+        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("GRANTS FEATURE (docs/11: equipping this item also grants...)") }
+        val featureOptions = listOf<FeatureId?>(null) + catalog.features.keys
+        InkSelect(
+            selected = item.grantsFeature,
+            options = featureOptions,
+            label = { id -> id?.let { catalog.features[it]?.name ?: it.raw } ?: "(none)" },
+            onSelect = { onChange(item.copy(grantsFeature = it)) },
+        )
 
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
             BasicText(if (item.twoHanded) "☑" else "☐", style = TextStyle(color = INK, fontSize = 14.sp), modifier = Modifier.padding(end = 4.dp))

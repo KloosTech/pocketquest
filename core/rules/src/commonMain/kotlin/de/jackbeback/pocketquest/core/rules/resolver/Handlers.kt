@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.core.rules.resolver
 
 import de.jackbeback.pocketquest.core.model.Ability
 import de.jackbeback.pocketquest.core.model.AbilityScores
+import de.jackbeback.pocketquest.core.model.forAbility
 import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.ActiveStatus
@@ -593,16 +594,6 @@ private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mo
     val spawn = if (success) effect.onSuccess else effect.onFail
     return HandlerOutcome(afterD20, listOf(rolledEvent), spawn)
 }
-
-private fun AbilityScores.forAbility(ability: Ability): Int =
-    when (ability) {
-        Ability.Str -> str
-        Ability.Dex -> dex
-        Ability.Con -> con
-        Ability.Int -> int
-        Ability.Wis -> wis
-        Ability.Cha -> cha
-    }
 
 private fun offerReaction(state: GameState, effect: Effect.OfferReaction, cat: Catalog): HandlerOutcome {
     val reactor = state.byId[effect.who] ?: return HandlerOutcome(state)

@@ -49,7 +49,7 @@ private fun validate(catalog: Catalog): List<String> =
         e.problems
     }
 
-private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Maps, Playtest }
+private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Events, Shops, Pools, Maps, Playtest }
 
 /**
  * Auto-loads `content/catalog.json` on startup if it exists — same canonical file
@@ -134,6 +134,9 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
                 DesignerTab.Features -> FeaturePanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.AiProfiles -> AiProfilePanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Encounters -> EncounterPanel(catalog, onCatalogChange = { catalog = it })
+                DesignerTab.Events -> EventPanel(catalog, onCatalogChange = { catalog = it })
+                DesignerTab.Shops -> ShopPanel(catalog, onCatalogChange = { catalog = it })
+                DesignerTab.Pools -> PoolsPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Maps -> MapEditorPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Playtest -> PlaytestPanel(catalog, onPlaytest = onPlaytest)
             }

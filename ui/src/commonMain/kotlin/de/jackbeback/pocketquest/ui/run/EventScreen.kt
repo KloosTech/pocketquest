@@ -18,10 +18,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EventChoice
-import de.jackbeback.pocketquest.core.run.EventPool
+import de.jackbeback.pocketquest.core.model.EventPool
 import de.jackbeback.pocketquest.core.run.GraphNode
 import de.jackbeback.pocketquest.core.run.RunState
-import de.jackbeback.pocketquest.core.run.applyRunEffect
+import de.jackbeback.pocketquest.core.run.resolveEventChoice
 import de.jackbeback.pocketquest.core.run.resolveEventNode
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -58,9 +58,8 @@ fun EventNodeScreen(run: RunState, node: GraphNode, cat: Catalog, pools: List<Ev
                     choice.label,
                     modifier = Modifier.padding(bottom = 8.dp),
                     onClick = {
-                        var updated = run.copy(rng = rngAfterPick)
-                        for (effect in choice.effects) updated = applyRunEffect(updated, effect, cat)
-                        resolution = choice.outcomeText to updated
+                        val result = resolveEventChoice(run.copy(rng = rngAfterPick), choice, cat)
+                        resolution = result.text to result.run
                     },
                 )
             }

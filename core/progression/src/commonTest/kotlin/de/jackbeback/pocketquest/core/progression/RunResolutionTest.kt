@@ -8,12 +8,12 @@ import de.jackbeback.pocketquest.core.meta.Unlock
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.Equipment
+import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.Slot
 import de.jackbeback.pocketquest.core.run.GraphNode
 import de.jackbeback.pocketquest.core.run.MemberId
 import de.jackbeback.pocketquest.core.run.NodeGraph
 import de.jackbeback.pocketquest.core.run.NodeId
-import de.jackbeback.pocketquest.core.run.NodeType
 import de.jackbeback.pocketquest.core.run.PartyMember
 import de.jackbeback.pocketquest.core.run.RunId
 import de.jackbeback.pocketquest.core.run.RunOutcome

@@ -9,6 +9,7 @@ import de.jackbeback.pocketquest.core.model.EncounterId
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.MapId
+import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
 import kotlinx.serialization.json.Json
 import kotlin.test.Test

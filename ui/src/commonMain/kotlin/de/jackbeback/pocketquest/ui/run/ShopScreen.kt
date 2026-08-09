@@ -19,11 +19,11 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.ShopPool
 import de.jackbeback.pocketquest.core.run.BuyResult
 import de.jackbeback.pocketquest.core.run.GraphNode
 import de.jackbeback.pocketquest.core.run.RunState
 import de.jackbeback.pocketquest.core.run.SellResult
-import de.jackbeback.pocketquest.core.run.ShopPool
 import de.jackbeback.pocketquest.core.run.buy
 import de.jackbeback.pocketquest.core.run.offerShopVisit
 import de.jackbeback.pocketquest.core.run.resolveShopNode

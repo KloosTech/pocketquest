@@ -29,8 +29,11 @@ import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EncounterId
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EnemySpawn
+import de.jackbeback.pocketquest.core.model.ItemDef
+import de.jackbeback.pocketquest.core.model.LootEntry
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.SpawnRole
+import kotlin.math.roundToInt
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -158,6 +161,63 @@ private fun EncounterEditor(encounter: EncounterSpec, catalog: Catalog, onChange
             BasicText("Extra enemies per act:", style = TextStyle(color = INK, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
             InkStepper(encounter.scaling.extraEnemiesPerAct, onValueChange = { onChange(encounter.copy(scaling = encounter.scaling.copy(extraEnemiesPerAct = it))) })
         }
+
+        Box(modifier = Modifier.padding(top = 16.dp)) {
+            InkLabel("GOLD REWARD (docs/11: finishEncounter rolls a value in this range)")
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            BasicText("Min:", style = TextStyle(color = INK, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
+            InkStepper(encounter.goldMin, min = 0, onValueChange = { onChange(encounter.copy(goldMin = it, goldMax = maxOf(it, encounter.goldMax))) })
+            BasicText("Max:", style = TextStyle(color = INK, fontSize = 12.sp), modifier = Modifier.padding(start = 16.dp, end = 8.dp))
+            InkStepper(encounter.goldMax, min = encounter.goldMin, onValueChange = { onChange(encounter.copy(goldMax = it)) })
+        }
+
+        Box(modifier = Modifier.padding(top = 16.dp)) {
+            InkLabel("LOOT (docs/11: each entry rolled independently by its own chance)")
+        }
+        val items = catalog.items.values.toList()
+        encounter.loot.forEachIndexed { index, entry ->
+            LootEntryRow(
+                entry = entry,
+                items = items,
+                onChange = { updated -> onChange(encounter.copy(loot = encounter.loot.toMutableList().also { it[index] = updated })) },
+                onRemove = { onChange(encounter.copy(loot = encounter.loot.filterIndexed { i, _ -> i != index })) },
+            )
+        }
+        if (items.isEmpty()) {
+            BasicText("No items in the working catalog.", style = TextStyle(color = DANGER, fontSize = 12.sp), modifier = Modifier.padding(top = 4.dp))
+        } else {
+            InkButton(
+                "+ Add Loot Entry",
+                modifier = Modifier.padding(top = 4.dp),
+                onClick = { onChange(encounter.copy(loot = encounter.loot + LootEntry(items.first().id))) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun LootEntryRow(entry: LootEntry, items: List<ItemDef>, onChange: (LootEntry) -> Unit, onRemove: () -> Unit) {
+    Row(modifier = Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (items.isEmpty()) {
+            BasicText(entry.item.raw, style = TextStyle(color = DANGER, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
+        } else {
+            InkSelect(
+                selected = items.find { it.id == entry.item } ?: items.first(),
+                options = items,
+                label = { it.name },
+                onSelect = { onChange(entry.copy(item = it.id)) },
+                modifier = Modifier.padding(end = 8.dp),
+            )
+        }
+        BasicText("Chance:", style = TextStyle(color = INK, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
+        InkStepper(
+            (entry.chance * 100).roundToInt(),
+            min = 0,
+            onValueChange = { onChange(entry.copy(chance = it.coerceIn(0, 100) / 100.0)) },
+        )
+        BasicText("%", style = TextStyle(color = INK_FAINT, fontSize = 12.sp), modifier = Modifier.padding(start = 4.dp, end = 8.dp))
+        InkButton("Remove", onClick = onRemove)
     }
 }
 

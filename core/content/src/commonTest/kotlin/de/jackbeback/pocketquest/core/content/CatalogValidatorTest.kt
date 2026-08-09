@@ -291,6 +291,57 @@ class CatalogValidatorTest {
     }
 
     @Test
+    fun encounterPoolReferencingAnUndefinedEncounterFailsValidation() {
+        val pool = de.jackbeback.pocketquest.core.model.EncounterPool(
+            act = 1, kind = de.jackbeback.pocketquest.core.model.NodeType.Combat,
+            entries = listOf(EncounterId("ghost")),
+        )
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(encounterPools = listOf(pool))) }
+        assertTrue(e.problems.any { it.contains("unknown encounter 'ghost'") }, "expected an unknown-encounter problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun eventPoolReferencingAnUndefinedEventFailsValidation() {
+        val pool = de.jackbeback.pocketquest.core.model.EventPool(act = 1, entries = listOf(EventId("ghost")))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(eventPools = listOf(pool))) }
+        assertTrue(e.problems.any { it.contains("unknown event 'ghost'") }, "expected an unknown-event problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun shopPoolReferencingAnUndefinedShopFailsValidation() {
+        val pool = de.jackbeback.pocketquest.core.model.ShopPool(act = 1, entries = listOf(de.jackbeback.pocketquest.core.model.ShopId("ghost")))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(Catalog(shopPools = listOf(pool))) }
+        assertTrue(e.problems.any { it.contains("unknown shop 'ghost'") }, "expected an unknown-shop problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun poolsReferencingRealContentPassValidation() {
+        val map = mapDef()
+        val encounter = EncounterSpec(id = EncounterId("e1"), name = "E1", mapId = map.id)
+        val event = de.jackbeback.pocketquest.core.model.EventDef(
+            id = EventId("ev1"), title = "T", body = "B",
+            choices = listOf(de.jackbeback.pocketquest.core.model.EventChoice(label = "L", outcomeText = "O")),
+        )
+        val potion = ItemDef(id = ItemId("potion"), name = "Potion")
+        val shop = de.jackbeback.pocketquest.core.model.ShopDef(
+            id = de.jackbeback.pocketquest.core.model.ShopId("s1"), act = 1,
+            stock = listOf(de.jackbeback.pocketquest.core.model.ShopEntry(potion.id, price = 10)),
+        )
+        CatalogValidator.validate(
+            Catalog(
+                maps = mapOf(map.id to map),
+                items = mapOf(potion.id to potion),
+                encounters = mapOf(encounter.id to encounter),
+                events = mapOf(event.id to event),
+                shops = mapOf(shop.id to shop),
+                encounterPools = listOf(de.jackbeback.pocketquest.core.model.EncounterPool(1, de.jackbeback.pocketquest.core.model.NodeType.Combat, listOf(encounter.id))),
+                eventPools = listOf(de.jackbeback.pocketquest.core.model.EventPool(1, listOf(event.id))),
+                shopPools = listOf(de.jackbeback.pocketquest.core.model.ShopPool(1, listOf(shop.id))),
+            ),
+        )
+    }
+
+    @Test
     fun encounterAskingForMoreEnemiesThanTheMapsSpawnZoneHasFailsValidation() {
         val map = mapDef(enemyTiles = 1)
         val encounter = EncounterSpec(
