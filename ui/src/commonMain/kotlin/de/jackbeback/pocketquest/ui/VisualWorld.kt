@@ -48,6 +48,9 @@ sealed interface Marker {
 
 data class MarkerOverlay(val id: Long, val marker: Marker)
 
+/** An important d20 roll (attack/save) awaiting its [DiceRoll] tumble — see Director.kt's `showDiceRoll`. */
+data class DiceRollOverlay(val id: Long, val result: Int)
+
 /**
  * doc07's VisualWorld, adapted. `speed` lives here (not on [AnimationPlayer]) so every [Beat]'s
  * `play` lambda — whose signature doc07 fixes to `suspend (VisualWorld) -> Unit` — can read the
@@ -58,6 +61,7 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
     val entities = mutableStateMapOf<EntityId, VisualEntity>()
     val overlays = mutableStateListOf<Overlay>()
     val markers = mutableStateListOf<MarkerOverlay>()
+    val diceRolls = mutableStateListOf<DiceRollOverlay>()
 
     /**
      * World-px point (same unscaled space [VisualEntity.pos] lives in) centered in the viewport.
@@ -74,6 +78,7 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
 
     private var nextOverlayId = 0L
     private var nextMarkerId = 0L
+    private var nextDiceRollId = 0L
 
     init {
         // doc02: pos == null means "not on the map" (reserve, dead) — nothing to draw at any
@@ -102,5 +107,15 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
 
     fun removeMarker(id: Long) {
         markers.removeAll { it.id == id }
+    }
+
+    fun addDiceRoll(result: Int): Long {
+        val id = nextDiceRollId++
+        diceRolls += DiceRollOverlay(id, result)
+        return id
+    }
+
+    fun removeDiceRoll(id: Long) {
+        diceRolls.removeAll { it.id == id }
     }
 }

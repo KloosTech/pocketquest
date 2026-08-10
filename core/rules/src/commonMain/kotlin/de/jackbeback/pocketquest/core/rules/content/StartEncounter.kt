@@ -18,7 +18,7 @@ import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
 import de.jackbeback.pocketquest.core.rules.d20
 import de.jackbeback.pocketquest.core.rules.stat.stats
-import de.jackbeback.pocketquest.core.rules.targeting.checkCombatStart
+import de.jackbeback.pocketquest.core.rules.targeting.updateEngagedEnemies
 import de.jackbeback.pocketquest.core.rules.targeting.updateRevealedTiles
 
 /**
@@ -117,8 +117,8 @@ private fun buildEncounterState(
     )
     // Without this, a fogOfWar map starts fully dark and every enemy — even one standing right next
     // to the party's own spawn tiles — would skip its very first turn, since nothing has been
-    // revealed yet at all. checkCombatStart right after catches a spawn that's already in the
+    // revealed yet at all. updateEngagedEnemies right after catches a spawn that's already in the
     // party's initial sightline (an intentional ambush-style encounter) — combat starts immediately
     // rather than pretending there's an exploration phase that was never actually true.
-    return checkCombatStart(updateRevealedTiles(state)) to partySpawnIds
+    return updateEngagedEnemies(updateRevealedTiles(state)) to partySpawnIds
 }

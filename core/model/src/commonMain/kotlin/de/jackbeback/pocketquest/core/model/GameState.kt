@@ -31,14 +31,17 @@ data class GameState(
      */
     val revealedTiles: Set<GridPos> = emptySet(),
     /**
-     * One-way latch: once true, stays true for the rest of the encounter, even if the enemy that
-     * tripped it later retreats into unrevealed territory — "you've been spotted" doesn't un-happen.
-     * A map with [BattleMapDef.fogOfWar] off has no exploration phase at all, so it starts (and
-     * stays) true from the moment [de.jackbeback.pocketquest.core.rules.targeting.checkCombatStart]
-     * first runs on it. While false, `:ui` runs a free-roam exploration mode instead of normal
-     * AP-gated turns. Same no-bump-needed reasoning as [revealedTiles].
+     * EntityIds of every [Faction.Enemy] the party has ever spotted (alive, standing on a
+     * [revealedTiles] tile) — monotonic bookkeeping, an id is never removed even once that enemy
+     * dies or retreats out of sight. Whether combat is *currently* active is a derived question,
+     * [de.jackbeback.pocketquest.core.rules.targeting.inCombat]: true while any entry here is still
+     * alive, so one engaged enemy retreating into shadow doesn't end combat while another engaged
+     * enemy is still a live threat — but once every entry here is dead and nothing new has been
+     * spotted, combat really is over and `:ui` drops back into free-roam exploration until
+     * [de.jackbeback.pocketquest.core.rules.targeting.updateEngagedEnemies] adds a freshly-spotted
+     * enemy to this set again. Same no-bump-needed reasoning as [revealedTiles].
      */
-    val combatStarted: Boolean = false,
+    val engagedEnemies: Set<EntityId> = emptySet(),
 ) {
     @Transient
     val byId: Map<EntityId, Entity> = entities.associateBy { it.id }

@@ -84,7 +84,8 @@ import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
 import de.jackbeback.pocketquest.core.rules.stat.stats
 import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.allThreatenedTiles
-import de.jackbeback.pocketquest.core.rules.targeting.checkCombatStart
+import de.jackbeback.pocketquest.core.rules.targeting.inCombat
+import de.jackbeback.pocketquest.core.rules.targeting.updateEngagedEnemies
 import de.jackbeback.pocketquest.core.rules.targeting.findPath
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
 import de.jackbeback.pocketquest.core.rules.targeting.updateRevealedTiles
@@ -166,7 +167,14 @@ private fun TurnOrderStrip(
         ) {
             BasicText("⚠", style = TextStyle(color = if (threatOverlayOn) Color.White else INK, fontSize = 14.sp))
         }
-        val activeId = state.turn.order.getOrNull(state.turn.activeIndex)
+        // Before combat starts, turn.activeIndex is just wherever initiative happened to land at
+        // spawn — could easily be an enemy, which reads as "it's the enemy's turn" during a mode
+        // that has no turns at all. Ring the first party member in order instead.
+        val activeId = if (state.inCombat) {
+            state.turn.order.getOrNull(state.turn.activeIndex)
+        } else {
+            state.turn.order.firstOrNull { state.byId[it]?.actor?.faction == Faction.Player }
+        }
         state.turn.order.forEach { id ->
             val entity = state.byId[id] ?: return@forEach
             // Nothing removes a dead entity from turn.order in THIS demo (DestroyEntity exists as
@@ -719,7 +727,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     var selection by remember { mutableStateOf<Selection>(Selection.None) }
     var inspected by remember { mutableStateOf<EntityId?>(null) }
     // Which of the player's own units exploration mode is currently walking around — irrelevant
-    // (and unused) once state.combatStarted, where the normal turn-order Selection flow takes over.
+    // (and unused) once state.inCombat, where the normal turn-order Selection flow takes over.
     var exploringSelectedId by remember { mutableStateOf<EntityId?>(null) }
     var sheetExpanded by remember { mutableStateOf(true) }
     var viewportSize by remember { mutableStateOf(Size.Zero) }
@@ -790,7 +798,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     }
 
     /**
-     * Exploration-mode movement (before [GameState.combatStarted]) — no AP, no turn order, no
+     * Exploration-mode movement (before [GameState.inCombat]) — no AP, no turn order, no
      * resolver/perform() pipeline: [entityId] just walks the full path to [destination] one hop at
      * a time, checking after every single hop whether an enemy just became revealed. The walk stops
      * dead the instant that happens — the player reacts to a mid-walk ambush, not to something that
@@ -803,10 +811,10 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
         val path = findPath(origin, destination, state.map, state.occupancy) ?: return
         for (hop in path) {
             world.entities[entityId]?.pos?.animateTo(hop.toOffset(TILE_PX), tween(world.scaled(180)))
-            val moved = checkCombatStart(updateRevealedTiles(moveEntityTo(state, entityId, hop)))
+            val moved = updateEngagedEnemies(updateRevealedTiles(moveEntityTo(state, entityId, hop)))
             state = moved
             if (canPan) followIfNeeded(hop.toOffset(TILE_PX))
-            if (moved.combatStarted) {
+            if (moved.inCombat) {
                 state = beginCombat(moved, catalog)
                 log.add(0, LogEntry("An enemy spots you!", LogCategory.Info))
                 exploringSelectedId = null
@@ -825,9 +833,10 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             player.awaitDrained()
             // Recompute fog every completed step, not just on movement — any state change could
             // shift who's alive/where. No-op-safe: returns the same instance when nothing's newly
-            // visible. checkCombatStart alongside it is a no-op once combatStarted is already true
-            // (the normal case once real combat is underway) — cheap and correct either way.
-            val updated = checkCombatStart(updateRevealedTiles(result.resolver.state))
+            // visible. updateEngagedEnemies alongside it means a kill that leaves no engaged enemy
+            // alive (and nothing new spotted) naturally drops state.inCombat back to false here —
+            // `:ui` picks that up on the next recomposition and returns to exploration mode.
+            val updated = updateEngagedEnemies(updateRevealedTiles(result.resolver.state))
             world.settle(updated)
             state = updated
             // docs/11-run-state.md's encounter handoff needs a real "combat is over" signal to call
@@ -899,11 +908,11 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     // ever kicked off its turn, and the board just sat on "Enemy turn..." forever. Reacting to
     // activeId directly (which also fires on first composition) covers that turn-1 case for free,
     // so the explicit call after the button's own endTurn() is now redundant and removed below.
-    LaunchedEffect(state.turn.round, activeId, state.combatStarted) {
+    LaunchedEffect(state.turn.round, activeId, state.inCombat) {
         // Before combat starts, turn order/AP don't apply at all (exploration mode instead) —
         // enemies stay put rather than getting a cold-start runAiTurns() pass through initiative
         // order the moment the encounter loads.
-        if (!state.combatStarted) return@LaunchedEffect
+        if (!state.inCombat) return@LaunchedEffect
         if (activeId == null) return@LaunchedEffect
         if (isHumanTurn) {
             // AI turns already get a hard camera move every action via frameActorAndTarget() below;
@@ -953,7 +962,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 // player already has a pending action, tapping the board again means "never mind");
                 // Idle -> tap own char/enemy/cell -> Inspect (whatever's on that tile, or nothing).
                 onTileTap = tap@{ pos ->
-                    if (!state.combatStarted) {
+                    if (!state.inCombat) {
                         // Free-roam: tap any of your own units to select them, then tap a
                         // destination to walk there — no turn order, no AP, see exploreMoveTo.
                         val occupant = state.occupancy[pos]?.let { state.byId[it] }
@@ -1015,6 +1024,17 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 onToggleThreat = { threatOverlayOn = !threatOverlayOn },
                 modifier = Modifier.align(Alignment.TopStart),
             )
+            // Fixed HUD-centered, not world-space — the faceted 3D shape needs room to actually
+            // read, unlike an entity token's small on-board footprint. At most one at a time in
+            // practice (AttackRolled/SaveRolled beats are Timing.Blocking, so they never overlap).
+            world.diceRolls.lastOrNull()?.let { roll ->
+                DiceRoll(
+                    result = roll.result,
+                    trigger = roll.id,
+                    world = world,
+                    modifier = Modifier.align(Alignment.Center).size(160.dp),
+                )
+            }
         }
         PartyBar(state, catalog)
 
@@ -1049,12 +1069,12 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             // Before combat starts, turn.activeIndex is just wherever initiative happened to land
             // at spawn — meaningless while exploration mode is driving the board instead. Peek
             // follows whichever unit the player has actually selected to move.
-            val peekEntity = if (state.combatStarted) active else exploringSelectedId?.let { state.byId[it] }
+            val peekEntity = if (state.inCombat) active else exploringSelectedId?.let { state.byId[it] }
             if (peekEntity != null) {
                 val s = peekEntity.stats(catalog)
                 BasicText(
                     "${catalog.archetype(peekEntity.archetype).name} — HP ${peekEntity.health?.current}/${s.maxHp}" +
-                        (peekEntity.resources?.takeIf { state.combatStarted }?.let { " · AP ${it.ap}/${s.maxAp} · Mana ${it.mana}/${s.maxMana}" } ?: ""),
+                        (peekEntity.resources?.takeIf { state.inCombat }?.let { " · AP ${it.ap}/${s.maxAp} · Mana ${it.mana}/${s.maxMana}" } ?: ""),
                     style = TextStyle(color = INK, fontSize = 16.sp),
                 )
             }
@@ -1067,7 +1087,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 // Inspect deliberately looks different from Peek (doc15: "they must not look
                 // alike") — no action bar, just read-only details plus Back.
                 InspectPanel(inspectedId, state, catalog, onBack = { inspected = null })
-            } else if (!state.combatStarted) {
+            } else if (!state.inCombat) {
                 // No AP/turn order to show an action bar for — just enough feedback for the tap
                 // flow in onTileTap above (select a unit, then a destination).
                 BasicText(

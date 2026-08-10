@@ -9,7 +9,7 @@ import de.jackbeback.pocketquest.core.rules.stat.stats
 
 /**
  * Repositions [entityId] directly to [to] — no AP cost, no resolver/effects pipeline, no combat
- * log entry. Exploration-mode movement only (before [GameState.combatStarted]): the moment combat
+ * log entry. Exploration-mode movement only (before [de.jackbeback.pocketquest.core.rules.targeting.inCombat]): the moment combat
  * starts there's no more "exploration," and every subsequent move goes back through the normal
  * Movement action / [de.jackbeback.pocketquest.core.rules.action.perform] pipeline. Callers are
  * expected to have already validated [to] via [de.jackbeback.pocketquest.core.rules.targeting.findPath]
@@ -25,7 +25,7 @@ fun moveEntityTo(state: GameState, entityId: EntityId, to: GridPos): GameState {
  * free-roam exploration, so combat begins clean — every entity's AP/Quick/Reaction back to full
  * (same fields [Effect.EndTurn]'s own turn-start reset touches, same reason mana is left alone: it's
  * a per-encounter pool, not a per-turn budget), turn order restarting at index 0. Call this exactly
- * once, right as [GameState.combatStarted] flips true.
+ * once, right as [de.jackbeback.pocketquest.core.rules.targeting.inCombat] flips true.
  */
 fun beginCombat(state: GameState, catalog: Catalog): GameState {
     val refreshed = state.entities.map { entity ->

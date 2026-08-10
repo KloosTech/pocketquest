@@ -72,20 +72,32 @@ fun updateRevealedTiles(state: GameState): GameState {
 }
 
 /**
- * One-way latch — [GameState.combatStarted] flips true the moment a living [Faction.Enemy] stands
- * on a tile in [GameState.revealedTiles], and never reverts even if that enemy later retreats into
- * unrevealed territory (once you've been spotted, you've been spotted). A map with
- * [BattleMap.fogOfWar] off has no exploration phase at all — this latches true for it immediately,
- * the first time this runs, rather than ever inspecting [GameState.revealedTiles] (which stays
- * permanently empty on such a map, since [updateRevealedTiles] never populates it there). A no-op
- * once already true, so callers (same as [updateRevealedTiles]) can call this unconditionally after
- * every step without checking first.
+ * Adds every currently-alive, currently-revealed [Faction.Enemy] to [GameState.engagedEnemies] —
+ * monotonic (ids are never removed, even once that enemy dies or retreats out of sight), same
+ * "safe to call after every step" contract as [updateRevealedTiles]. A no-op on a map with
+ * [BattleMap.fogOfWar] off: [inCombat] is unconditionally true there regardless of this set, so
+ * there's nothing for it to track.
  */
-fun checkCombatStart(state: GameState): GameState {
-    if (state.combatStarted) return state
-    if (!state.map.fogOfWar) return state.copy(combatStarted = true)
-    val spotted = state.entities.any {
-        it.actor?.faction == Faction.Enemy && (it.health?.current ?: 1) > 0 && it.pos != null && it.pos in state.revealedTiles
-    }
-    return if (spotted) state.copy(combatStarted = true) else state
+fun updateEngagedEnemies(state: GameState): GameState {
+    if (!state.map.fogOfWar) return state
+    val newlyEngaged = state.entities
+        .asSequence()
+        .filter { it.actor?.faction == Faction.Enemy }
+        .filter { (it.health?.current ?: 1) > 0 }
+        .filter { it.pos != null && it.pos in state.revealedTiles }
+        .map { it.id }
+        .toSet()
+    val merged = state.engagedEnemies + newlyEngaged
+    return if (merged == state.engagedEnemies) state else state.copy(engagedEnemies = merged)
 }
+
+/**
+ * Whether combat is currently active, derived fresh every time rather than a one-way latch: true
+ * while any [GameState.engagedEnemies] entry is still alive (so one engaged enemy retreating into
+ * shadow doesn't end the fight while another is still a live threat elsewhere), or unconditionally
+ * true when the map has [BattleMap.fogOfWar] off (no exploration phase at all). Flips back to false
+ * — and `:ui` drops back into free-roam exploration — the moment every engaged enemy is dead and
+ * nothing new has been [updateEngagedEnemies]'d in, until the next fresh sighting.
+ */
+val GameState.inCombat: Boolean
+    get() = !map.fogOfWar || engagedEnemies.any { id -> byId[id]?.let { (it.health?.current ?: 1) > 0 } == true }

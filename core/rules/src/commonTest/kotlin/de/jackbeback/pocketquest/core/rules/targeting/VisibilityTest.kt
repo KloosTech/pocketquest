@@ -56,9 +56,9 @@ class VisibilityTest {
         health = Health(hp), resources = null, actor = Actor(Faction.Player, Controller.Human),
     )
 
-    private fun enemy(id: Long, pos: GridPos) = Entity(
+    private fun enemy(id: Long, pos: GridPos, hp: Int = 10) = Entity(
         id = EntityId(id), archetype = ArchetypeId("goblin"), pos = pos,
-        health = Health(10), resources = null, actor = Actor(Faction.Enemy, Controller.Ai(de.jackbeback.pocketquest.core.model.AiProfileId("standard"))),
+        health = Health(hp), resources = null, actor = Actor(Faction.Enemy, Controller.Ai(de.jackbeback.pocketquest.core.model.AiProfileId("standard"))),
     )
 
     private fun state(map: BattleMap, vararg entities: Entity) = GameState(
@@ -121,40 +121,59 @@ class VisibilityTest {
     }
 
     @Test
-    fun checkCombatStartIsFalseWhileNoEnemyIsOnARevealedTile() {
+    fun inCombatIsFalseWhileNoEnemyIsOnARevealedTile() {
         // A 3-thick wall (col 2..4) genuinely blocks strict LoS past it (no penetration, no
         // adjacency reveal reaching that far) — an open room would reveal the whole map trivially
         // and defeat the point of this test.
         val map = BattleMap(6, 1, terrain = (2..4).associate { GridPos(it, 0) to TileType.Wall }, fogOfWar = true)
         val before = updateRevealedTiles(state(map, player(1, GridPos(0, 0)), enemy(2, GridPos(5, 0))))
-        assertFalse(checkCombatStart(before).combatStarted, "the enemy is behind a wall the party hasn't seen past")
+        assertFalse(updateEngagedEnemies(before).inCombat, "the enemy is behind a wall the party hasn't seen past")
     }
 
     @Test
-    fun checkCombatStartFlipsTrueTheMomentAnEnemyIsOnARevealedTile() {
+    fun inCombatFlipsTrueTheMomentAnEnemyIsOnARevealedTile() {
         val map = BattleMap(3, 1, fogOfWar = true)
         val before = updateRevealedTiles(state(map, player(1, GridPos(0, 0)), enemy(2, GridPos(1, 0))))
-        assertTrue(checkCombatStart(before).combatStarted)
+        assertTrue(updateEngagedEnemies(before).inCombat)
     }
 
     @Test
-    fun checkCombatStartIsAOneWayLatchThatSurvivesTheEnemyRetreatingIntoShadow() {
+    fun inCombatSurvivesAnEngagedEnemyRetreatingIntoShadow() {
         val map = BattleMap(3, 1, fogOfWar = true)
-        val spotted = checkCombatStart(updateRevealedTiles(state(map, player(1, GridPos(0, 0)), enemy(2, GridPos(1, 0)))))
-        assertTrue(spotted.combatStarted)
-        // Enemy is still physically on a revealed tile (revealedTiles is monotonic and never
-        // shrinks), but even if it later stood somewhere that's never been revealed, re-running
-        // checkCombatStart must not un-latch it — it's a no-op once true, by construction.
-        val stillLatched = checkCombatStart(spotted)
-        assertTrue(stillLatched.combatStarted)
-        assertTrue(stillLatched === spotted, "already-true is a no-op, no copy() needed")
+        val spotted = updateEngagedEnemies(updateRevealedTiles(state(map, player(1, GridPos(0, 0)), enemy(2, GridPos(1, 0)))))
+        assertTrue(spotted.inCombat)
+        // The enemy id is now permanently in engagedEnemies (revealedTiles/engagedEnemies are both
+        // monotonic) — even if it later stood somewhere never revealed, it's still ALIVE, so combat
+        // must not drop back to exploration just because it ducked out of sight mid-fight.
+        val retreated = spotted.copy(entities = spotted.entities.map { if (it.id == EntityId(2)) it.copy(pos = GridPos(2, 0)) else it })
+        assertTrue(updateEngagedEnemies(retreated).inCombat, "a live engaged enemy hiding again must not end combat")
     }
 
     @Test
-    fun checkCombatStartIsImmediatelyTrueWhenTheMapHasNoFogOfWar() {
+    fun inCombatDropsBackToFalseOnceEveryEngagedEnemyIsDeadAndNothingNewIsSpotted() {
+        // The actual bug report: explore -> spot and kill the only enemy -> should return to
+        // exploration mode, not stay stuck in normal turn-based combat forever.
+        val map = BattleMap(3, 1, fogOfWar = true)
+        val spotted = updateEngagedEnemies(updateRevealedTiles(state(map, player(1, GridPos(0, 0)), enemy(2, GridPos(1, 0)))))
+        assertTrue(spotted.inCombat)
+        val defeated = spotted.copy(entities = spotted.entities.map { if (it.id == EntityId(2)) it.copy(health = it.health?.copy(current = 0)) else it })
+        assertFalse(updateEngagedEnemies(defeated).inCombat, "the only engaged enemy is dead and nothing new has been spotted")
+    }
+
+    @Test
+    fun inCombatStaysTrueIfOneEngagedEnemyDiesButAnotherIsStillAlive() {
+        val map = BattleMap(3, 1, fogOfWar = true)
+        val spotted = updateEngagedEnemies(updateRevealedTiles(state(map, player(1, GridPos(0, 0)), enemy(2, GridPos(1, 0)), enemy(3, GridPos(2, 0)))))
+        assertTrue(spotted.inCombat)
+        val oneDead = spotted.copy(entities = spotted.entities.map { if (it.id == EntityId(2)) it.copy(health = it.health?.copy(current = 0)) else it })
+        assertTrue(updateEngagedEnemies(oneDead).inCombat, "enemy 3 is still alive and engaged")
+    }
+
+    @Test
+    fun inCombatIsImmediatelyTrueWhenTheMapHasNoFogOfWar() {
         val map = BattleMap(3, 1, fogOfWar = false)
         val before = state(map, player(1, GridPos(0, 0)))
-        assertTrue(checkCombatStart(before).combatStarted, "no fog means no exploration phase at all")
+        assertTrue(updateEngagedEnemies(before).inCombat, "no fog means no exploration phase at all")
     }
 
     @Test

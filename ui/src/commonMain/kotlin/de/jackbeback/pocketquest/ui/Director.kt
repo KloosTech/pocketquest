@@ -29,6 +29,7 @@ private const val REACTION_MARKER_MS = 150
 private const val REDIRECT_ARC_HOLD_MS = 500L
 private const val FIZZLE_FLASH_HOLD_MS = 400L
 private const val TELEPORT_BLINK_MS = 300
+private const val DICE_ROLL_HOLD_MS = 500L
 
 /**
  * doc07's choreograph(): "adding a new game event means adding a when
@@ -62,7 +63,10 @@ fun choreograph(event: GameEvent): List<Beat> = when (event) {
     is GameEvent.Teleported -> listOf(
         Beat(Timing.Blocking) { world -> world.blink(event.who, event.to) },
     )
+    // The die tumbles and settles on the actual d20 result before the attacker's own lunge —
+    // previously this roll was completely silent (the log line was the only trace of it).
     is GameEvent.AttackRolled -> listOf(
+        Beat(Timing.Blocking) { world -> world.showDiceRoll(event.d20) },
         Beat(Timing.Blocking) { world -> world.pulse(event.attacker, 1.3f, ATTACK_PULSE_MS) },
     )
     is GameEvent.DamageTaken -> listOf(
@@ -116,6 +120,10 @@ fun choreograph(event: GameEvent): List<Beat> = when (event) {
     is GameEvent.Fizzled -> (event.reason as? Rejection.Blocked)?.let { blocked ->
         listOf(Beat(Timing.Blocking) { world -> world.flashTile(blocked.pos) })
     } ?: emptyList()
+    // Same first-ever visual as AttackRolled — a save previously had no beat at all, only its log line.
+    is GameEvent.SaveRolled -> listOf(
+        Beat(Timing.Blocking) { world -> world.showDiceRoll(event.d20) },
+    )
     else -> emptyList()
 }
 
@@ -154,6 +162,14 @@ private suspend fun VisualWorld.showRedirectArc(from: EntityId, to: EntityId) {
     val id = addMarker(Marker.Arc(fromV.pos.value, toV.pos.value))
     if (speed > 0f) delay((REDIRECT_ARC_HOLD_MS / speed).toLong())
     removeMarker(id)
+}
+
+private suspend fun VisualWorld.showDiceRoll(result: Int) {
+    val id = addDiceRoll(result)
+    // Tumble duration (Dice3D.kt's own animation) plus a short hold on the settled number before
+    // it's removed — both go through the same scaled() factor as every other beat's timing.
+    delay((scaled(TUMBLE_MS) + scaled(DICE_ROLL_HOLD_MS.toInt())).toLong())
+    removeDiceRoll(id)
 }
 
 private suspend fun VisualWorld.flashTile(pos: GridPos) {
