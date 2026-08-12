@@ -26,15 +26,29 @@ private fun rngFor(state: RngState): Random {
     return Random((z xor (z shr 31)).toLong())
 }
 
+/**
+ * docs/22-dice-roll-ui-and-ability-checks.md: the discarded roll under Advantage/Disadvantage —
+ * [d20] itself only ever returns [resolved] (the one that actually counted), which is all combat
+ * math needs, but a BG3-style dual-die display needs [other] too, purely cosmetic. Null under
+ * [RollMode.Normal], where only one die was ever rolled at all.
+ */
+data class D20Roll(val resolved: Int, val other: Int? = null)
+
 /** Rolls a single d20. [mode] rolls twice and takes the higher/lower, per advantage/disadvantage. */
 fun RngState.d20(mode: RollMode = RollMode.Normal): Pair<RngState, Int> {
+    val (next, roll) = d20Detailed(mode)
+    return next to roll.resolved
+}
+
+/** Same roll as [d20], with the discarded Advantage/Disadvantage die preserved — see [D20Roll]. */
+fun RngState.d20Detailed(mode: RollMode = RollMode.Normal): Pair<RngState, D20Roll> {
     val rng = rngFor(this)
     val result = if (mode == RollMode.Normal) {
-        rng.nextInt(1, 21)
+        D20Roll(rng.nextInt(1, 21))
     } else {
         val a = rng.nextInt(1, 21)
         val b = rng.nextInt(1, 21)
-        if (mode == RollMode.Advantage) maxOf(a, b) else minOf(a, b)
+        if (mode == RollMode.Advantage) D20Roll(maxOf(a, b), minOf(a, b)) else D20Roll(minOf(a, b), maxOf(a, b))
     }
     return copy(calls = calls + 1) to result
 }

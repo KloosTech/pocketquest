@@ -12,16 +12,30 @@ sealed interface GameEvent {
     @Serializable @SerialName("resourcesSpent") data class ResourcesSpent(val who: EntityId, val ap: Int, val mana: Int) : GameEvent
     @Serializable @SerialName("statusApplied") data class StatusApplied(val target: EntityId, val status: StatusId, val stacks: Int, val expiry: Expiry) : GameEvent
     @Serializable @SerialName("statusExpired") data class StatusExpired(val target: EntityId, val status: StatusId) : GameEvent
-    /** docs/17-engine-gaps.md 3.6: [critical] is a natural 20 — always a hit, doubled damage dice. A natural 1 is always a miss (no separate flag needed — it just folds into [hit] being false). */
-    @Serializable @SerialName("attackRolled") data class AttackRolled(val attacker: EntityId, val target: EntityId, val d20: Int, val mod: Int, val ac: Int, val hit: Boolean, val critical: Boolean = false) : GameEvent
+    /**
+     * docs/17-engine-gaps.md 3.6: [critical] is a natural 20 — always a hit, doubled damage dice. A
+     * natural 1 is always a miss (no separate flag needed — it just folds into [hit] being false).
+     * [breakdown] (docs/22) is the same total as [mod], decomposed into labeled terms for the roll
+     * card's chip row — [mod] stays as the flat total so every pre-existing reader is unaffected.
+     * [otherD20] is the discarded Advantage/Disadvantage die (docs/22) — null under Normal mode or
+     * Expected mode, purely for the roll card's dual-die display.
+     */
+    @Serializable @SerialName("attackRolled") data class AttackRolled(val attacker: EntityId, val target: EntityId, val d20: Int, val mod: Int, val ac: Int, val hit: Boolean, val critical: Boolean = false, val breakdown: RollBreakdown = RollBreakdown(emptyList()), val otherD20: Int? = null) : GameEvent
     /** The individual damage-dice results behind a [DamageTaken]'s final `amount` — found live: two hits with the same weapon landed for different totals and there was no way to tell dice variance from a resistance/modifier swing without this. Emitted only for a real (`RngMode.Live`) roll; `RngMode.Expected`'s averaged preview/AI-scoring rolls have no discrete dice to show. */
     @Serializable @SerialName("damageRolled") data class DamageRolled(val attacker: EntityId, val target: EntityId, val rolls: List<Int>, val modifier: Int, val damageType: DamageType) : GameEvent
-    @Serializable @SerialName("saveRolled") data class SaveRolled(val target: EntityId, val ability: Ability, val d20: Int, val mod: Int, val dc: Int, val success: Boolean) : GameEvent
+    /** [breakdown]/[otherD20] (docs/22) mirror [AttackRolled.breakdown]/[AttackRolled.otherD20]. */
+    @Serializable @SerialName("saveRolled") data class SaveRolled(val target: EntityId, val ability: Ability, val d20: Int, val mod: Int, val dc: Int, val success: Boolean, val breakdown: RollBreakdown = RollBreakdown(emptyList()), val otherD20: Int? = null) : GameEvent
     @Serializable @SerialName("turnStarted") data class TurnStarted(val who: EntityId, val round: Int) : GameEvent
     @Serializable @SerialName("turnEnded") data class TurnEnded(val who: EntityId) : GameEvent
     @Serializable @SerialName("resourcesReset") data class ResourcesReset(val who: EntityId, val ap: Int, val mana: Int) : GameEvent
     @Serializable @SerialName("reactionTriggered") data class ReactionTriggered(val who: EntityId, val actionId: ActionId) : GameEvent
-    @Serializable @SerialName("actionStarted") data class ActionStarted(val who: EntityId, val actionId: ActionId) : GameEvent
+    /**
+     * [point]/[targets] (docs/24-projectile-travel-animation.md) mirror the [ActionCtx] `perform()`
+     * already resolved this action against — where a projectile-travel beat's destination comes
+     * from ([point] if the action set one, else the first of [targets]), independent of however many
+     * per-target `AttackRolled`/`SaveRolled`/`DamageTaken` events this same cast goes on to emit.
+     */
+    @Serializable @SerialName("actionStarted") data class ActionStarted(val who: EntityId, val actionId: ActionId, val point: GridPos? = null, val targets: List<EntityId> = emptyList()) : GameEvent
     @Serializable @SerialName("concentrationStarted") data class ConcentrationStarted(val who: EntityId, val linkId: LinkId) : GameEvent
     @Serializable @SerialName("concentrationBroken") data class ConcentrationBroken(val who: EntityId, val linkId: LinkId) : GameEvent
     @Serializable @SerialName("concentrationCheckRolled") data class ConcentrationCheckRolled(val who: EntityId, val dc: Int, val roll: Int, val mod: Int, val success: Boolean) : GameEvent

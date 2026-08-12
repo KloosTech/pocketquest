@@ -112,7 +112,11 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
                 is EffectTemplate.RollAttack -> {
                     RefPicker(value.attacker, { onChange(value.copy(attacker = it)) }, modifier = Modifier.padding(end = 8.dp))
                     RefPicker(value.target, { onChange(value.copy(target = it)) }, modifier = Modifier.padding(end = 8.dp))
-                    IntField(value.attackBonus, label = "bonus") { onChange(value.copy(attackBonus = it)) }
+                    // docs/22-dice-roll-ui-and-ability-checks.md: the attacker's own ability
+                    // modifier now drives the roll — "bonus" here is only the extra/magic-weapon
+                    // bonus on top (0 for an ordinary weapon), no longer the whole attack bonus.
+                    InkSelect(value.ability, Ability.entries, { it.name }, { onChange(value.copy(ability = it)) }, modifier = Modifier.padding(end = 8.dp))
+                    IntField(value.attackBonus, label = "extra bonus") { onChange(value.copy(attackBonus = it)) }
                     DiceField(value.damage) { onChange(value.copy(damage = it)) }
                     InkSelect(value.damageType, DamageType.entries, { it.name }, { onChange(value.copy(damageType = it)) }, modifier = Modifier.padding(start = 8.dp))
                 }
@@ -144,6 +148,15 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
                 EffectTemplateListEditor(value.onSuccess, catalog, onChange = { onChange(value.copy(onSuccess = it)) })
                 InkLabel("ON FAIL", modifier = Modifier.padding(top = 4.dp))
                 EffectTemplateListEditor(value.onFail, catalog, onChange = { onChange(value.copy(onFail = it)) })
+            }
+        }
+        if (value is EffectTemplate.Push) {
+            // docs/29-push-on-wall-hit.md: same nested-editor shape as RollSave's onSuccess/onFail
+            // above — Ref.EachTarget in here means "the entity that hit the wall" (see
+            // EffectTemplateInstantiate.kt's per-target ctx scoping for Push.onWallHit).
+            Column(modifier = Modifier.padding(start = 24.dp, top = 4.dp)) {
+                InkLabel("ON WALL HIT")
+                EffectTemplateListEditor(value.onWallHit, catalog, onChange = { onChange(value.copy(onWallHit = it)) })
             }
         }
     }

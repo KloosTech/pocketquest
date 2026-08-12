@@ -141,7 +141,7 @@ class EventEffectsTest {
     @Test
     fun checklessChoiceAppliesEffectsUnconditionally() {
         val choice = EventChoice(label = "L", outcomeText = "You found gold.", effects = listOf(RunEffect.GrantCurrency(10)))
-        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, catalog())
+        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, MemberId("m1"), catalog())
         assertEquals("You found gold.", result.text)
         assertEquals(10, result.run.gold)
     }
@@ -153,7 +153,7 @@ class EventEffectsTest {
             successText = "Success!", successEffects = listOf(RunEffect.GrantCurrency(10)),
             failureText = "Failure!", failureEffects = listOf(RunEffect.GrantCurrency(-10)),
         )
-        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, catalog())
+        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, MemberId("m1"), catalog())
         assertEquals("Success!", result.text)
         assertEquals(10, result.run.gold)
     }
@@ -165,7 +165,7 @@ class EventEffectsTest {
             successText = "Success!", successEffects = listOf(RunEffect.GrantCurrency(10)),
             failureText = "Failure!", failureEffects = listOf(RunEffect.GrantCurrency(-10)),
         )
-        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, catalog())
+        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, MemberId("m1"), catalog())
         assertEquals("Failure!", result.text)
         assertEquals(-10, result.run.gold)
     }
@@ -173,7 +173,7 @@ class EventEffectsTest {
     @Test
     fun checkedChoiceCanBeOneSidedWithTheOtherBranchEmpty() {
         val choice = EventChoice(label = "L", check = EventCheck(Ability.Str, dc = 999), successEffects = listOf(RunEffect.GrantCurrency(10)))
-        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, catalog())
+        val result = resolveEventChoice(run(member("m1", hp = 20)), choice, MemberId("m1"), catalog())
         assertEquals(0, result.run.gold, "the failure branch was left empty on purpose — nothing should happen")
     }
 
@@ -181,12 +181,14 @@ class EventEffectsTest {
     fun checkedChoiceConsumesExactlyOneRngRoll() {
         val before = run(member("m1", hp = 20))
         val choice = EventChoice(label = "L", check = EventCheck(Ability.Str, dc = 10))
-        val result = resolveEventChoice(before, choice, catalog())
+        val result = resolveEventChoice(before, choice, MemberId("m1"), catalog())
         assertEquals(before.rng.calls + 1, result.run.rng.calls)
     }
 
     @Test
-    fun checkedChoicePicksThePartysBestScoringMember() {
+    fun checkedChoiceUsesTheExplicitlyChosenRollerNotAnAutoPickedBestScoringOne() {
+        // docs/22-dice-roll-ui-and-ability-checks.md: the player picks who rolls now — resolving as
+        // the weak member must use ITS modifier even though a stronger member is available.
         val strongHero = hero.copy(id = ArchetypeId("strong"), abilities = AbilityScores(20, 10, 10, 10, 10, 10))
         val cat = Catalog(archetypes = mapOf(hero.id to hero, strongHero.id to strongHero))
         val weak = member("weak", hp = 20)
@@ -198,10 +200,28 @@ class EventEffectsTest {
             successEffects = listOf(RunEffect.GrantCurrency(1)), failureEffects = listOf(RunEffect.GrantCurrency(-1)),
         )
 
-        val result = resolveEventChoice(before, choice, cat)
+        val result = resolveEventChoice(before, choice, MemberId("weak"), cat)
 
         val (_, expectedRoll) = before.rng.d20()
-        val expectedSuccess = expectedRoll + abilityModifier(20) >= dc
-        assertEquals(if (expectedSuccess) 1 else -1, result.run.gold, "expected the STR-20 member's modifier to decide the roll, not the STR-10 member's")
+        val expectedSuccess = expectedRoll + abilityModifier(10) >= dc
+        assertEquals(if (expectedSuccess) 1 else -1, result.run.gold, "must use the chosen weak member's modifier, not the stronger member's")
+    }
+
+    @Test
+    fun previewEventCheckReportsEachCandidateRollersOwnBreakdown() {
+        // previewEventCheck takes no RngState at all — a pure lookup, nothing to consume, so the
+        // player can compare every party member's odds before committing to who actually rolls.
+        val strongHero = hero.copy(id = ArchetypeId("strong"), abilities = AbilityScores(16, 10, 10, 10, 10, 10))
+        val cat = Catalog(archetypes = mapOf(hero.id to hero, strongHero.id to strongHero))
+        val weak = member("weak", hp = 20)
+        val strong = weak.copy(memberId = MemberId("strong"), archetype = strongHero.id)
+        val before = run(weak, strong)
+        val check = EventCheck(Ability.Str, dc = 12)
+
+        val weakPreview = previewEventCheck(before, check, MemberId("weak"), cat)
+        val strongPreview = previewEventCheck(before, check, MemberId("strong"), cat)
+
+        assertEquals(0, weakPreview.total, "STR 10 -> +0")
+        assertEquals(3, strongPreview.total, "STR 16 -> +3")
     }
 }

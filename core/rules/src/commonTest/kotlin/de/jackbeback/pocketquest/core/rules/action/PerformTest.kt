@@ -45,7 +45,11 @@ class PerformTest {
 
         val completed = assertIs<StepResult.Completed>(result)
         val events = completed.resolver.emitted
-        assertIs<GameEvent.ActionStarted>(events[0], "ActionStarted is seeded before the resolver even runs")
+        val actionStarted = assertIs<GameEvent.ActionStarted>(events[0], "ActionStarted is seeded before the resolver even runs")
+        // docs/24-projectile-travel-animation.md: point/targets ride along on this one event so a
+        // travel-animation beat has a destination regardless of how many per-target effects follow.
+        assertEquals(GridPos(1, 0), actionStarted.point)
+        assertEquals(listOf(s.id("goblin")), actionStarted.targets)
         assertIs<GameEvent.ResourcesSpent>(events[1], "cost must be spent before any other effect runs")
         assertTrue(events.any { it is GameEvent.AttackRolled })
 

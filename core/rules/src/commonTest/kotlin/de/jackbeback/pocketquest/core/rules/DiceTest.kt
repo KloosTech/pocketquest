@@ -48,6 +48,44 @@ class DiceTest {
         assertTrue(results.toSet().size > 5)
     }
 
+    // --- docs/22-dice-roll-ui-and-ability-checks.md: d20Detailed ---
+
+    @Test
+    fun d20DetailedUnderNormalModeHasNoOtherRoll() {
+        val (_, roll) = RngState(seed = 5).d20Detailed(RollMode.Normal)
+        assertEquals(null, roll.other, "only one die is ever rolled under Normal mode")
+    }
+
+    @Test
+    fun d20DetailedResolvedMatchesPlainD20ForTheSameState() {
+        // d20() delegates to d20Detailed() internally — this pins that down so the two can never
+        // silently diverge (e.g. a future edit drawing from the RNG differently in one vs the other).
+        for (seed in 0L until 50L) {
+            val state = RngState(seed = seed)
+            val (_, plain) = state.d20(RollMode.Advantage)
+            val (_, detailed) = state.d20Detailed(RollMode.Advantage)
+            assertEquals(plain, detailed.resolved)
+        }
+    }
+
+    @Test
+    fun d20DetailedUnderAdvantageResolvedIsTheHigherOfTheTwo() {
+        for (seed in 0L until 50L) {
+            val (_, roll) = RngState(seed = seed).d20Detailed(RollMode.Advantage)
+            val other = requireNotNull(roll.other) { "Advantage always rolls two dice" }
+            assertTrue(roll.resolved >= other, "resolved must be the higher of the pair under Advantage")
+        }
+    }
+
+    @Test
+    fun d20DetailedUnderDisadvantageResolvedIsTheLowerOfTheTwo() {
+        for (seed in 0L until 50L) {
+            val (_, roll) = RngState(seed = seed).d20Detailed(RollMode.Disadvantage)
+            val other = requireNotNull(roll.other) { "Disadvantage always rolls two dice" }
+            assertTrue(roll.resolved <= other, "resolved must be the lower of the pair under Disadvantage")
+        }
+    }
+
     @Test
     fun advantageSkewsHighDisadvantageSkewsLow() {
         val sampleSize = 500

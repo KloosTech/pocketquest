@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.border
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -101,7 +103,7 @@ fun EventPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifier: M
 
 @Composable
 private fun EventEditor(event: EventDef, catalog: Catalog, onChange: (EventDef) -> Unit, onRemove: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkLabel("TITLE")
             InkButton("Remove Event", modifier = Modifier.padding(start = 16.dp), onClick = onRemove)

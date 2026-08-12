@@ -19,4 +19,13 @@ data class Archetype(
     val innateHealSteps: List<HealStep> = emptyList(),
     /** docs/21-ai-behavior-spec.md: "different enemies, different AIs" is per-archetype, not per-spawn. `"standard"` is the always-ships-with-a-real-entry built-in default (see `Catalog.defaultAiProfile`), so an archetype that never sets this still behaves exactly as before this field existed. */
     val aiProfile: AiProfileId = AiProfileId("standard"),
+    /**
+     * docs/23-sprite-rendering.md: a `kind = "character"` id in the asset manifest — `null` keeps
+     * the board token as today's faction-colored circle, a real, permanent, supported state, not a
+     * migration shim. An archetype with no art drawn for it yet renders correctly forever, not just
+     * until someone gets around to it.
+     */
+    val spriteId: String? = null,
+    /** docs/26-character-detail-card.md: authored flavor/lore text, shown as the Inspect card's top banner. */
+    val description: String = "",
 )

@@ -1,14 +1,18 @@
 package de.jackbeback.pocketquest.core.run
 
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.EventCheck
 import de.jackbeback.pocketquest.core.model.EventChoice
 import de.jackbeback.pocketquest.core.model.RngState
+import de.jackbeback.pocketquest.core.model.RollBreakdown
+import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RunEffect
 import de.jackbeback.pocketquest.core.model.RunEffectTarget
-import de.jackbeback.pocketquest.core.model.forAbility
-import de.jackbeback.pocketquest.core.rules.abilityModifier
-import de.jackbeback.pocketquest.core.rules.d20
+import de.jackbeback.pocketquest.core.rules.d20Detailed
+import de.jackbeback.pocketquest.core.rules.matches
+import de.jackbeback.pocketquest.core.rules.resolveAdvantage
 import de.jackbeback.pocketquest.core.rules.rollRange
+import de.jackbeback.pocketquest.core.rules.stat.rollBreakdown
 import de.jackbeback.pocketquest.core.rules.stat.stats
 
 /**
@@ -56,17 +60,37 @@ private fun applyToTargets(run: RunState, target: RunEffectTarget, transform: (P
     return run.copy(party = updatedParty, rng = rng)
 }
 
-/** [text] is whichever branch's flavor text applies — [outcomeText] unconditionally, or [successText]/[failureText] once a check resolves. */
-data class EventChoiceResolution(val text: String, val run: RunState)
+/** docs/22: the actual roll a checked [EventChoice] produced — null for a checkless choice, otherwise what the roll card renders after the "click to roll" moment. [otherD20] mirrors [de.jackbeback.pocketquest.core.model.GameEvent.AttackRolled.otherD20] — the discarded Advantage/Disadvantage die, for the dual-die display. */
+data class EventCheckOutcome(val d20: Int, val otherD20: Int?, val breakdown: RollBreakdown, val dc: Int, val success: Boolean)
+
+/** [text] is whichever branch's flavor text applies — [outcomeText] unconditionally, or [successText]/[failureText] once a check resolves. [checkOutcome] is null for a checkless choice. */
+data class EventChoiceResolution(val text: String, val run: RunState, val checkOutcome: EventCheckOutcome? = null)
+
+/**
+ * docs/22-dice-roll-ui-and-ability-checks.md: what attempting [check] as [roller] would look like —
+ * the DC and this member's roll breakdown — computed without touching [RunState.rng] or applying
+ * anything. Lets the roll card show the DC/modifiers and let the player actually choose who
+ * attempts it (previously [resolveEventChoice] silently auto-picked the party's best-scoring
+ * member) before committing to the "click to roll" moment [resolveEventChoice] performs.
+ */
+fun previewEventCheck(run: RunState, check: EventCheck, roller: MemberId, cat: Catalog): RollBreakdown {
+    val member = run.party.first { it.memberId == roller }
+    return member.toEntity(cat).rollBreakdown(cat, check.ability)
+}
 
 /**
  * A checkless choice ([EventChoice.check] null) applies [EventChoice.effects] unconditionally — the
- * original shape. A checked choice has the party's best-scoring member on [EventCheck.ability] roll
- * `d20 + abilityModifier(derivedScore) >= dc`, the same formula `:core:rules`' RollSave combat
- * handler uses, then applies only the matching branch's effects — either branch may be empty for a
- * choice that "only ever helps" or "only ever hurts" while still being a real roll.
+ * original shape. A checked choice rolls `d20 + breakdown.total >= check.dc` for the explicitly
+ * chosen [roller] (docs/22: the player picks, this no longer auto-selects the best-scoring member),
+ * consulting [de.jackbeback.pocketquest.core.model.Stats.rollGrants] for
+ * [RollContext.AbilityCheck]-matched advantage/disadvantage the same way `:core:rules`' combat
+ * handlers already do for attacks/saves — a gap out-of-combat checks had until now. Advantage only
+ * applies when [EventCheck.skill] is set: [RollContext.AbilityCheck] has no "any skill" wildcard
+ * (unlike [RollContext.AttackRoll]'s `vs = null`), so a skill-less raw-ability check can't match a
+ * skill-specific grant. [roller] is ignored for a checkless choice. Either effects branch may be
+ * empty for a choice that "only ever helps" or "only ever hurts" while still being a real roll.
  */
-fun resolveEventChoice(run: RunState, choice: EventChoice, cat: Catalog): EventChoiceResolution {
+fun resolveEventChoice(run: RunState, choice: EventChoice, roller: MemberId, cat: Catalog): EventChoiceResolution {
     val check = choice.check
     if (check == null) {
         var updated = run
@@ -74,15 +98,23 @@ fun resolveEventChoice(run: RunState, choice: EventChoice, cat: Catalog): EventC
         return EventChoiceResolution(choice.outcomeText, updated)
     }
 
-    val scoreByMember = run.party.associateWith { it.toEntity(cat).stats(cat).abilities.forAbility(check.ability) }
-    val roller = scoreByMember.maxBy { it.value }.key
-    val mod = abilityModifier(scoreByMember.getValue(roller))
-    val (advancedRng, rollValue) = run.rng.d20()
-    val success = rollValue + mod >= check.dc
+    val member = run.party.first { it.memberId == roller }
+    val entity = member.toEntity(cat)
+    val breakdown = entity.rollBreakdown(cat, check.ability)
+    val derivedAdvantage = check.skill?.let { skill ->
+        entity.stats(cat).rollGrants
+            .filter { it.ctx.matches(RollContext.AbilityCheck(skill)) }
+            .map { it.side }
+            .toSet()
+    } ?: emptySet()
+    val advantageMode = resolveAdvantage(derivedAdvantage)
+    val (advancedRng, roll) = run.rng.d20Detailed(advantageMode)
+    val success = roll.resolved + breakdown.total >= check.dc
 
     val effects = if (success) choice.successEffects else choice.failureEffects
     val text = if (success) choice.successText else choice.failureText
     var updated = run.copy(rng = advancedRng)
     for (effect in effects) updated = applyRunEffect(updated, effect, cat)
-    return EventChoiceResolution(text, updated)
+    val outcome = EventCheckOutcome(roll.resolved, roll.other, breakdown, check.dc, success)
+    return EventChoiceResolution(text, updated, outcome)
 }

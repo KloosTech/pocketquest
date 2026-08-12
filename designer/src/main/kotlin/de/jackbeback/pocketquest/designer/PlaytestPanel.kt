@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -52,7 +53,7 @@ fun PlaytestPanel(catalog: Catalog, onPlaytest: (GameState, Catalog) -> Unit, mo
     var selectedArchetypes by remember { mutableStateOf(catalog.archetypes.keys.take(MAX_PARTY_SIZE).toSet()) }
     val party = catalog.archetypes.keys.filter { it in selectedArchetypes }
 
-    Column(modifier = modifier.padding(16.dp)) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
         InkLabel("ENCOUNTER")
         InkSelect(
             selected = selectedId,

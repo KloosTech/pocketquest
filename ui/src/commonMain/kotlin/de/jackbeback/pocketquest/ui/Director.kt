@@ -1,12 +1,26 @@
 package de.jackbeback.pocketquest.ui
 
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameEvent
+import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Rejection
+import de.jackbeback.pocketquest.core.model.RollBreakdown
+import de.jackbeback.pocketquest.core.model.Shape
+import de.jackbeback.pocketquest.core.rules.targeting.tilesInShape
+import de.jackbeback.pocketquest.ui.assets.GameAssetManifest
+import de.jackbeback.pocketquest.ui.assets.GameSpriteLoader
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.PI
+import kotlin.math.atan2
+import kotlin.math.roundToInt
 
 /** doc07: one place decides timing. Nothing else in the codebase knows how long anything takes. */
 sealed interface Timing {
@@ -24,12 +38,27 @@ private const val STATUS_EXPIRE_MS = 200
 private const val DEATH_FADE_MS = 400
 private const val DAMAGE_NUMBER_HOLD_MS = 700L
 private const val HP_ANIMATE_MS = 250
+private const val TELEGRAPH_MS = 700
+private const val TELEGRAPH_RISE_PX = 40f
+
+// docs/30-hit-telegraph-text.md: same red/green-is-good-or-bad palette already used everywhere
+// else (HP bars, the active-turn tile ring) — HIT/FAILED are bad for the target, SAVED is good,
+// MISS is neutral (nothing happened to them).
+private val TELEGRAPH_HIT_COLOR = Color(0xFFB71C1C)
+private val TELEGRAPH_MISS_COLOR = Color(0xFF757575)
+private val TELEGRAPH_SAVED_COLOR = Color(0xFF2E7D32)
+private val TELEGRAPH_FAILED_COLOR = Color(0xFFB71C1C)
 private const val MOVE_STEP_MS = 180
 private const val REACTION_MARKER_MS = 150
 private const val REDIRECT_ARC_HOLD_MS = 500L
 private const val FIZZLE_FLASH_HOLD_MS = 400L
 private const val TELEPORT_BLINK_MS = 300
 private const val DICE_ROLL_HOLD_MS = 500L
+private const val PROJECTILE_MS_PER_TILE = 90
+private const val PROJECTILE_MIN_MS = 150
+private const val PROJECTILE_MAX_MS = 900
+private const val PROJECTILE_FADE_MS = 120
+private const val RIPPLE_FLASH_HOLD_MS = 400L
 
 /**
  * doc07's choreograph(): "adding a new game event means adding a when
@@ -39,9 +68,19 @@ private const val DICE_ROLL_HOLD_MS = 500L
  * since nothing in the demo moves), plus doc15's "things the engine emits
  * that need a visual" (Downed, StatusExpired, DamageRedirected,
  * ReactionTriggered, and Fizzled when its Rejection is Blocked). Died
- * itself carries no visual — see its own branch below. ActionStarted/
- * ResourcesSpent/ResourcesReset/TurnStarted/TurnEnded fall through to the
- * empty default — there is no HUD or turn banner yet for them to drive.
+ * itself carries no visual — see its own branch below. ResourcesSpent/
+ * ResourcesReset/TurnStarted/TurnEnded fall through to the empty default —
+ * there is no HUD or turn banner yet for them to drive.
+ *
+ * [state]/[cat] (docs/24-projectile-travel-animation.md) are only needed for
+ * `ActionStarted`'s projectile-travel beat — looking up
+ * [de.jackbeback.pocketquest.core.model.ActionDef.projectileSprite] and
+ * computing the AoE ripple footprint via [tilesInShape] both need the
+ * catalog/map, unlike every other beat here which only ever touches
+ * [VisualWorld]. [state] is the PRE-update state (same as `App.kt`'s
+ * `formatEvent` call uses) — the caster hasn't moved by the time
+ * `ActionStarted` fires, so its position there is exactly where the
+ * projectile should launch from.
  *
  * Every beat that mutates a *shared* per-entity [Animatable] (`scale`,
  * `hp`) is [Timing.Blocking], never [Timing.Parallel] — found the hard way,
@@ -54,7 +93,15 @@ private const val DICE_ROLL_HOLD_MS = 500L
  * cleanly interrupting. Only [floatNumber] stays Parallel — it only ever
  * touches its own freshly-created overlay entry, never shared state.
  */
-fun choreograph(event: GameEvent): List<Beat> = when (event) {
+fun choreograph(event: GameEvent, state: GameState, cat: Catalog): List<Beat> = when (event) {
+    is GameEvent.ActionStarted -> {
+        val spriteId = cat.actionDef(event.actionId).projectileSprite
+        if (spriteId == null) {
+            emptyList()
+        } else {
+            listOf(Beat(Timing.Blocking) { world -> world.fireProjectile(event, spriteId, state, cat) })
+        }
+    }
     is GameEvent.MoveStepped -> listOf(
         Beat(Timing.Blocking) { world -> world.walk(event.who, event.to) },
     )
@@ -66,8 +113,14 @@ fun choreograph(event: GameEvent): List<Beat> = when (event) {
     // The die tumbles and settles on the actual d20 result before the attacker's own lunge —
     // previously this roll was completely silent (the log line was the only trace of it).
     is GameEvent.AttackRolled -> listOf(
-        Beat(Timing.Blocking) { world -> world.showDiceRoll(event.d20) },
+        Beat(Timing.Blocking) { world ->
+            world.showDiceRoll("Attack Roll", event.d20, event.ac, event.breakdown, event.hit, event.otherD20)
+        },
         Beat(Timing.Blocking) { world -> world.pulse(event.attacker, 1.3f, ATTACK_PULSE_MS) },
+        // docs/30-hit-telegraph-text.md: Parallel, not Blocking — it rides alongside whatever
+        // DamageTaken/pulse beats follow (a hit) rather than adding its own hold to the sequence;
+        // a miss has nothing else to show at all, so this is its only feedback.
+        Beat(Timing.Parallel) { world -> world.showTelegraph(event.target, if (event.hit) "HIT" else "MISS", if (event.hit) TELEGRAPH_HIT_COLOR else TELEGRAPH_MISS_COLOR) },
     )
     is GameEvent.DamageTaken -> listOf(
         Beat(Timing.Parallel) { world -> world.floatNumber(event.target, -event.amount, event.damageType) },
@@ -122,7 +175,10 @@ fun choreograph(event: GameEvent): List<Beat> = when (event) {
     } ?: emptyList()
     // Same first-ever visual as AttackRolled — a save previously had no beat at all, only its log line.
     is GameEvent.SaveRolled -> listOf(
-        Beat(Timing.Blocking) { world -> world.showDiceRoll(event.d20) },
+        Beat(Timing.Blocking) { world ->
+            world.showDiceRoll("${event.ability.name} Save", event.d20, event.dc, event.breakdown, event.success, event.otherD20)
+        },
+        Beat(Timing.Parallel) { world -> world.showTelegraph(event.target, if (event.success) "SAVED" else "FAILED", if (event.success) TELEGRAPH_SAVED_COLOR else TELEGRAPH_FAILED_COLOR) },
     )
     else -> emptyList()
 }
@@ -164,8 +220,8 @@ private suspend fun VisualWorld.showRedirectArc(from: EntityId, to: EntityId) {
     removeMarker(id)
 }
 
-private suspend fun VisualWorld.showDiceRoll(result: Int) {
-    val id = addDiceRoll(result)
+private suspend fun VisualWorld.showDiceRoll(title: String, result: Int, target: Int, breakdown: RollBreakdown, succeeded: Boolean, otherResult: Int? = null) {
+    val id = addDiceRoll(title, result, target, breakdown, succeeded, otherResult)
     // Tumble duration (Dice3D.kt's own animation) plus a short hold on the settled number before
     // it's removed — both go through the same scaled() factor as every other beat's timing.
     delay((scaled(TUMBLE_MS) + scaled(DICE_ROLL_HOLD_MS.toInt())).toLong())
@@ -176,6 +232,71 @@ private suspend fun VisualWorld.flashTile(pos: GridPos) {
     val id = addMarker(Marker.TileFlash(pos))
     if (speed > 0f) delay((FIZZLE_FLASH_HOLD_MS / speed).toLong())
     removeMarker(id)
+}
+
+/** docs/24: every affected tile flashes together (resolved: simultaneous, not a staggered wave) and clears together. */
+private suspend fun VisualWorld.flashTiles(positions: Collection<GridPos>) {
+    if (positions.isEmpty()) return
+    val ids = positions.map { addMarker(Marker.TileFlash(it)) }
+    if (speed > 0f) delay((RIPPLE_FLASH_HOLD_MS / speed).toLong())
+    ids.forEach { removeMarker(it) }
+}
+
+/**
+ * docs/24-projectile-travel-animation.md: launches [spriteId] from [event.who]'s current tile toward
+ * "the one that got selected" ([event.point] if the action set one, else the first of
+ * [event.targets]) — never one projectile per hit entity, regardless of how many
+ * AttackRolled/SaveRolled/DamageTaken events this same cast goes on to emit. Fades out on arrival
+ * (never just vanishes) rather than differentiating a hit/miss visual at the projectile itself — the
+ * existing dice-roll card and pulse/damage-number beats that follow already carry that distinction.
+ * An AoE action (non-[Shape.Single]) additionally flashes every tile in the shape's footprint the
+ * moment the projectile lands, reusing the exact geometry [de.jackbeback.pocketquest.core.rules.targeting.affectedBy]
+ * itself resolves hits with — a visual ripple, not a second hit-detection pass.
+ */
+private suspend fun VisualWorld.fireProjectile(event: GameEvent.ActionStarted, spriteId: String, state: GameState, cat: Catalog) {
+    val casterVisual = entities[event.who] ?: return
+    val origin = casterVisual.pos.value
+    val destination = event.point?.toOffset(tilePx)
+        ?: event.targets.firstOrNull()?.let { entities[it]?.pos?.value }
+        ?: return
+    val manifest = GameAssetManifest.load()
+    val meta = manifest.prop(spriteId) ?: return
+    val bitmap = GameSpriteLoader.load(meta.file) ?: return
+
+    // Source art assumed to face east/rightward by default — atan2's own convention already matches
+    // that (0 rad == pointing along +x), so the raw angle needs no offset correction.
+    val angleDegrees = (atan2((destination.y - origin.y).toDouble(), (destination.x - origin.x).toDouble()) * 180.0 / PI).toFloat()
+    val distanceTiles = (destination - origin).getDistance() / tilePx
+    val travelMs = (distanceTiles * PROJECTILE_MS_PER_TILE).roundToInt().coerceIn(PROJECTILE_MIN_MS, PROJECTILE_MAX_MS)
+
+    val id = addProjectile(origin, bitmap, angleDegrees)
+    val visual = projectiles[id]
+    visual?.pos?.animateTo(destination, tween(scaled(travelMs)))
+    visual?.alpha?.animateTo(0f, tween(scaled(PROJECTILE_FADE_MS)))
+    removeProjectile(id)
+
+    val point = event.point ?: return
+    val shape = cat.actionDef(event.actionId).targeting.shape
+    if (shape !is Shape.Single) {
+        val casterPos = state.byId[event.who]?.pos ?: return
+        flashTiles(tilesInShape(casterPos, point, shape, state.map))
+    }
+}
+
+/**
+ * docs/30-hit-telegraph-text.md: "HIT"/"MISS"/"SAVED"/"FAILED" rising and fading together over
+ * [id]'s current position — captured once at spawn (`v.pos.value`), same "doesn't track further
+ * movement" convention [floatNumber]'s damage numbers already use.
+ */
+private suspend fun VisualWorld.showTelegraph(id: EntityId, text: String, color: Color) {
+    val v = entities[id] ?: return
+    val telegraphId = addTelegraph(v.pos.value, text, color)
+    val visual = telegraphs[telegraphId] ?: return
+    coroutineScope {
+        launch { visual.pos.animateTo(v.pos.value - Offset(0f, TELEGRAPH_RISE_PX), tween(scaled(TELEGRAPH_MS))) }
+        launch { visual.alpha.animateTo(0f, tween(scaled(TELEGRAPH_MS))) }
+    }
+    removeTelegraph(telegraphId)
 }
 
 private suspend fun VisualWorld.floatNumber(

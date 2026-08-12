@@ -2,27 +2,35 @@ package de.jackbeback.pocketquest.ui
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTransformGestures
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,36 +44,51 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.TextMeasurer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.unit.toSize
 import de.jackbeback.pocketquest.core.ai.chooseAction
+import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.ActionCtx
 import de.jackbeback.pocketquest.core.model.ActionId
+import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.Effect
+import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.PreviewResult
 import de.jackbeback.pocketquest.core.model.PropLayer
+import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.model.TileType
@@ -88,6 +111,7 @@ import de.jackbeback.pocketquest.core.rules.targeting.inCombat
 import de.jackbeback.pocketquest.core.rules.targeting.updateEngagedEnemies
 import de.jackbeback.pocketquest.core.rules.targeting.findPath
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
+import de.jackbeback.pocketquest.core.rules.targeting.tilesInShape
 import de.jackbeback.pocketquest.core.rules.targeting.updateRevealedTiles
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -147,6 +171,7 @@ private sealed interface Selection {
 private fun TurnOrderStrip(
     state: GameState,
     colors: Map<EntityId, Color>,
+    sprites: Map<EntityId, ImageBitmap>,
     onSelectEntity: (EntityId) -> Unit,
     onOpenLog: () -> Unit,
     threatOverlayOn: Boolean,
@@ -175,53 +200,179 @@ private fun TurnOrderStrip(
         } else {
             state.turn.order.firstOrNull { state.byId[it]?.actor?.faction == Faction.Player }
         }
-        state.turn.order.forEach { id ->
-            val entity = state.byId[id] ?: return@forEach
-            // Nothing removes a dead entity from turn.order in THIS demo (DestroyEntity exists as
-            // an engine primitive since doc17 3.1, but nothing in the demo catalog calls it) —
-            // endTurn already skips a dead entity's turn, so this strip just needs to render that
-            // visually instead of showing it as a normal live token.
-            val alive = (entity.health?.current ?: 1) > 0
-            Box(
-                modifier = Modifier
-                    .padding(end = 10.dp)
-                    .size(32.dp)
-                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelectEntity(id) },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (id == activeId) {
-                    Box(Modifier.size(32.dp).border(2.dp, INK, CircleShape))
+        // A big encounter's turn order can run wider than the screen — scrolls on its own,
+        // pinned threat-toggle/log buttons stay put either side. This Row is the ONLY weighted
+        // child left in the outer Row (no trailing Spacer(weight(1f)) anymore) — that pairing
+        // used to split the leftover width 50/50 between them (equal weights), leaving this box
+        // only half the room it needed and the other half as dead space in front of the log
+        // button, which is what actually caused both bugs at once: no real scroll room, and a gap
+        // to the log button's left. `weight(1f)` alone claims the full remainder as this box's
+        // bound, so overflowing tokens have real room to scroll in, and the log button — placed
+        // right after this box, which already extends to the row's end — lands at the true right
+        // edge for free, with no separate push needed.
+        Row(modifier = Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
+            state.turn.order.forEach { id ->
+                val entity = state.byId[id] ?: return@forEach
+                // Nothing removes a dead entity from turn.order in THIS demo (DestroyEntity exists as
+                // an engine primitive since doc17 3.1, but nothing in the demo catalog calls it) —
+                // endTurn already skips a dead entity's turn, so this strip just needs to render that
+                // visually instead of showing it as a normal live token.
+                val alive = (entity.health?.current ?: 1) > 0
+                Box(
+                    modifier = Modifier
+                        .padding(end = 10.dp)
+                        .size(32.dp)
+                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onSelectEntity(id) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (id == activeId) {
+                        // Player's own turn reads as green — easy to spot at a glance without
+                        // reading names; an active enemy keeps the plain ink ring (still your turn
+                        // to react to, but not "go", so it doesn't get the same color).
+                        val ringColor = if (entity.actor?.faction == Faction.Player) Color(0xFF2E7D32) else INK
+                        Box(Modifier.size(32.dp).border(2.dp, ringColor, CircleShape))
+                    }
+                    val sprite = sprites[id]
+                    if (sprite != null) {
+                        Image(
+                            bitmap = sprite,
+                            contentDescription = null,
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.size(22.dp).clip(CircleShape).alpha(if (alive) 1f else 0.3f),
+                        )
+                    } else {
+                        Box(Modifier.size(22.dp).background((colors[id] ?: Color.Gray).copy(alpha = if (alive) 1f else 0.3f), CircleShape))
+                    }
                 }
-                Box(Modifier.size(22.dp).background((colors[id] ?: Color.Gray).copy(alpha = if (alive) 1f else 0.3f), CircleShape))
             }
         }
-        Spacer(modifier = Modifier.weight(1f))
         InkButton("☰", onClick = onOpenLog)
     }
 }
+
+private const val PARTY_BAR_COMPACT_BAR_HEIGHT_DP = 14
 
 /**
  * doc15: "3 portraits, HP/mana, controller" — reads live `GameState`, not `RunState` (invariant 8
  * in doc11: `PartyMember.hp` is stale by design mid-encounter). Controller toggle (doc15's
  * AI/manual flip) is deferred — nothing in the demo catalog needs a party member ever AI-driven.
+ *
+ * HP/mana render as the same [StatBar] bars the docs/26 Inspect card uses (a compact variant,
+ * [PARTY_BAR_COMPACT_BAR_HEIGHT_DP] tall), each member column `weight(1f)`'d to split the full
+ * row width evenly — this, plus AP text below the bars, is now the ONLY place any of HP/mana/AP
+ * show at all; the Peek sheet directly below repeats none of it, text or bar.
+ *
+ * [onEntityClick] wires the Inspect toggle asked for directly on the portraits — a tap opens
+ * the docs/26 detail card for that member, a second tap on the SAME one closes it. The tap-own-
+ * tile-triggers-Move shortcut on the board is unrelated and unchanged; this is a second, separate
+ * way to reach Inspect, not a replacement for it.
  */
 @Composable
-private fun PartyBar(state: GameState, catalog: Catalog, modifier: Modifier = Modifier) {
+private fun PartyBar(state: GameState, catalog: Catalog, onEntityClick: (EntityId) -> Unit, modifier: Modifier = Modifier) {
     val party = state.entities.filter { it.actor?.faction == Faction.Player }
     Row(
-        modifier = modifier.fillMaxWidth().height(64.dp).background(PAPER_SHEET).padding(horizontal = 12.dp, vertical = 6.dp),
+        modifier = modifier.fillMaxWidth().background(PAPER_SHEET).padding(horizontal = 12.dp, vertical = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         party.forEach { entity ->
             val s = entity.stats(catalog)
-            Column(modifier = Modifier.padding(end = 16.dp)) {
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = 8.dp)
+                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onEntityClick(entity.id) },
+            ) {
                 BasicText(catalog.archetype(entity.archetype).name, style = TextStyle(color = INK, fontSize = 12.sp))
-                BasicText("HP ${entity.health?.current}/${s.maxHp}", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
-                entity.resources?.let {
-                    BasicText("Mana ${it.mana}/${s.maxMana}", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
+                Spacer(modifier = Modifier.size(2.dp))
+                StatBar(
+                    "Hp", entity.health?.current ?: 0, s.maxHp, HP_BAR_COLOR, modifier = Modifier.fillMaxWidth(),
+                    barHeight = PARTY_BAR_COMPACT_BAR_HEIGHT_DP.dp, valueTextSize = 9.sp,
+                )
+                entity.resources?.let { resources ->
+                    Spacer(modifier = Modifier.size(2.dp))
+                    StatBar(
+                        "Mp", resources.mana, s.maxMana, MP_BAR_COLOR, modifier = Modifier.fillMaxWidth(),
+                        barHeight = PARTY_BAR_COMPACT_BAR_HEIGHT_DP.dp, valueTextSize = 9.sp,
+                    )
+                    Spacer(modifier = Modifier.size(2.dp))
+                    BasicText("AP ${resources.ap}/${s.maxAp}", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
                 }
             }
         }
+    }
+}
+
+private const val AC_BADGE_SIZE_DP = 44
+private const val INSPECT_SPRITE_SIZE_DP = 110
+private const val STAT_BAR_HEIGHT_DP = 22
+private const val ABILITY_LABEL_WIDTH_DP = 100
+
+/** docs/26-character-detail-card.md: the diamond AC badge, drawn rather than a rotated square+text (Modifier.rotate would spin the number too, and the DrawScope `rotate` this file already imports for projectiles is a different function of the same name — a plain `Path` sidesteps both). */
+@Composable
+private fun AcBadge(ac: Int, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.size(AC_BADGE_SIZE_DP.dp), contentAlignment = Alignment.Center) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val path = Path().apply {
+                moveTo(size.width / 2f, 0f)
+                lineTo(size.width, size.height / 2f)
+                lineTo(size.width / 2f, size.height)
+                lineTo(0f, size.height / 2f)
+                close()
+            }
+            drawPath(path, color = PAPER)
+            drawPath(path, color = INK, style = Stroke(width = 2f))
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            BasicText("$ac", style = TextStyle(color = INK, fontSize = 14.sp))
+            BasicText("AC", style = TextStyle(color = INK_FAINT, fontSize = 9.sp))
+        }
+    }
+}
+
+// Shared HP/MP fill colors — docs/26's Inspect card and the Peek header's action-select sheet both use them.
+private val HP_BAR_COLOR = Color(0xFFD98080)
+private val MP_BAR_COLOR = Color(0xFF7FB8D9)
+
+/**
+ * docs/26: a labeled fill bar — proportional fill plus the numeric current/max (the mockup's bar
+ * has no number, but Inspect is the one place a player can check exact HP/MP, dropping it would
+ * be a real functional loss). [barHeight]/[valueTextSize] are overridable so PartyBar can render a
+ * compact variant that fits two bars per party member alongside every other portrait.
+ */
+@Composable
+private fun StatBar(
+    label: String,
+    current: Int,
+    max: Int,
+    fillColor: Color,
+    modifier: Modifier = Modifier,
+    barHeight: Dp = STAT_BAR_HEIGHT_DP.dp,
+    valueTextSize: TextUnit = 11.sp,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier) {
+        BasicText(label, style = TextStyle(color = INK, fontSize = 13.sp), modifier = Modifier.width(28.dp))
+        Box(modifier = Modifier.weight(1f).height(barHeight).border(1.dp, INK_FAINT).background(PAPER_SHEET)) {
+            val fraction = if (max > 0) (current.toFloat() / max).coerceIn(0f, 1f) else 0f
+            Box(modifier = Modifier.fillMaxHeight().fillMaxWidth(fraction).background(fillColor))
+            BasicText("$current/$max", style = TextStyle(color = INK, fontSize = valueTextSize), modifier = Modifier.align(Alignment.Center))
+        }
+    }
+}
+
+@Composable
+private fun AbilityGrid(abilities: AbilityScores, modifier: Modifier = Modifier) {
+    Column(modifier = modifier) {
+        AbilityRow("Str", abilities.str, "Int", abilities.int)
+        AbilityRow("Dex", abilities.dex, "Wis", abilities.wis)
+        AbilityRow("Con", abilities.con, "Cha", abilities.cha)
+    }
+}
+
+@Composable
+private fun AbilityRow(labelA: String, valueA: Int, labelB: String, valueB: Int) {
+    Row {
+        BasicText("$labelA: $valueA", style = TextStyle(color = INK, fontSize = 13.sp), modifier = Modifier.width(ABILITY_LABEL_WIDTH_DP.dp))
+        BasicText("$labelB: $valueB", style = TextStyle(color = INK, fontSize = 13.sp))
     }
 }
 
@@ -231,9 +382,15 @@ private fun PartyBar(state: GameState, catalog: Catalog, modifier: Modifier = Mo
  * action" — doc15 asks for both on an enemy, but nothing tracks either yet (no committed-AI-intent
  * concept exists — see doc15's own "Threat overlay, and the intent question"), so showing them
  * would be invented data, not a read of something real.
+ *
+ * docs/26-character-detail-card.md: rebuilt into a full stat card — sprite+AC badge left, HP/MP
+ * bars and the six ability scores right, an authored flavor banner on top. [abilities] is read
+ * from `entity.stats(catalog).abilities` at the call site — post-modifier, not the archetype's
+ * unbuffed base — so a cursed/buffed entity's card matches its already-effective HP/AC, not a
+ * stale printed-on-the-sheet number.
  */
 @Composable
-private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog, onBack: () -> Unit) {
+private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog, sprite: ImageBitmap?, onBack: () -> Unit) {
     val entity = state.byId[entityId]
     if (entity == null) {
         BasicText("(no longer on the board)", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
@@ -242,16 +399,39 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
         return
     }
     val s = entity.stats(catalog)
-    BasicText(
-        "${catalog.archetype(entity.archetype).name} — ${entity.actor?.faction ?: Faction.Neutral}",
-        style = TextStyle(color = INK, fontSize = 16.sp),
-    )
-    Spacer(modifier = Modifier.size(4.dp))
-    BasicText(
-        "HP ${entity.health?.current}/${s.maxHp} · AC ${s.armorClass}" +
-            (entity.resources?.let { " · AP ${it.ap}/${s.maxAp} · Mana ${it.mana}/${s.maxMana}" } ?: ""),
-        style = TextStyle(color = INK_FAINT, fontSize = 13.sp),
-    )
+    val description = catalog.archetype(entity.archetype).description
+    if (description.isNotBlank()) {
+        BasicText(description, style = TextStyle(color = INK_FAINT, fontSize = 13.sp))
+        Spacer(modifier = Modifier.size(8.dp))
+    }
+    Row {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.width(INSPECT_SPRITE_SIZE_DP.dp + 8.dp)) {
+            Box {
+                Box(modifier = Modifier.size(INSPECT_SPRITE_SIZE_DP.dp).border(1.dp, INK_FAINT).background(PAPER)) {
+                    if (sprite != null) {
+                        Image(bitmap = sprite, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+                    } else {
+                        BasicText("✦", style = TextStyle(color = INK_FAINT, fontSize = 32.sp), modifier = Modifier.align(Alignment.Center))
+                    }
+                }
+                AcBadge(s.armorClass, modifier = Modifier.align(Alignment.TopStart).offset(x = (-12).dp, y = (-12).dp))
+            }
+            Spacer(modifier = Modifier.size(4.dp))
+            BasicText(catalog.archetype(entity.archetype).name, style = TextStyle(color = INK, fontSize = 14.sp))
+        }
+        Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+            StatBar("Hp", entity.health?.current ?: 0, s.maxHp, HP_BAR_COLOR)
+            Spacer(modifier = Modifier.size(6.dp))
+            StatBar("Mp", entity.resources?.mana ?: 0, s.maxMana, MP_BAR_COLOR)
+            val resources = entity.resources
+            if (resources != null) {
+                Spacer(modifier = Modifier.size(4.dp))
+                BasicText("AP ${resources.ap}/${s.maxAp}", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
+            }
+            Spacer(modifier = Modifier.size(12.dp))
+            AbilityGrid(s.abilities)
+        }
+    }
     if (entity.statuses.isNotEmpty()) {
         Spacer(modifier = Modifier.size(8.dp))
         entity.statuses.forEach { status ->
@@ -260,6 +440,111 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
     }
     Spacer(modifier = Modifier.size(12.dp))
     InkButton("Back", onClick = onBack)
+}
+
+private const val ACTION_ICON_SIZE_DP = 36
+private const val SWIPE_LEFT_THRESHOLD_PX = 80f
+
+/** docs/25: the icon slot on an action card/Details banner — a real sprite when authored, otherwise a generic placeholder glyph (never a missing/blank slot, resolved: "Generic placeholder glyph"). */
+@Composable
+private fun ActionIcon(bitmap: ImageBitmap?, modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier.size(ACTION_ICON_SIZE_DP.dp).border(1.dp, INK_FAINT).background(PAPER),
+        contentAlignment = Alignment.Center,
+    ) {
+        if (bitmap != null) {
+            Image(bitmap = bitmap, contentDescription = null, modifier = Modifier.fillMaxSize(), contentScale = ContentScale.Crop)
+        } else {
+            BasicText("✦", style = TextStyle(color = INK_FAINT, fontSize = 18.sp))
+        }
+    }
+}
+
+/**
+ * docs/25: one action-grid card — icon left, name right, rounded rect. Tap starts targeting
+ * (handled by [onTap], same [Selection] flow as before this pass). Swipe left opens the Details
+ * view for this action via [onSwipeLeft] — resolved gesture direction — entirely independent of
+ * [Selection]; the drag is only ever interpreted at [onDragEnd], no partial-drag visual.
+ */
+@Composable
+private fun ActionCard(name: String, icon: ImageBitmap?, modifier: Modifier = Modifier, onTap: () -> Unit, onSwipeLeft: () -> Unit) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier
+            .clip(RoundedCornerShape(8.dp))
+            .border(1.dp, INK_FAINT, RoundedCornerShape(8.dp))
+            .background(PAPER)
+            .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap)
+            .pointerInput(Unit) {
+                var dragged = 0f
+                detectHorizontalDragGestures(
+                    onDragStart = { dragged = 0f },
+                    onDragEnd = { if (dragged < -SWIPE_LEFT_THRESHOLD_PX) onSwipeLeft() },
+                    onHorizontalDrag = { change, dragAmount -> dragged += dragAmount; change.consume() },
+                )
+            }
+            .padding(8.dp),
+    ) {
+        ActionIcon(icon, modifier = Modifier.padding(end = 8.dp))
+        BasicText(name, style = TextStyle(color = INK, fontSize = 13.sp))
+    }
+}
+
+/** docs/25: the action bar as a max-2-per-row card grid, replacing the old single scrolling [Row] of text buttons. */
+@Composable
+private fun ActionGrid(
+    actionIds: List<ActionId>,
+    icons: Map<ActionId, ImageBitmap>,
+    catalog: Catalog,
+    onTap: (ActionId) -> Unit,
+    onSwipeLeft: (ActionId) -> Unit,
+) {
+    Column {
+        actionIds.chunked(2).forEach { row ->
+            Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
+                row.forEach { actionId ->
+                    ActionCard(
+                        name = catalog.actionDef(actionId).name,
+                        icon = icons[actionId],
+                        modifier = Modifier.weight(1f).padding(end = 8.dp),
+                        onTap = { onTap(actionId) },
+                        onSwipeLeft = { onSwipeLeft(actionId) },
+                    )
+                }
+                if (row.size == 1) Spacer(modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+// ShapePreviewGrid moved to ActionDescription.kt (same package) — made public so :designer's
+// ActionPanel.kt can show the same live targeting preview during authoring, not just in-game.
+
+/**
+ * docs/25's Details view — swapped into the bottom sheet by [ActionCard]'s swipe gesture,
+ * entirely orthogonal to [Selection]: browsing here never starts targeting or touches the board,
+ * mirrors [InspectPanel]'s existing full-sheet-swap-plus-[onBack] convention.
+ */
+@Composable
+private fun ActionDetailsPanel(actionId: ActionId, icon: ImageBitmap?, catalog: Catalog, onBack: () -> Unit) {
+    val def = catalog.actionDef(actionId)
+    Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ActionIcon(icon, modifier = Modifier.padding(end = 8.dp))
+            BasicText(def.name, style = TextStyle(color = INK, fontSize = 16.sp))
+        }
+        Spacer(modifier = Modifier.size(12.dp))
+        Row {
+            ShapePreviewGrid(remember(def.targeting) { previewShape(def.targeting) }, modifier = Modifier.padding(end = 12.dp))
+            BasicText(
+                describeEffects(def.effects, catalog),
+                style = TextStyle(color = INK, fontSize = 13.sp),
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Spacer(modifier = Modifier.size(12.dp))
+        InkButton("Back", onClick = onBack)
+    }
 }
 
 /**
@@ -338,6 +623,39 @@ private suspend fun loadMapAssets(map: BattleMap): MapAssets {
 }
 
 /**
+ * docs/23-sprite-rendering.md: one bitmap per distinct archetype actually present in [entities]
+ * that has an [de.jackbeback.pocketquest.core.model.Archetype.spriteId] — not the whole catalog, same
+ * "only load what's actually used" discipline [loadMapAssets] already established. An archetype with
+ * no `spriteId`, or whose id fails to resolve/load, is simply absent from the returned map — [Board]
+ * and [TurnOrderStrip] both already treat "no sprite for this entity" as "draw the circle instead,"
+ * the same missing-asset-is-never-a-crash contract every other sprite lookup here uses.
+ */
+private suspend fun loadEntitySprites(entities: List<Entity>, catalog: Catalog): Map<ArchetypeId, ImageBitmap> {
+    val manifest = GameAssetManifest.load()
+    return entities.map { it.archetype }.distinct().mapNotNull { archetypeId ->
+        val spriteId = catalog.archetype(archetypeId).spriteId ?: return@mapNotNull null
+        val meta = manifest.prop(spriteId) ?: return@mapNotNull null
+        val bitmap = GameSpriteLoader.load(meta.file) ?: return@mapNotNull null
+        archetypeId to bitmap
+    }.toMap()
+}
+
+/**
+ * docs/25-action-selection-ui.md: one bitmap per distinct [ActionId] actually offered on the
+ * action grid that has a [de.jackbeback.pocketquest.core.model.ActionDef.projectileSprite] —
+ * same "only load what's used, missing is never a crash" discipline as [loadEntitySprites].
+ */
+private suspend fun loadActionIcons(actionIds: List<ActionId>, catalog: Catalog): Map<ActionId, ImageBitmap> {
+    val manifest = GameAssetManifest.load()
+    return actionIds.distinct().mapNotNull { actionId ->
+        val spriteId = catalog.actionDef(actionId).projectileSprite ?: return@mapNotNull null
+        val meta = manifest.prop(spriteId) ?: return@mapNotNull null
+        val bitmap = GameSpriteLoader.load(meta.file) ?: return@mapNotNull null
+        actionId to bitmap
+    }.toMap()
+}
+
+/**
  * Picks a stable-but-varied sub-cell from a multi-cell texture sheet using the tile's own grid
  * position, so neighbouring cells don't all show the identical sub-image — the exact technique
  * `MapEditorPanel.kt`'s `floorSwatch`/`FloorPatch` already proved for the editor's own preview,
@@ -380,8 +698,11 @@ private fun Board(
     mapAssets: MapAssets?,
     world: VisualWorld,
     colors: Map<EntityId, Color>,
+    sprites: Map<EntityId, ImageBitmap>,
     legalTiles: Set<GridPos>,
     threatTiles: Set<GridPos>,
+    affectedTiles: Set<GridPos>,
+    activeTurnTile: GridPos?,
     selectedTile: GridPos?,
     canPan: Boolean,
     revealedTiles: Set<GridPos>,
@@ -391,6 +712,9 @@ private fun Board(
     modifier: Modifier = Modifier,
 ) {
     val scope = rememberCoroutineScope()
+    // docs/30-hit-telegraph-text.md: measured once per composition, not per draw frame — the same
+    // discipline `rememberTextMeasurer()` itself exists for (measuring is real work).
+    val textMeasurer = rememberTextMeasurer()
     // detectTapGestures's double-tap disambiguation wait never resolved a tap to onTap in this
     // environment (confirmed empirically — zero taps registered across many real clicks, while a
     // plain Modifier.clickable fired reliably every time). clickable's own tap recognition works,
@@ -446,15 +770,23 @@ private fun Board(
         drawProps(map, mapAssets, PropLayer.Floor, camera, zoom)
         threatTiles.forEach { pos -> drawThreatHatch(pos, camera, zoom) }
         legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
+        affectedTiles.forEach { pos -> drawAffectedTile(pos, camera, zoom) }
+        activeTurnTile?.let { pos -> drawActiveTurnTile(pos, camera, zoom) }
         selectedTile?.let { pos -> drawSelectedTile(pos, camera, zoom) }
         drawProps(map, mapAssets, PropLayer.Object, camera, zoom)
         world.entities.forEach { (id, entity) ->
             val pos = entityPositions[id]
             if (map.fogOfWar && pos != null && pos !in revealedTiles) return@forEach
-            drawEntity(entity, colors[id] ?: Color.Gray, camera, zoom)
+            drawEntity(entity, colors[id] ?: Color.Gray, sprites[id], camera, zoom)
+        }
+        world.projectiles.values.forEach { projectile ->
+            drawProjectile(projectile, camera, zoom)
         }
         world.overlays.forEach { overlay ->
             drawOverlay(overlay, camera, zoom)
+        }
+        world.telegraphs.values.forEach { telegraph ->
+            drawTelegraph(telegraph, textMeasurer, camera, zoom)
         }
         world.markers.forEach { marker ->
             drawMarker(marker.marker, camera, zoom)
@@ -622,6 +954,28 @@ private fun DrawScope.drawHighlight(pos: GridPos, camera: Offset, zoom: Float) {
     )
 }
 
+/** docs/27: every tile a multi-target action's shape would actually hit, given the confirmed point — red fill+border, same red the ripple flash/threat hatch already use, drawn under [drawSelectedTile]'s green so the confirmed point itself still reads green on top. */
+private fun DrawScope.drawAffectedTile(pos: GridPos, camera: Offset, zoom: Float) {
+    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
+    val tileSize = Size(TILE_PX * zoom, TILE_PX * zoom)
+    val red = Color(0xFFB71C1C)
+    drawRect(color = red.copy(alpha = 0.3f), topLeft = topLeft, size = tileSize)
+    drawRect(color = red, topLeft = topLeft, size = tileSize, style = Stroke(width = 2f))
+}
+
+/**
+ * The tile the active player-controlled entity stands on — same green as [TurnOrderStrip]'s
+ * active-token ring, border only (no fill), so it never gets confused with
+ * [drawSelectedTile]'s solid fill+border "confirmed target" meaning if both happen to land on the
+ * same tile. Only ever passed for a player's own turn — an active enemy gets no board highlight
+ * (matches [TurnOrderStrip], which also only greens a player token).
+ */
+private fun DrawScope.drawActiveTurnTile(pos: GridPos, camera: Offset, zoom: Float) {
+    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
+    val tileSize = Size(TILE_PX * zoom, TILE_PX * zoom)
+    drawRect(color = Color(0xFF2E7D32), topLeft = topLeft, size = tileSize, style = Stroke(width = 3f))
+}
+
 /** The tile picked in Selection.TargetPicked, before Confirm — a solid green tint+border, deliberately not the dashed ink "Reachable" style so a confirmed-looking pick reads differently from "you could tap here." */
 private fun DrawScope.drawSelectedTile(pos: GridPos, camera: Offset, zoom: Float) {
     val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
@@ -667,13 +1021,46 @@ private fun DrawScope.drawFogOfWar(map: BattleMap, revealedTiles: Set<GridPos>, 
     }
 }
 
-private fun DrawScope.drawEntity(entity: VisualEntity, color: Color, camera: Offset, zoom: Float) {
-    drawCircle(
-        color = color,
-        radius = TILE_PX * zoom * 0.35f * entity.scale.value,
-        center = worldToScreen(entity.pos.value, camera, zoom, size),
-        alpha = entity.alpha.value,
-    )
+/**
+ * docs/23-sprite-rendering.md: draws [sprite] when the entity's archetype has one, the original
+ * flat-colored circle otherwise — a real, permanent fallback, not a loading placeholder. 256px
+ * source art doesn't divide cleanly into either the pipeline's 64px logical tile or this board's own
+ * `TILE_PX`, so this deliberately doesn't chase doc16's "integer physical scale only" rule for these
+ * assets — drawn at a fixed fraction of the tile with normal bitmap filtering instead.
+ */
+private fun DrawScope.drawEntity(entity: VisualEntity, color: Color, sprite: ImageBitmap?, camera: Offset, zoom: Float) {
+    val center = worldToScreen(entity.pos.value, camera, zoom, size)
+    if (sprite != null) {
+        val footprint = TILE_PX * zoom * 0.9f * entity.scale.value
+        val topLeft = center - Offset(footprint / 2f, footprint / 2f)
+        drawImage(
+            image = sprite,
+            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+            dstSize = IntSize(footprint.roundToInt(), footprint.roundToInt()),
+            alpha = entity.alpha.value,
+        )
+    } else {
+        drawCircle(
+            color = color,
+            radius = TILE_PX * zoom * 0.35f * entity.scale.value,
+            center = center,
+            alpha = entity.alpha.value,
+        )
+    }
+}
+
+/** docs/24-projectile-travel-animation.md: a sprite in flight, rotated once for the whole trip — not re-derived per frame, [ProjectileVisual.rotationDegrees] is fixed at launch. */
+private fun DrawScope.drawProjectile(projectile: ProjectileVisual, camera: Offset, zoom: Float) {
+    val center = worldToScreen(projectile.pos.value, camera, zoom, size)
+    val footprint = TILE_PX * zoom * 0.7f
+    rotate(degrees = projectile.rotationDegrees, pivot = center) {
+        drawImage(
+            image = projectile.bitmap,
+            dstOffset = IntOffset((center.x - footprint / 2f).roundToInt(), (center.y - footprint / 2f).roundToInt()),
+            dstSize = IntSize(footprint.roundToInt(), footprint.roundToInt()),
+            alpha = projectile.alpha.value,
+        )
+    }
 }
 
 private fun DrawScope.drawOverlay(overlay: Overlay, camera: Offset, zoom: Float) {
@@ -683,6 +1070,14 @@ private fun DrawScope.drawOverlay(overlay: Overlay, camera: Offset, zoom: Float)
     val screenPos = worldToScreen(overlay.pos, camera, zoom, size)
     val screenTile = TILE_PX * zoom
     drawRect(color = color, topLeft = screenPos + Offset(screenTile * 0.3f, -screenTile * 0.6f), size = Size(screenTile * 0.25f, screenTile * 0.25f))
+}
+
+/** docs/30-hit-telegraph-text.md: real text (unlike [drawOverlay]'s placeholder square) — bold, centered over [telegraph]'s current (rising/fading) position. */
+private fun DrawScope.drawTelegraph(telegraph: TelegraphVisual, textMeasurer: TextMeasurer, camera: Offset, zoom: Float) {
+    val center = worldToScreen(telegraph.pos.value, camera, zoom, size)
+    val style = TextStyle(color = telegraph.color.copy(alpha = telegraph.alpha.value), fontSize = (16 * zoom).sp, fontWeight = FontWeight.Bold)
+    val layout = textMeasurer.measure(telegraph.text, style)
+    drawText(layout, topLeft = center - Offset(layout.size.width / 2f, layout.size.height / 2f))
 }
 
 /** doc15: "an arc from the original target to the tank" (DamageRedirected) / "a blocked flash on the affected tile" (Fizzled, Rejection.Blocked). */
@@ -722,14 +1117,32 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     val world = remember { VisualWorld(initialState, TILE_PX) }
     val player = remember { AnimationPlayer(world) }
     val colors = remember(initialState) { initialState.entities.associate { it.id to colorFor(it.actor?.faction) } }
+    // docs/23-sprite-rendering.md: loaded once per encounter (archetype roster is fixed for its
+    // duration), not per state tick — same discipline loadMapAssets already established for map
+    // assets. Re-keyed from archetype to EntityId so Board/TurnOrderStrip can look up by id exactly
+    // like `colors` already does, without needing a `state`/`catalog` reference of their own.
+    val spritesByArchetype by produceState<Map<ArchetypeId, ImageBitmap>>(initialValue = emptyMap(), initialState, catalog) {
+        value = loadEntitySprites(initialState.entities, catalog)
+    }
+    val sprites = remember(spritesByArchetype, initialState) {
+        initialState.entities.mapNotNull { e -> spritesByArchetype[e.archetype]?.let { e.id to it } }.toMap()
+    }
+    // docs/25-action-selection-ui.md: every action's icon, loaded once per catalog (the whole
+    // catalog is fixed for the encounter, same reasoning as spritesByArchetype above) — not just
+    // the active entity's own action set, since Details can be swiped open for any of them.
+    val actionIcons by produceState<Map<ActionId, ImageBitmap>>(initialValue = emptyMap(), catalog) {
+        value = loadActionIcons(catalog.actions.keys.toList(), catalog)
+    }
     val log = remember { mutableStateListOf<LogEntry>() }
     var logOpen by remember { mutableStateOf(false) }
     var selection by remember { mutableStateOf<Selection>(Selection.None) }
     var inspected by remember { mutableStateOf<EntityId?>(null) }
+    // docs/25: which action's Details view is open, if any — independent of [selection] entirely,
+    // swiping a card never starts targeting.
+    var detailsActionId by remember { mutableStateOf<ActionId?>(null) }
     // Which of the player's own units exploration mode is currently walking around — irrelevant
     // (and unused) once state.inCombat, where the normal turn-order Selection flow takes over.
     var exploringSelectedId by remember { mutableStateOf<EntityId?>(null) }
-    var sheetExpanded by remember { mutableStateOf(true) }
     var viewportSize by remember { mutableStateOf(Size.Zero) }
     var threatOverlayOn by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -829,7 +1242,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             // never changes mid-encounter), and the only state that's actually in scope here; the
             // resolver's own final state isn't assigned to `state` until after this loop.
             result.resolver.emitted.forEach { event -> formatEvent(event, state, catalog)?.let { log.add(0, it) } }
-            player.enqueue(result.resolver.emitted.flatMap { choreograph(it) })
+            player.enqueue(result.resolver.emitted.flatMap { choreograph(it, state, catalog) })
             player.awaitDrained()
             // Recompute fog every completed step, not just on movement — any state change could
             // shift who's alive/where. No-op-safe: returns the same instance when nothing's newly
@@ -948,8 +1361,23 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 mapAssets = mapAssets,
                 world = world,
                 colors = colors,
+                sprites = sprites,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
                 threatTiles = threatTiles,
+                // docs/27: every tile a multi-target action's shape would hit, given the confirmed
+                // point — Shape.Single is excluded (its "affected" tile is just the point itself,
+                // already shown green by selectedTile below, a red ring around it would say nothing new).
+                affectedTiles = run {
+                    val targetPicked = selection as? Selection.TargetPicked ?: return@run emptySet()
+                    val point = targetPicked.ctx.point ?: return@run emptySet()
+                    val shape = catalog.actionDef(targetPicked.actionId).targeting.shape
+                    if (shape is Shape.Single) return@run emptySet()
+                    val casterPos = state.byId[targetPicked.ctx.caster]?.pos ?: return@run emptySet()
+                    tilesInShape(casterPos, point, shape, state.map)
+                },
+                // Same "player faction, not just any active entity" criterion TurnOrderStrip's
+                // own green ring already uses, so the board and the strip always agree.
+                activeTurnTile = if (state.inCombat && active?.actor?.faction == Faction.Player) active.pos else null,
                 selectedTile = (selection as? Selection.TargetPicked)?.ctx?.point,
                 canPan = canPan,
                 revealedTiles = state.revealedTiles,
@@ -1015,6 +1443,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             TurnOrderStrip(
                 state,
                 colors,
+                sprites,
                 onSelectEntity = { id ->
                     val pos = state.byId[id]?.pos ?: return@TurnOrderStrip
                     scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
@@ -1028,24 +1457,29 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             // read, unlike an entity token's small on-board footprint. At most one at a time in
             // practice (AttackRolled/SaveRolled beats are Timing.Blocking, so they never overlap).
             world.diceRolls.lastOrNull()?.let { roll ->
-                DiceRoll(
-                    result = roll.result,
-                    trigger = roll.id,
-                    world = world,
-                    modifier = Modifier.align(Alignment.Center).size(160.dp),
-                )
+                RollCard(overlay = roll, world = world, modifier = Modifier.align(Alignment.Center))
             }
         }
-        PartyBar(state, catalog)
+        PartyBar(
+            state,
+            catalog,
+            onEntityClick = { id ->
+                // Mirrors onTileTap's own invariant: Inspect only opens from Idle, never mid-
+                // targeting (a pending ActionPicked/TargetPicked stays on the board untouched).
+                if (selection is Selection.None) {
+                    inspected = if (inspected == id) null else id
+                }
+            },
+        )
 
         // Bottom sheet — Peek/Inspect states (doc15). Flush against the party bar directly above
         // it (same PAPER_SHEET tone, no gap between them), so rounded top corners here just
         // exposed the outer PAPER background peeking through the corner cutouts — a real visual
         // glitch found by the user, not a stylistic choice. A hairline ink border reads as a
         // bordered card instead (same technique InkButton already uses), no rounding needed.
-        // doc15: "dismissible only to half-height, never fully" — collapsed still shows the header
-        // line, just hides the action bar/log so more board is visible. A tap-to-toggle handle for
-        // now, not a drag gesture (velocity tracking/snap points are real work, deferred).
+        // doc15's collapse-to-half-height chevron handle removed — it ate a whole row for a
+        // low-value affordance, and the sheet has no drag-to-resize gesture, only a tap toggle,
+        // so it wasn't earning its space (per the user's explicit ask). Always fully expanded now.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
@@ -1053,40 +1487,20 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 .background(PAPER_SHEET)
                 .padding(16.dp),
         ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                    ) { sheetExpanded = !sheetExpanded },
-                contentAlignment = Alignment.Center,
-            ) {
-                BasicText(if (sheetExpanded) "▾" else "▴", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
-            }
-            Spacer(modifier = Modifier.size(4.dp))
-
-            // Before combat starts, turn.activeIndex is just wherever initiative happened to land
-            // at spawn — meaningless while exploration mode is driving the board instead. Peek
-            // follows whichever unit the player has actually selected to move.
-            val peekEntity = if (state.inCombat) active else exploringSelectedId?.let { state.byId[it] }
-            if (peekEntity != null) {
-                val s = peekEntity.stats(catalog)
-                BasicText(
-                    "${catalog.archetype(peekEntity.archetype).name} — HP ${peekEntity.health?.current}/${s.maxHp}" +
-                        (peekEntity.resources?.takeIf { state.inCombat }?.let { " · AP ${it.ap}/${s.maxAp} · Mana ${it.mana}/${s.maxMana}" } ?: ""),
-                    style = TextStyle(color = INK, fontSize = 16.sp),
-                )
-            }
-
-            if (!sheetExpanded) return@Column
-            Spacer(modifier = Modifier.size(12.dp))
+            // Name/HP/mana/AP all moved out of this sheet — HP/mana into PartyBar as bars, AP
+            // alongside them there too (see PartyBar) — nothing repeats them here anymore, text or
+            // bar. This sheet starts directly at "Select an action"/Peek's own action state below.
 
             val inspectedId = inspected
+            val detailsId = detailsActionId
             if (inspectedId != null) {
                 // Inspect deliberately looks different from Peek (doc15: "they must not look
                 // alike") — no action bar, just read-only details plus Back.
-                InspectPanel(inspectedId, state, catalog, onBack = { inspected = null })
+                InspectPanel(inspectedId, state, catalog, sprites[inspectedId], onBack = { inspected = null })
+            } else if (detailsId != null) {
+                // docs/25: independent of Selection/targeting entirely — swiped open from the
+                // action grid below, backs out to that same grid, never touches the board.
+                ActionDetailsPanel(detailsId, actionIcons[detailsId], catalog, onBack = { detailsActionId = null })
             } else if (!state.inCombat) {
                 // No AP/turn order to show an action bar for — just enough feedback for the tap
                 // flow in onTileTap above (select a unit, then a destination).
@@ -1099,42 +1513,48 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             } else {
                 when (val sel = selection) {
                     is Selection.None -> {
-                        Row {
-                            // Move no longer gets its own button here — tapping the active entity's
+                        Column {
+                            // docs/25: "Select an action" until one's picked — the header text
+                            // itself carries the picked action's description in the other
+                            // Selection branches below (ActionPicked/TargetPicked), not here.
+                            BasicText("Select an action", style = TextStyle(color = INK_FAINT, fontSize = 13.sp))
+                            Spacer(modifier = Modifier.size(8.dp))
+                            // Move no longer gets its own card here — tapping the active entity's
                             // own tile on the board does the same thing (see onTileTap above).
-                            active.allActions(catalog).filter { it != moveActionId }.forEach { actionId ->
-                                InkButton(
-                                    catalog.actionDef(actionId).name,
-                                    modifier = Modifier.padding(end = 8.dp),
-                                    onClick = {
-                                        inspected = null
-                                        val def = catalog.actionDef(actionId)
-                                        selection = when {
-                                            def.targeting.mode == TargetMode.SelfOnly -> {
-                                                val ctx = ActionCtx(activeId, listOf(activeId), point = active.pos)
+                            ActionGrid(
+                                actionIds = active.allActions(catalog).filter { it != moveActionId },
+                                icons = actionIcons,
+                                catalog = catalog,
+                                onSwipeLeft = { actionId -> detailsActionId = actionId },
+                                onTap = { actionId ->
+                                    inspected = null
+                                    val def = catalog.actionDef(actionId)
+                                    selection = when {
+                                        def.targeting.mode == TargetMode.SelfOnly -> {
+                                            val ctx = ActionCtx(activeId, listOf(activeId), point = active.pos)
+                                            Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
+                                        }
+                                        // Exactly one legal target: skip straight to TargetPicked instead of
+                                        // making the player tap the only option on the board. Still requires
+                                        // an explicit Confirm — this only removes a redundant tap, not the
+                                        // safety net doc15's "nothing mutates before Confirm" is built on.
+                                        else -> {
+                                            val legal = legalTargets(state, activeId, def, catalog)
+                                            val onlyTarget = legal.singleOrNull()
+                                            if (onlyTarget != null) {
+                                                val targets = affectedBy(state, def, activeId, onlyTarget)
+                                                val ctx = ActionCtx(activeId, targets, point = onlyTarget)
                                                 Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
-                                            }
-                                            // Exactly one legal target: skip straight to TargetPicked instead of
-                                            // making the player tap the only option on the board. Still requires
-                                            // an explicit Confirm — this only removes a redundant tap, not the
-                                            // safety net doc15's "nothing mutates before Confirm" is built on.
-                                            else -> {
-                                                val legal = legalTargets(state, activeId, def, catalog)
-                                                val onlyTarget = legal.singleOrNull()
-                                                if (onlyTarget != null) {
-                                                    val targets = affectedBy(state, def, activeId, onlyTarget)
-                                                    val ctx = ActionCtx(activeId, targets, point = onlyTarget)
-                                                    Selection.TargetPicked(actionId, ctx, preview(state, activeId, actionId, ctx, catalog))
-                                                } else {
-                                                    Selection.ActionPicked(actionId, legal)
-                                                }
+                                            } else {
+                                                Selection.ActionPicked(actionId, legal)
                                             }
                                         }
-                                    },
-                                )
-                            }
+                                    }
+                                },
+                            )
                             InkButton(
                                 "End Turn",
+                                modifier = Modifier.fillMaxWidth(),
                                 onClick = {
                                     // runAiTurns() no longer needs an explicit call here — the
                                     // LaunchedEffect(activeId) above reacts the moment endTurn()
@@ -1146,15 +1566,26 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                         }
                     }
                     is Selection.ActionPicked -> {
+                        // docs/25: header swaps to the picked action's authored description — an
+                        // empty description (nothing authored yet) just skips the line rather than
+                        // showing an empty header.
+                        catalog.actionDef(sel.actionId).description.takeIf { it.isNotBlank() }?.let {
+                            BasicText(it, style = TextStyle(color = INK_FAINT, fontSize = 13.sp))
+                            Spacer(modifier = Modifier.size(4.dp))
+                        }
                         BasicText("${catalog.actionDef(sel.actionId).name}: pick a highlighted tile", style = TextStyle(color = INK, fontSize = 14.sp))
                         Spacer(modifier = Modifier.size(8.dp))
                         InkButton("Cancel", onClick = { selection = Selection.None })
                     }
                     is Selection.TargetPicked -> {
-                        // No Confirm/Cancel buttons for any action — tapping the highlighted (green)
-                        // tile again on the board confirms it, tapping anywhere else resets it (same
-                        // gesture for every action, not just Move — see onTileTap above).
-                        BasicText("${catalog.actionDef(sel.actionId).name} expects ${sel.preview.events.size} events", style = TextStyle(color = INK, fontSize = 14.sp))
+                        // docs/27: "expects N events" was a placeholder that never told the player
+                        // anything useful about what they were about to do — the same Details view
+                        // docs/25 built for browsing actions goes here instead. No Confirm/Cancel
+                        // buttons of its own for any action — tapping the highlighted (green) tile
+                        // again on the board confirms it, tapping anywhere else resets it (same
+                        // gesture for every action, not just Move — see onTileTap above); its own
+                        // "Back" cancels the pending target the same way tapping elsewhere does.
+                        ActionDetailsPanel(sel.actionId, actionIcons[sel.actionId], catalog, onBack = { selection = Selection.None })
                         Spacer(modifier = Modifier.size(8.dp))
                         BasicText("Tap the highlighted tile again to confirm — tap elsewhere to cancel.", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
                     }

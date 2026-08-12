@@ -175,6 +175,23 @@ class EffectHandlerTest {
     }
 
     @Test
+    fun moveAlongOntoOccupiedTileSpawnsOnWallHitWhenPresent() {
+        // docs/29-push-on-wall-hit.md: still fizzles (unchanged), but now ALSO spawns onWallHit —
+        // empty by default (every test above this one proves that), populated here.
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+            entity("blocker") { archetype("dummy"); at(1, 0) }
+        }
+        val onWallHit = listOf(Effect.DealDamage(s.id("hero"), 3, DamageType.Bludgeoning))
+        val path = listOf(GridPos(1, 0))
+        val out = applyEffect(s.state, Effect.MoveAlong(s.id("hero"), path, onWallHit = onWallHit), emptyMap(), s.catalog)
+
+        assertIs<GameEvent.Fizzled>(out.events.single())
+        assertEquals(onWallHit, out.spawn)
+    }
+
+    @Test
     fun moveAlongOntoNonWalkableTileFizzles() {
         val s = scenario {
             archetype("dummy") { hp = 10 }
@@ -266,6 +283,44 @@ class EffectHandlerTest {
         }
         assertEquals(GridPos(1, 0), working.byId.getValue(s.id("hero")).pos, "stopped one tile short of the wall at (2,0)")
         assertTrue(events.any { it is GameEvent.Fizzled })
+    }
+
+    @Test
+    fun pushOnWallHitRidesAlongOntoTheSpawnedMoveAlong() {
+        // docs/29-push-on-wall-hit.md: Push itself doesn't spawn onWallHit directly — it threads
+        // it onto the MoveAlong it spawns, which is what actually fires it once blocked.
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+        }
+        val onWallHit = listOf(Effect.DealDamage(s.id("hero"), 5, DamageType.Bludgeoning))
+        val out = applyEffect(s.state, Effect.Push(s.id("hero"), direction = GridPos(1, 0), distance = 3, onWallHit = onWallHit), emptyMap(), s.catalog)
+        val moveAlong = assertIs<Effect.MoveAlong>(out.spawn.single())
+        assertEquals(onWallHit, moveAlong.onWallHit)
+    }
+
+    @Test
+    fun pushOnWallHitFiresOnceTheSpawnedMoveAlongActuallyGetsBlocked() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0) }
+            entity("wall") { archetype("dummy"); at(2, 0) }
+        }
+        val onWallHit = listOf(Effect.DealDamage(s.id("hero"), 5, DamageType.Bludgeoning))
+        val first = applyEffect(s.state, Effect.Push(s.id("hero"), direction = GridPos(1, 0), distance = 3, onWallHit = onWallHit), emptyMap(), s.catalog)
+        val moveAlong = assertIs<Effect.MoveAlong>(first.spawn.single())
+        // Same "drive the spawned MoveAlong by hand" technique pushStopsAtTheFirstBlockedTile...
+        // already uses — this time collecting spawned effects too, not just events.
+        var working = first.state
+        var current: Effect = moveAlong
+        val allSpawned = mutableListOf<Effect>()
+        while (true) {
+            val step = applyEffect(working, current, emptyMap(), s.catalog)
+            working = step.state
+            allSpawned += step.spawn
+            current = step.spawn.singleOrNull() ?: break
+        }
+        assertTrue(onWallHit.single() in allSpawned, "the wall-hit damage must actually reach the resolver stack once blocked")
     }
 
     @Test

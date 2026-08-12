@@ -34,7 +34,7 @@ import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.rules.TurnMoment
 import de.jackbeback.pocketquest.core.rules.abilityModifier
 import de.jackbeback.pocketquest.core.rules.action.instantiate
-import de.jackbeback.pocketquest.core.rules.d20
+import de.jackbeback.pocketquest.core.rules.d20Detailed
 import de.jackbeback.pocketquest.core.rules.matches
 import de.jackbeback.pocketquest.core.rules.resolveAdvantage
 import kotlinx.serialization.json.Json
@@ -42,6 +42,7 @@ import kotlinx.serialization.json.encodeToJsonElement
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import de.jackbeback.pocketquest.core.rules.roll
+import de.jackbeback.pocketquest.core.rules.stat.rollBreakdown
 import de.jackbeback.pocketquest.core.rules.stat.stats
 import kotlin.math.roundToInt
 
@@ -98,12 +99,15 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
  * true expected value of an advantaged roll (which is measurably higher) in every AI/preview
  * evaluation.
  */
-private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): Pair<Int, GameState> = when (mode) {
+/** [other] (docs/22) is the discarded Advantage/Disadvantage die — null under Normal mode or in Expected mode (no real dice at all there). Purely for the roll card's dual-die display; hit/success math only ever uses [value]. */
+private data class D20Outcome(val value: Int, val other: Int?, val state: GameState)
+
+private fun rollD20(state: GameState, mode: RngMode, advantage: RollMode): D20Outcome = when (mode) {
     RngMode.Live -> {
-        val (next, value) = state.rng.d20(advantage)
-        value to state.copy(rng = next)
+        val (next, roll) = state.rng.d20Detailed(advantage)
+        D20Outcome(roll.resolved, roll.other, state.copy(rng = next))
     }
-    RngMode.Expected -> expectedD20(advantage) to state
+    RngMode.Expected -> D20Outcome(expectedD20(advantage), null, state)
 }
 
 /**
@@ -357,7 +361,10 @@ private fun moveAlong(state: GameState, effect: Effect.MoveAlong): HandlerOutcom
 
     val to = effect.path[effect.index]
     if (!state.map.isWalkable(to) || state.occupancy.containsKey(to)) {
-        return fizzle(state, effect, Rejection.Blocked(to))
+        // docs/29-push-on-wall-hit.md: still fizzles (the log line/Rejection event is unchanged),
+        // but now also spawns onWallHit — empty for ordinary movement, populated only when this
+        // MoveAlong came from a Push that authored one.
+        return fizzle(state, effect, Rejection.Blocked(to)).copy(spawn = effect.onWallHit)
     }
 
     val newState = state.withEntity(who.id) { it.copy(pos = to) }
@@ -371,7 +378,8 @@ private fun moveAlong(state: GameState, effect: Effect.MoveAlong): HandlerOutcom
  * blocked-tile fizzle-without-continuation behavior — see [Effect.Push]'s own doc comment. This
  * handler's only job is building the [distance]-tile path in [direction]; MoveAlong (dispatched
  * separately, across however many resolver steps it takes) does the actual moving, stopping at
- * whatever tile it first can't enter.
+ * whatever tile it first can't enter. [Effect.Push.onWallHit] rides straight onto the spawned
+ * MoveAlong (docs/29-push-on-wall-hit.md) — this handler never checks the destination itself.
  */
 private fun push(state: GameState, effect: Effect.Push): HandlerOutcome {
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
@@ -381,7 +389,7 @@ private fun push(state: GameState, effect: Effect.Push): HandlerOutcome {
     val stepCol = effect.direction.col.coerceIn(-1, 1)
     val stepRow = effect.direction.row.coerceIn(-1, 1)
     val path = (1..effect.distance).map { step -> GridPos(from.col + stepCol * step, from.row + stepRow * step) }
-    return HandlerOutcome(state, spawn = listOf(Effect.MoveAlong(effect.target, path)))
+    return HandlerOutcome(state, spawn = listOf(Effect.MoveAlong(effect.target, path, onWallHit = effect.onWallHit)))
 }
 
 /**
@@ -531,7 +539,7 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
         .map { it.side }
         .toSet()
     val advantageMode = resolveAdvantage(effect.advantage + derivedAdvantage)
-    val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
+    val (rollValue, otherD20, afterD20) = rollD20(state, mode, advantageMode)
     // doc17-engine-gaps.md 3.6: a natural 20 always hits (even against an AC the flat total would
     // never clear); a natural 1 always misses (even against an AC the flat total would clear).
     // Expected mode's rolls are fixed rounded averages (11/14/7) and never literally 1 or 20, so
@@ -539,17 +547,24 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
     // previews are about the average case.
     val critical = rollValue == 20
     val fumble = rollValue == 1
-    val total = rollValue + effect.attackBonus
+    // docs/22: the attack bonus is no longer just effect.attackBonus wholesale — it's the
+    // attacker's own derived ability modifier (per effect.ability) plus effect.attackBonus as an
+    // extra/magic-weapon bonus on top (0 for an ordinary weapon).
+    val breakdown = attacker.rollBreakdown(cat, effect.ability, extra = effect.attackBonus, extraLabel = "Weapon")
+    val attackBonus = breakdown.total
+    val total = rollValue + attackBonus
     val hit = !fumble && (critical || total >= ac)
 
     val rolledEvent = GameEvent.AttackRolled(
         attacker = attacker.id,
         target = target.id,
         d20 = rollValue,
-        mod = effect.attackBonus,
+        mod = attackBonus,
         ac = ac,
         hit = hit,
         critical = critical,
+        breakdown = breakdown,
+        otherD20 = otherD20,
     )
     if (!hit) return HandlerOutcome(afterD20, listOf(rolledEvent))
 
@@ -573,14 +588,14 @@ private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mo
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
     val targetStats = target.stats(cat)
-    val score = targetStats.abilities.forAbility(effect.ability)
-    val mod = abilityModifier(score)
+    val breakdown = target.rollBreakdown(cat, effect.ability)
+    val mod = breakdown.total
     val derivedAdvantage = targetStats.rollGrants
         .filter { it.ctx.matches(RollContext.SavingThrow(effect.ability)) }
         .map { it.side }
         .toSet()
     val advantageMode = resolveAdvantage(effect.advantage + derivedAdvantage)
-    val (rollValue, afterD20) = rollD20(state, mode, advantageMode)
+    val (rollValue, otherD20, afterD20) = rollD20(state, mode, advantageMode)
     val success = rollValue + mod >= effect.dc
 
     val rolledEvent = GameEvent.SaveRolled(
@@ -590,6 +605,8 @@ private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mo
         mod = mod,
         dc = effect.dc,
         success = success,
+        breakdown = breakdown,
+        otherD20 = otherD20,
     )
     val spawn = if (success) effect.onSuccess else effect.onFail
     return HandlerOutcome(afterD20, listOf(rolledEvent), spawn)
@@ -695,7 +712,7 @@ private fun concentrationCheck(state: GameState, effect: Effect.ConcentrationChe
         .filter { it.ctx.matches(RollContext.SavingThrow(Ability.Con)) }
         .map { it.side }
         .toSet()
-    val (rollValue, afterRoll) = rollD20(state, mode, resolveAdvantage(derivedAdvantage))
+    val (rollValue, _, afterRoll) = rollD20(state, mode, resolveAdvantage(derivedAdvantage))
     val success = rollValue + mod >= effect.dc
 
     val events = mutableListOf<GameEvent>(GameEvent.ConcentrationCheckRolled(who.id, effect.dc, rollValue, mod, success))

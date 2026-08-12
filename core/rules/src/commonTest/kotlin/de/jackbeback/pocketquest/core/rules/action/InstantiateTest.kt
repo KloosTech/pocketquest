@@ -183,6 +183,30 @@ class InstantiateTest {
     }
 
     @Test
+    fun pushOnWallHitIsInstantiatedAgainstACtxScopedToJustTheOnePushedTarget() {
+        // docs/29-push-on-wall-hit.md: same per-target scoping RollSave's onSuccess/onFail already
+        // use — Ref.EachTarget inside onWallHit must mean "the one entity that hit the wall," not
+        // every target of the whole action (there are two targets here: EntityId(2) and (3), only
+        // (2)'s own Push instance should carry a wall-hit effect aimed back at (2), not (3)).
+        val template = EffectTemplate.Push(
+            target = Ref.EachTarget,
+            awayFrom = Ref.Caster,
+            distance = 2,
+            onWallHit = listOf(EffectTemplate.DealDamage(Ref.EachTarget, 5, DamageType.Bludgeoning)),
+        )
+        val s = state.copy(
+            entities = listOf(entity(caster, GridPos(5, 5)), entity(EntityId(2), GridPos(6, 5)), entity(EntityId(3), GridPos(5, 6))),
+        )
+        val ctx = ActionCtx(caster, targets = listOf(EntityId(2), EntityId(3)))
+        val result = template.instantiate(s, ctx, cat)
+
+        val pushOnTwo = result.filterIsInstance<Effect.Push>().single { it.target == EntityId(2) }
+        assertEquals(listOf(Effect.DealDamage(EntityId(2), 5, DamageType.Bludgeoning)), pushOnTwo.onWallHit)
+        val pushOnThree = result.filterIsInstance<Effect.Push>().single { it.target == EntityId(3) }
+        assertEquals(listOf(Effect.DealDamage(EntityId(3), 5, DamageType.Bludgeoning)), pushOnThree.onWallHit)
+    }
+
+    @Test
     fun pushWithNoPositionForTheAwayFromRefProducesNoEffects() {
         val template = EffectTemplate.Push(target = Ref.EachTarget, awayFrom = Ref.Caster, distance = 2)
         val s = state.copy(entities = listOf(Entity(caster, ArchetypeId("dummy"), pos = null, health = null, resources = null, actor = null), entity(EntityId(2), GridPos(6, 5))))

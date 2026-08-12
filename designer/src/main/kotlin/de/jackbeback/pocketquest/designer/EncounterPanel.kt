@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
@@ -111,7 +113,7 @@ private fun EncounterEditor(encounter: EncounterSpec, catalog: Catalog, onChange
     val maps = catalog.maps.values.toList()
     val archetypes = catalog.archetypes.values.toList()
 
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
         InkLabel("NAME")
         InkTextField(encounter.name, onValueChange = { onChange(encounter.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
 

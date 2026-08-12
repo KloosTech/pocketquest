@@ -33,7 +33,7 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
 
     is EffectTemplate.RollAttack -> {
         val attackerId = resolveRef(attacker, ctx).firstOrNull() ?: return emptyList()
-        resolveRef(target, ctx).map { Effect.RollAttack(attackerId, it, attackBonus, advantage, damage, damageType, tags) }
+        resolveRef(target, ctx).map { Effect.RollAttack(attackerId, it, attackBonus, advantage, damage, damageType, tags, ability) }
     }
 
     is EffectTemplate.RollSave ->
@@ -62,7 +62,15 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
             // duplicate that normalization here.
             resolveRef(target, ctx).mapNotNull { targetId ->
                 val targetPos = state.byId[targetId]?.pos ?: return@mapNotNull null
-                Effect.Push(targetId, GridPos(targetPos.col - awayFromPos.col, targetPos.row - awayFromPos.row), distance)
+                // Same per-target ctx scoping RollSave's onSuccess/onFail already use — see
+                // Push.onWallHit's own doc comment.
+                val scopedCtx = ctx.copy(targets = listOf(targetId))
+                Effect.Push(
+                    targetId,
+                    GridPos(targetPos.col - awayFromPos.col, targetPos.row - awayFromPos.row),
+                    distance,
+                    onWallHit = onWallHit.flatMap { it.instantiate(state, scopedCtx, cat) },
+                )
             }
         }
     }

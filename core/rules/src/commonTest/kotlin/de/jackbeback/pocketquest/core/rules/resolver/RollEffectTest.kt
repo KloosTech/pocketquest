@@ -15,8 +15,11 @@ import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
+import de.jackbeback.pocketquest.core.model.RollTerm
+import de.jackbeback.pocketquest.core.model.Stat
 import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.rules.d20
+import de.jackbeback.pocketquest.core.rules.fixture.Scenario
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
 import de.jackbeback.pocketquest.core.rules.roll
 import kotlin.test.Test
@@ -68,6 +71,62 @@ class RollEffectTest {
         val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
         assertTrue(!rolled.hit)
         assertTrue(out.spawn.isEmpty(), "a miss must not spawn DealDamage")
+    }
+
+    // --- docs/22-dice-roll-ui-and-ability-checks.md: derived attack bonus + breakdown ---
+
+    @Test
+    fun rollAttackDerivesBonusFromTheAttackersAbilityScoreNotJustAttackBonus() {
+        val s = scenario {
+            archetype("brute") { hp = 10; abilities(str = 16) } // +3 modifier
+            archetype("target") { hp = 10; ac = 10 }
+            entity("hero") { archetype("brute"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("target"); at(1, 0); hp(10) }
+        }
+        // attackBonus is now an EXTRA on top of the derived Str modifier, not the whole bonus —
+        // a +1 magic weapon here, so total should be 3 (Str) + 1 (weapon) = 4, same shape as before
+        // this feature but no longer hand-waved past the attacker's actual ability score.
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 1, damage = DiceSpec(1, 6, 0), damageType = DamageType.Slashing)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
+        assertEquals(4, rolled.mod)
+        assertEquals(
+            listOf(RollTerm("Str", 3), RollTerm("Weapon", 1)),
+            rolled.breakdown.terms,
+            "the Items & Effects term is omitted since nothing modified Str beyond the archetype base",
+        )
+    }
+
+    @Test
+    fun rollAttackBreakdownOmitsZeroTermsEntirely() {
+        val s = scenario {
+            archetype("dummy") { hp = 10 } // Str 10 -> modifier 0
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(10) }
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, damage = DiceSpec(1, 6, 0), damageType = DamageType.Slashing)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
+        assertEquals(0, rolled.mod)
+        assertEquals(listOf(RollTerm("Str", 0)), rolled.breakdown.terms, "no Items & Effects or Weapon term when both are zero")
+    }
+
+    @Test
+    fun rollAttackBreakdownIncludesAnItemsAndEffectsCatchAllTermWhenSomethingModifiesTheAbility() {
+        val s = scenario {
+            archetype("buffed") { hp = 10; abilities(str = 12); modifier(Modifier.Add(Stat.Str, 4)) } // base +1, +4 more from the innate modifier -> derived Str 16, +3
+            archetype("target") { hp = 10 }
+            entity("hero") { archetype("buffed"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("target"); at(1, 0); hp(10) }
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, damage = DiceSpec(1, 6, 0), damageType = DamageType.Slashing)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, mode = RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.AttackRolled>(out.events.single())
+        assertEquals(3, rolled.mod)
+        assertEquals(listOf(RollTerm("Str", 1), RollTerm("Items & Effects", 2)), rolled.breakdown.terms)
     }
 
     @Test
@@ -252,6 +311,20 @@ class RollEffectTest {
     }
 
     @Test
+    fun rollSaveBreakdownReportsTheAbilityModifierTerm() {
+        val s = scenario {
+            archetype("dummy") { hp = 20; abilities(dex = 14) } // dex mod +2
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20) }
+        }
+        val effect = Effect.RollSave(s.id("hero"), Ability.Dex, dc = 12)
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.SaveRolled>(out.events.single())
+        assertEquals(2, rolled.mod)
+        assertEquals(listOf(RollTerm("Dex", 2)), rolled.breakdown.terms)
+    }
+
+    @Test
     fun rollSaveExpectedModeFailsWhenAverageRollBelowDc() {
         val s = scenario {
             archetype("dummy") { hp = 20; abilities(dex = 8) } // dex mod -1; 10.5-1=9.5 < dc 20 -> fail
@@ -351,6 +424,31 @@ class RollEffectTest {
         val rolled = out.events.single() as GameEvent.AttackRolled
         assertEquals(14, rolled.d20, "advantage vs Enemy must apply since the target is Enemy")
     }
+
+    @Test
+    fun rollAttackCarriesTheDiscardedAdvantageDieForTheDualDieCardOnlyInLiveMode() {
+        val s = scenario {
+            archetype("attacker") { hp = 10 }
+            archetype("target") { hp = 10; ac = 5 }
+            entity("hero") { archetype("attacker"); at(0, 0); hp(10) }
+            entity("goblin") { archetype("target"); at(1, 0); hp(10); faction(Faction.Enemy) }
+            statusDef("hunter") { modifier(Modifier.Roll(RollContext.AttackRoll(vs = Faction.Enemy), AdvSide.Advantage)) }
+            status("hero", "hunter")
+        }
+        val effect = Effect.RollAttack(s.id("hero"), s.id("goblin"), attackBonus = 0, damage = DiceSpec(1, 4, 0), damageType = DamageType.Fire)
+
+        val expected = (out(s, effect, RngMode.Expected).events.single() as GameEvent.AttackRolled)
+        assertEquals(null, expected.otherD20, "Expected mode has no real dice at all to discard")
+
+        // Live mode's hit also emits DamageRolled alongside AttackRolled — unlike Expected mode's
+        // single-event roll, so this can't use .single() the way the sibling assertion above does.
+        val live = (out(s, effect, RngMode.Live).events.first() as GameEvent.AttackRolled)
+        val other = requireNotNull(live.otherD20) { "Live mode + Advantage always rolls two real dice" }
+        assertTrue(live.d20 >= other, "the recorded d20 must be the higher of the pair under Advantage")
+    }
+
+    private fun out(s: Scenario, effect: Effect.RollAttack, mode: RngMode) =
+        applyEffect(s.state, effect, emptyMap(), s.catalog, mode = mode)
 
     @Test
     fun rollAttackDoesNotApplyAFactionScopedGrantAgainstTheWrongFaction() {

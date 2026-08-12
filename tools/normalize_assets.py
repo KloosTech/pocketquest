@@ -6,10 +6,16 @@ Additive, not a from-scratch rebuild: most raw source packs get deleted from
 the repo once their output is normalized (established practice — the raw
 packs are large third-party downloads, not project source), so this script
 can never assume the full original source tree is present. It loads the
-existing assets/normalized/assets.json (if any), only ADDS entries for ids
-it doesn't already know about, and never deletes/overwrites prior output —
-running it again after a raw pack has been deleted and cleaned up must be a
-no-op for that pack, not data loss for everything normalized before it.
+existing OUT/assets.json (if any), only ADDS entries for ids it doesn't
+already know about, and never deletes/overwrites prior output — running it
+again after a raw pack has been deleted and cleaned up must be a no-op for
+that pack, not data loss for everything normalized before it.
+
+docs/23-sprite-rendering.md: OUT points directly at :ui's own composeResources
+tree — the one location actually bundled cross-platform — not a repo-root
+duplicate a human has to remember to copy afterward. SRC (raw, pre-normalize
+source packs) stays at the repo-root `assets/` folder; only the *output* of
+normalizing moved.
 
 Run from the repo root: `python3 tools/normalize_assets.py`.
 """
@@ -19,7 +25,7 @@ import re
 from PIL import Image
 
 SRC = "assets"
-OUT = "assets/normalized"
+OUT = "ui/src/commonMain/composeResources/files/normalized"
 TILE = 64
 SRC_TILE_DUNGEON = 70  # the original "Free Flat Greyscale Dungeon Assets" pack's tile size
 SRC_TILE_DECOR = 300  # "Classic Dungeon Map Symbols - High Res"'s tile size

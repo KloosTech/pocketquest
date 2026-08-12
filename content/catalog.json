@@ -4,14 +4,14 @@
             "id": "archetype1",
             "name": "Warrior",
             "abilities": {
-                "str": 13,
+                "str": 14,
                 "dex": 10,
-                "con": 10,
+                "con": 12,
                 "int": 10,
                 "wis": 10,
                 "cha": 10
             },
-            "baseMaxHp": 10,
+            "baseMaxHp": 28,
             "baseAc": 10,
             "speedTiles": 6,
             "baseMaxAp": 2,
@@ -19,9 +19,11 @@
             "actions": [
                 "action2",
                 "move",
+                "action5",
                 "action3"
             ],
-            "aiProfile": "profile1"
+            "aiProfile": "profile1",
+            "spriteId": "knight"
         },
         "archetype2": {
             "id": "archetype2",
@@ -34,8 +36,8 @@
                 "wis": 10,
                 "cha": 10
             },
-            "baseMaxHp": 4,
-            "baseAc": 10,
+            "baseMaxHp": 16,
+            "baseAc": 8,
             "speedTiles": 6,
             "baseMaxAp": 2,
             "baseMaxMana": 0,
@@ -43,7 +45,77 @@
                 "move",
                 "action2"
             ],
-            "aiProfile": "profile1"
+            "aiProfile": "profile1",
+            "spriteId": "goblin_swordsman"
+        },
+        "archetype3": {
+            "id": "archetype3",
+            "name": "Goblin Brute",
+            "abilities": {
+                "str": 14,
+                "dex": 10,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 24,
+            "baseAc": 8,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "move",
+                "action4"
+            ],
+            "aiProfile": "profile1",
+            "spriteId": "goblin_brute"
+        },
+        "archetype4": {
+            "id": "archetype4",
+            "name": "Goblin Archer",
+            "abilities": {
+                "str": 10,
+                "dex": 12,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 10,
+            "baseAc": 8,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "move"
+            ],
+            "aiProfile": "profile2",
+            "spriteId": "goblin_archer"
+        }
+    },
+    "statuses": {
+        "status1": {
+            "id": "status1",
+            "name": "Bleeding",
+            "stackPolicy": "AddStacks",
+            "modifiers": [
+                {
+                    "type": "add",
+                    "stat": "MaxHp",
+                    "value": -4
+                }
+            ],
+            "onTurnStart": [
+                {
+                    "type": "dealDamage",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "amount": 4,
+                    "damageType": "Slashing"
+                }
+            ]
         }
     },
     "items": {
@@ -85,7 +157,53 @@
                 },
                 "requiresLoS": false
             },
-            "effects": []
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 8,
+                    "damage": {
+                        "count": 1,
+                        "sides": 12
+                    },
+                    "damageType": "Bludgeoning"
+                },
+                {
+                    "type": "rollSave",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "ability": "Dex",
+                    "dc": 10,
+                    "onSuccess": [
+                        {
+                            "type": "push",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "awayFrom": {
+                                "type": "caster"
+                            },
+                            "distance": 2,
+                            "onWallHit": [
+                                {
+                                    "type": "dealDamage",
+                                    "target": {
+                                        "type": "eachTarget"
+                                    },
+                                    "amount": 4,
+                                    "damageType": "Bludgeoning"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
         },
         "action2": {
             "id": "action2",
@@ -117,7 +235,7 @@
                     "target": {
                         "type": "eachTarget"
                     },
-                    "attackBonus": 0,
+                    "attackBonus": 4,
                     "damage": {
                         "count": 1,
                         "sides": 4,
@@ -145,7 +263,7 @@
                 },
                 "shape": {
                     "type": "sphere",
-                    "radius": 2
+                    "radius": 1
                 },
                 "maxTargets": 9
             },
@@ -164,6 +282,174 @@
                         "sides": 6
                     },
                     "damageType": "Fire"
+                }
+            ],
+            "projectileSprite": "fireball"
+        },
+        "action4": {
+            "id": "action4",
+            "name": "Big Swing",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "Direction",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "cone",
+                    "length": 2,
+                    "degrees": 93
+                },
+                "maxTargets": 3
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 6,
+                    "damage": {
+                        "count": 1,
+                        "sides": 12
+                    },
+                    "damageType": "Bludgeoning"
+                },
+                {
+                    "type": "rollSave",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "ability": "Dex",
+                    "dc": 12,
+                    "onSuccess": [
+                        {
+                            "type": "push",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "awayFrom": {
+                                "type": "caster"
+                            },
+                            "distance": 2,
+                            "onWallHit": [
+                                {
+                                    "type": "dealDamage",
+                                    "target": {
+                                        "type": "eachTarget"
+                                    },
+                                    "amount": 20,
+                                    "damageType": "Bludgeoning"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "projectileSprite": "club_256_2"
+        },
+        "action5": {
+            "id": "action5",
+            "name": "Slice",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SingleEntity",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "single"
+                },
+                "filter": {
+                    "excludeSelf": true
+                }
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 4,
+                    "damage": {
+                        "count": 1,
+                        "sides": 8
+                    },
+                    "damageType": "Slashing"
+                },
+                {
+                    "type": "rollSave",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "ability": "Con",
+                    "dc": 12,
+                    "onFail": [
+                        {
+                            "type": "applyStatus",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "status": "status1",
+                            "expiry": {
+                                "type": "permanent"
+                            }
+                        }
+                    ]
+                }
+            ]
+        },
+        "action6": {
+            "id": "action6",
+            "name": "Basic Shot",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SingleEntity",
+                "range": {
+                    "type": "tiles",
+                    "n": 5
+                },
+                "shape": {
+                    "type": "single"
+                }
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 4,
+                    "damage": {
+                        "count": 1,
+                        "sides": 4
+                    },
+                    "damageType": "Piercing",
+                    "ability": "Dex"
                 }
             ]
         }
@@ -438,27 +724,6 @@
                 }
             ],
             "wallEdges": [
-                {
-                    "pos": {
-                        "col": 5,
-                        "row": 1
-                    },
-                    "side": "West"
-                },
-                {
-                    "pos": {
-                        "col": 5,
-                        "row": 2
-                    },
-                    "side": "West"
-                },
-                {
-                    "pos": {
-                        "col": 5,
-                        "row": 3
-                    },
-                    "side": "West"
-                },
                 {
                     "pos": {
                         "col": 1,
@@ -793,8 +1058,8 @@
                     "role": "Party",
                     "tiles": [
                         {
-                            "col": 1,
-                            "row": 1
+                            "col": 3,
+                            "row": 2
                         }
                     ]
                 },
@@ -802,12 +1067,12 @@
                     "role": "Enemy",
                     "tiles": [
                         {
-                            "col": 6,
+                            "col": 4,
                             "row": 2
                         },
                         {
-                            "col": 7,
-                            "row": 2
+                            "col": 4,
+                            "row": 3
                         }
                     ]
                 }
@@ -2472,6 +2737,27 @@
                             "row": 6
                         }
                     ]
+                },
+                {
+                    "role": "Elite",
+                    "tiles": [
+                        {
+                            "col": 2,
+                            "row": 2
+                        },
+                        {
+                            "col": 19,
+                            "row": 13
+                        },
+                        {
+                            "col": 19,
+                            "row": 1
+                        },
+                        {
+                            "col": 20,
+                            "row": 2
+                        }
+                    ]
                 }
             ]
         }
@@ -2486,7 +2772,7 @@
                     "archetype": "archetype2"
                 },
                 {
-                    "archetype": "archetype2"
+                    "archetype": "archetype3"
                 }
             ],
             "scaling": {
@@ -2507,6 +2793,15 @@
             "enemies": [
                 {
                     "archetype": "archetype2",
+                    "count": 8
+                },
+                {
+                    "archetype": "archetype4",
+                    "count": 4
+                },
+                {
+                    "archetype": "archetype3",
+                    "role": "Elite",
                     "count": 4
                 }
             ]
@@ -2515,18 +2810,18 @@
     "aiProfiles": {
         "profile1": {
             "id": "profile1",
-            "name": "Basic Goblin",
+            "name": "Basic Melee",
             "tiers": [
                 {
                     "condition": {
                         "type": "enemyCountInRange",
-                        "range": 1,
-                        "atLeast": 1
+                        "range": 5,
+                        "atLeast": 2
                     },
                     "goal": {
                         "type": "useAction",
                         "category": "Damage",
-                        "targetPreference": "LowestHpPercent"
+                        "targetPreference": "Farthest"
                     }
                 },
                 {
@@ -2535,6 +2830,23 @@
                     },
                     "goal": {
                         "type": "approach"
+                    }
+                }
+            ]
+        },
+        "profile2": {
+            "id": "profile2",
+            "name": "Basic Archer",
+            "tiers": [
+                {
+                    "condition": {
+                        "type": "enemyCountInRange",
+                        "range": 3,
+                        "atLeast": 2
+                    },
+                    "goal": {
+                        "type": "useAction",
+                        "targetPreference": "LowestHpPercent"
                     }
                 }
             ]

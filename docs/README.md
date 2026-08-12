@@ -34,6 +34,17 @@ Game design and product layer:
 | [18-damage-pipeline.md](18-damage-pipeline.md) | Interception chain: redirect, absorb, reflect, resistance |
 
 | [19-placeholders.md](19-placeholders.md) | Generated placeholder art and the missing-asset registry |
+| [20-desktop-designer-spec.md](20-desktop-designer-spec.md) | Desktop designer: per-editor status and sequencing |
+| [21-ai-behavior-spec.md](21-ai-behavior-spec.md) | AI behavior: tiered profiles |
+| [22-dice-roll-ui-and-ability-checks.md](22-dice-roll-ui-and-ability-checks.md) | Dice roll UI (DC + modifier breakdown) and out-of-combat ability checks |
+| [23-sprite-rendering.md](23-sprite-rendering.md) | Real sprite art for archetypes/projectiles/chests, replacing colored circles |
+| [24-projectile-travel-animation.md](24-projectile-travel-animation.md) | Attacks send a sprite flying from caster to target, rotated to face travel direction |
+| [25-action-selection-ui.md](25-action-selection-ui.md) | Icon+name action cards, authored description, swipe-to-Details view with auto-generated effect text |
+| [26-character-detail-card.md](26-character-detail-card.md) | Full Inspect stat card: sprite, AC badge, HP/MP bars, ability scores |
+| [27-targeting-aoe-highlight-and-details-sheet.md](27-targeting-aoe-highlight-and-details-sheet.md) | Red AoE tile highlight on the board, Details sheet replaces "expects N events" |
+| [28-sprite-import.md](28-sprite-import.md) | "Import…" button on the Archetype/Action sprite pickers — copies the file, updates assets.json, no restart needed |
+| [29-push-on-wall-hit.md](29-push-on-wall-hit.md) | Push effects can trigger an on-wall-hit sub-effect instead of just fizzling |
+| [30-hit-telegraph-text.md](30-hit-telegraph-text.md) | Animated HIT/MISS/SAVED/FAILED text over a character on attack/save resolution |
 
 Not yet written: 14 (UI shell).
 

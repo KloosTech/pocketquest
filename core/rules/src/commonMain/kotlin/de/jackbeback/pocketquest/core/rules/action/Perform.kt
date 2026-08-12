@@ -57,7 +57,10 @@ private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId,
  * instant casting begins, not after the caster has already paid or the spell has resolved.
  */
 private fun buildInitial(state: GameState, caster: EntityId, actionId: ActionId, ctx: ActionCtx, cat: Catalog): Resolver {
-    val actionStarted = GameEvent.ActionStarted(caster, actionId)
+    // docs/24-projectile-travel-animation.md: point/targets ride along on the one event that fires
+    // exactly once per cast, so a travel-animation beat has a destination to fly to regardless of
+    // how many per-target effects this action's own EachTarget expansion goes on to emit.
+    val actionStarted = GameEvent.ActionStarted(caster, actionId, ctx.point, ctx.targets)
     val (triggered, reacted) = collectTriggers(state, listOf(actionStarted), depth = 0, cat = cat, alreadyReacted = emptySet())
     return Resolver(
         state = state,

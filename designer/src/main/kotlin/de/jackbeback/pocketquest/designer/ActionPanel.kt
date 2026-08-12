@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
@@ -54,6 +56,9 @@ import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
 import de.jackbeback.pocketquest.core.rules.action.preview
 import de.jackbeback.pocketquest.core.rules.stat.stats
+import de.jackbeback.pocketquest.ui.ShapePreviewGrid
+import de.jackbeback.pocketquest.ui.describeEffects
+import de.jackbeback.pocketquest.ui.previewShape
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -137,12 +142,63 @@ fun ActionPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifier: 
 
 @Composable
 private fun ActionEditor(action: ActionDef, catalog: Catalog, onChange: (ActionDef) -> Unit, onRemove: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkLabel("NAME")
             InkButton("Remove Action", modifier = Modifier.padding(start = 16.dp), onClick = onRemove)
         }
         InkTextField(action.name, onValueChange = { onChange(action.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
+
+        Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("DESCRIPTION") }
+        // docs/25-action-selection-ui.md: flavor/tactical text shown once this action is picked
+        // in the battle UI — separate from the auto-generated mechanical effect text.
+        InkTextField(
+            action.description,
+            onValueChange = { onChange(action.copy(description = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = false,
+        )
+
+        Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("PROJECTILE SPRITE") }
+        var justImportedSprite by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val spriteOptions = AssetManifest.projectileSprites
+            val currentSprite = spriteOptions.find { it.id == action.projectileSprite }
+            InkSelect(
+                selected = currentSprite,
+                options = listOf<ManifestAsset?>(null) + spriteOptions,
+                label = { it?.id ?: "None (no travel animation)" },
+                onSelect = { asset -> onChange(action.copy(projectileSprite = asset?.id)) },
+                modifier = Modifier.width(220.dp),
+                itemContent = { asset ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                        if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                        BasicText(asset?.id ?: "None (no travel animation)", style = TextStyle(color = INK, fontSize = 13.sp))
+                    }
+                },
+            )
+            if (currentSprite != null) {
+                val bmp = remember(currentSprite.file) { SpriteLoader.load(PROPS_DIR + currentSprite.file) }
+                if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
+            }
+            InkButton(
+                "Import…",
+                modifier = Modifier.padding(start = 8.dp),
+                onClick = {
+                    val source = chooseImageFile() ?: return@InkButton
+                    val imported = AssetManifest.importSprite(source, kind = "projectile") ?: return@InkButton
+                    onChange(action.copy(projectileSprite = imported.id))
+                    justImportedSprite = true
+                },
+            )
+        }
+        // docs/28: this list updates live, but Playtest reads through :ui's packaged Compose
+        // Resources, baked in at build time — it won't see a just-imported file until :designer
+        // itself is fully restarted. Only shown right after an import, not permanently.
+        if (justImportedSprite) {
+            InkLabel("Imported — restart :designer:run to see it in Playtest.", modifier = Modifier.padding(top = 4.dp))
+        }
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("COST") }
         CostEditor(action.cost, catalog) { onChange(action.copy(cost = it)) }
@@ -152,6 +208,19 @@ private fun ActionEditor(action: ActionDef, catalog: Catalog, onChange: (ActionD
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("EFFECTS") }
         EffectTemplateListEditor(action.effects, catalog, onChange = { onChange(action.copy(effects = it)) })
+
+        Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("TARGETING PREVIEW") }
+        // docs/25-action-selection-ui.md: the same shape grid + auto-generated effect text the
+        // in-game Details view shows (ShapePreviewGrid/describeEffects, both public in :ui's
+        // ActionDescription.kt) — authors see it update live as Targeting/Effects change, instead
+        // of only discovering how it reads once it's live in a playtest.
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            ShapePreviewGrid(remember(action.targeting) { previewShape(action.targeting) }, modifier = Modifier.padding(end = 12.dp))
+            BasicText(
+                describeEffects(action.effects, catalog).ifBlank { "(no effects yet)" },
+                style = TextStyle(color = INK, fontSize = 13.sp),
+            )
+        }
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("REACTION TRIGGER") }
         Row(verticalAlignment = Alignment.CenterVertically) {

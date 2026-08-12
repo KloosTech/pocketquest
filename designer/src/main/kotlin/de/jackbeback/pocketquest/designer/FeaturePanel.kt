@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -100,7 +101,7 @@ fun FeaturePanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifier:
 
 @Composable
 private fun FeatureEditor(feature: FeatureDef, catalog: Catalog, onChange: (FeatureDef) -> Unit, onRemove: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkLabel("NAME")
             InkButton("Remove Feature", modifier = Modifier.padding(start = 16.dp), onClick = onRemove)

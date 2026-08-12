@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -116,12 +117,21 @@ fun ArchetypePanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
 
 @Composable
 private fun ArchetypeEditor(archetype: Archetype, catalog: Catalog, onChange: (Archetype) -> Unit, onRemove: () -> Unit) {
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkLabel("NAME")
             InkButton("Remove Archetype", modifier = Modifier.padding(start = 16.dp), onClick = onRemove)
         }
         InkTextField(archetype.name, onValueChange = { onChange(archetype.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
+
+        Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("DESCRIPTION") }
+        // docs/26-character-detail-card.md: flavor/lore text shown as the Inspect card's top banner.
+        InkTextField(
+            archetype.description,
+            onValueChange = { onChange(archetype.copy(description = it)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = false,
+        )
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("ACTIONS") }
         if (catalog.actions.isEmpty()) {
@@ -141,6 +151,47 @@ private fun ArchetypeEditor(archetype: Archetype, catalog: Catalog, onChange: (A
                     )
                 }
             }
+        }
+
+        Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("SPRITE") }
+        var justImportedSprite by remember { mutableStateOf(false) }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            val spriteOptions = AssetManifest.characterSprites
+            val currentSprite = spriteOptions.find { it.id == archetype.spriteId }
+            InkSelect(
+                selected = currentSprite,
+                options = listOf<ManifestAsset?>(null) + spriteOptions,
+                label = { it?.id ?: "None (colored circle)" },
+                onSelect = { asset -> onChange(archetype.copy(spriteId = asset?.id)) },
+                modifier = Modifier.width(220.dp),
+                itemContent = { asset ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                        if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                        BasicText(asset?.id ?: "None (colored circle)", style = TextStyle(color = INK, fontSize = 13.sp))
+                    }
+                },
+            )
+            if (currentSprite != null) {
+                val bmp = remember(currentSprite.file) { SpriteLoader.load(PROPS_DIR + currentSprite.file) }
+                if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
+            }
+            InkButton(
+                "Import…",
+                modifier = Modifier.padding(start = 8.dp),
+                onClick = {
+                    val source = chooseImageFile() ?: return@InkButton
+                    val imported = AssetManifest.importSprite(source, kind = "character") ?: return@InkButton
+                    onChange(archetype.copy(spriteId = imported.id))
+                    justImportedSprite = true
+                },
+            )
+        }
+        // docs/28: this list updates live, but Playtest reads through :ui's packaged Compose
+        // Resources, baked in at build time — it won't see a just-imported file until :designer
+        // itself is fully restarted. Only shown right after an import, not permanently.
+        if (justImportedSprite) {
+            InkLabel("Imported — restart :designer:run to see it in Playtest.", modifier = Modifier.padding(top = 4.dp))
         }
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("ABILITY SCORES") }

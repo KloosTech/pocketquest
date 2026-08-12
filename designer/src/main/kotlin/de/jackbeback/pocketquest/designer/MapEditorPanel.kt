@@ -79,8 +79,11 @@ import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
 import kotlin.math.roundToInt
 
 private const val TILE_PX = 32f
-private const val PARTY_SPRITE_PATH = "assets/normalized/characters/hero_a_idle.png"
-private const val PROPS_DIR = "assets/normalized/"
+// docs/23-sprite-rendering.md: :ui's composeResources tree is the one location actually bundled
+// cross-platform, not a repo-root duplicate — :designer reads that same tree directly.
+private const val PARTY_SPRITE_PATH = "ui/src/commonMain/composeResources/files/normalized/characters/hero_a_idle.png"
+// Not private — ArchetypePanel.kt's sprite picker reuses this same base path (docs/23).
+const val PROPS_DIR = "ui/src/commonMain/composeResources/files/normalized/"
 private const val CANVAS_PADDING = 48f
 
 /** What a click currently paints. [Wall] toggles the nearest tile edge rather than a cell; [Prop] places/erases a footprint-sized piece of furniture anchored at the clicked cell. */
@@ -453,8 +456,9 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
     }
 }
 
+// Not private — ArchetypePanel.kt's sprite picker reuses this same thumbnail composable (docs/23).
 @Composable
-private fun PropThumbnail(bmp: ImageBitmap, modifier: Modifier = Modifier) {
+fun PropThumbnail(bmp: ImageBitmap, modifier: Modifier = Modifier) {
     Canvas(modifier = modifier.size(28.dp).background(PAPER)) {
         drawImage(bmp, dstOffset = IntOffset.Zero, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
     }

@@ -46,6 +46,13 @@ sealed interface EffectTemplate {
     @Serializable @SerialName("applyStatus")
     data class ApplyStatus(val target: Ref, val status: StatusId, val stacks: Int = 1, val expiry: Expiry, val caster: Ref? = null) : EffectTemplate
 
+    /**
+     * docs/22-dice-roll-ui-and-ability-checks.md: [attackBonus] is no longer the whole attack
+     * modifier — the resolver derives `abilityModifier(attacker's [ability] score)` and adds
+     * [attackBonus] on top as an extra/magic-weapon bonus (default 0, an ordinary weapon). [ability]
+     * defaults to Str (melee-typical); a Dex finesse weapon or a spell attack authors it explicitly,
+     * same pattern [RollSave] already uses for its own [Ability].
+     */
     @Serializable @SerialName("rollAttack")
     data class RollAttack(
         val attacker: Ref,
@@ -55,6 +62,7 @@ sealed interface EffectTemplate {
         val damage: DiceSpec,
         val damageType: DamageType,
         val tags: Set<DamageTag> = emptySet(),
+        val ability: Ability = Ability.Str,
     ) : EffectTemplate
 
     @Serializable @SerialName("rollSave")
@@ -67,9 +75,17 @@ sealed interface EffectTemplate {
         val onFail: List<EffectTemplate> = emptyList(),
     ) : EffectTemplate
 
-    /** doc17-engine-gaps.md 3.1: [direction] is computed at instantiate() time as [target] minus [awayFrom]'s position, not authored directly — "push away from me" is the actual content-authoring shape (doc05's Thunderwave example), a raw vector isn't. */
+    /**
+     * doc17-engine-gaps.md 3.1: [direction] is computed at instantiate() time as [target] minus
+     * [awayFrom]'s position, not authored directly — "push away from me" is the actual
+     * content-authoring shape (doc05's Thunderwave example), a raw vector isn't.
+     * [onWallHit] (docs/29-push-on-wall-hit.md): fires when the push is stopped early by a wall or
+     * another entity — instantiated against a ctx scoped to just the one pushed target (same
+     * per-target scoping [RollSave.onSuccess]/[onFail] already use), so `Ref.EachTarget` inside it
+     * means "the thing that hit the wall," not every target of the whole action.
+     */
     @Serializable @SerialName("push")
-    data class Push(val target: Ref, val awayFrom: Ref, val distance: Int) : EffectTemplate
+    data class Push(val target: Ref, val awayFrom: Ref, val distance: Int, val onWallHit: List<EffectTemplate> = emptyList()) : EffectTemplate
 
     /** doc17-engine-gaps.md 3.1: the destination is the action's own targeted point (`ActionCtx.point`) — a Point-targeted teleport action's whole reason for existing, not a separate ref/slot. */
     @Serializable @SerialName("teleport")
@@ -101,6 +117,15 @@ data class ActionDef(
     val effects: List<EffectTemplate>,
     /** Only meaningful when cost.action is Reaction — which GameEvent kind offers this reaction. */
     val reactionTrigger: ReactionTrigger? = null,
+    /**
+     * docs/24-projectile-travel-animation.md: a `kind = "projectile"` manifest id (docs/23) — the
+     * sprite that flies from caster to target when this action resolves. `null` keeps today's plain
+     * attacker-pulse with no travel, a real permanent fallback for actions with no art drawn yet,
+     * not a migration shim.
+     */
+    val projectileSprite: String? = null,
+    /** docs/25-action-selection-ui.md: authored flavor/tactical text, shown once this action is picked in the battle UI. Independent of the auto-generated mechanical effect text the Details view builds from [effects]. */
+    val description: String = "",
 )
 
 data class PreviewResult(val state: GameState, val events: List<GameEvent>)

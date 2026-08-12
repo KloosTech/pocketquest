@@ -36,9 +36,14 @@ sealed interface Effect {
         val fromReflect: Boolean = false,
     ) : Effect
 
-    /** Self-continuing: the handler re-pushes with index+1 rather than looping — see docs/04-resolver.md. */
+    /**
+     * Self-continuing: the handler re-pushes with index+1 rather than looping — see docs/04-resolver.md.
+     * [onWallHit] (docs/29-push-on-wall-hit.md) fires when a step is blocked (wall or occupied
+     * tile) instead of just fizzling silently — empty by default, so ordinary movement (walking,
+     * the Move action) is unaffected; only [Effect.Push] ever populates it.
+     */
     @Serializable @SerialName("moveAlong")
-    data class MoveAlong(val who: EntityId, val path: List<GridPos>, val index: Int = 0) : Effect
+    data class MoveAlong(val who: EntityId, val path: List<GridPos>, val index: Int = 0, val onWallHit: List<Effect> = emptyList()) : Effect
 
     /**
      * doc17-engine-gaps.md 3.1 / doc05's effect vocabulary. Deliberately does NOT reimplement
@@ -48,9 +53,11 @@ sealed interface Effect {
      * cutting primitives too coarsely: Push composes with MoveAlong rather than duplicating it).
      * [direction] is normalized to a single-tile step (each component clamped to -1..1) before use,
      * so passing something other than a true unit vector can't silently multiply the push distance.
+     * [onWallHit] (docs/29-push-on-wall-hit.md) rides along onto the [MoveAlong] this handler
+     * spawns — that's what actually detects the blocked tile and fires it.
      */
     @Serializable @SerialName("push")
-    data class Push(val target: EntityId, val direction: GridPos, val distance: Int) : Effect
+    data class Push(val target: EntityId, val direction: GridPos, val distance: Int, val onWallHit: List<Effect> = emptyList()) : Effect
 
     /**
      * doc17-engine-gaps.md 3.1 / doc05. Instant, unlike [MoveAlong] — one handler call, no
@@ -109,7 +116,12 @@ sealed interface Effect {
         val linkId: LinkId? = null,
     ) : Effect
 
-    /** d20 + attackBonus vs target's AC. On hit, rolls [damage] itself and spawns DealDamage — dice never roll outside a handler. */
+    /**
+     * d20 + `abilityModifier(attacker's [ability] score)` + [attackBonus] (an extra/magic-weapon
+     * bonus on top, default 0) vs target's AC — see [ActionDef.EffectTemplate.RollAttack]'s doc
+     * comment (docs/22). On hit, rolls [damage] itself and spawns DealDamage — dice never roll
+     * outside a handler.
+     */
     @Serializable @SerialName("rollAttack")
     data class RollAttack(
         val attacker: EntityId,
@@ -119,6 +131,7 @@ sealed interface Effect {
         val damage: DiceSpec,
         val damageType: DamageType,
         val tags: Set<DamageTag> = emptySet(),
+        val ability: Ability = Ability.Str,
     ) : Effect
 
     /** d20 + ability modifier vs dc. Spawns whichever branch wins — see docs/05's Slot example; this is the simpler direct-branch shape. */

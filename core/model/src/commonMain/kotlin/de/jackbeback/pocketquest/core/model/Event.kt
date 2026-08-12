@@ -36,8 +36,13 @@ data class EventChoice(
     val failureEffects: List<RunEffect> = emptyList(),
 )
 
+/**
+ * [skill] (docs/22) is label-only — "Deception Check" instead of "Charisma Check" on the roll card
+ * — not a proficiency bonus; PocketQuest has no proficiency system yet (docs/22 open question #2,
+ * deferred). The roll itself is still pure [ability], same formula as before this field existed.
+ */
 @Serializable
-data class EventCheck(val ability: Ability, val dc: Int)
+data class EventCheck(val ability: Ability, val dc: Int, val skill: Skill? = null)
 
 /**
  * Deliberately a small sealed interface, same "type dropdown + inline fields" authoring shape as

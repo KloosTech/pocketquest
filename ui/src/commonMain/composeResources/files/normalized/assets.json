@@ -1,2023 +1,2107 @@
 {
-  "tile": 64,
-  "characters": [
-    {
-      "id": "base_a",
-      "anim": "fishing",
-      "file": "characters/base_a_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_a",
-      "anim": "idle",
-      "file": "characters/base_a_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_a",
-      "anim": "sleep",
-      "file": "characters/base_a_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "base_a",
-      "anim": "sprint",
-      "file": "characters/base_a_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_a",
-      "anim": "walk",
-      "file": "characters/base_a_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_b",
-      "anim": "fishing",
-      "file": "characters/base_b_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_b",
-      "anim": "idle",
-      "file": "characters/base_b_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_b",
-      "anim": "sleep",
-      "file": "characters/base_b_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "base_b",
-      "anim": "sprint",
-      "file": "characters/base_b_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_b",
-      "anim": "walk",
-      "file": "characters/base_b_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_c",
-      "anim": "fishing",
-      "file": "characters/base_c_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_c",
-      "anim": "idle",
-      "file": "characters/base_c_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_c",
-      "anim": "sleep",
-      "file": "characters/base_c_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "base_c",
-      "anim": "sprint",
-      "file": "characters/base_c_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "base_c",
-      "anim": "walk",
-      "file": "characters/base_c_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_a",
-      "anim": "fishing",
-      "file": "characters/hero_a_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_a",
-      "anim": "idle",
-      "file": "characters/hero_a_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_a",
-      "anim": "sleep",
-      "file": "characters/hero_a_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "hero_a",
-      "anim": "sprint",
-      "file": "characters/hero_a_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_a",
-      "anim": "walk",
-      "file": "characters/hero_a_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_b",
-      "anim": "fishing",
-      "file": "characters/hero_b_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_b",
-      "anim": "idle",
-      "file": "characters/hero_b_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_b",
-      "anim": "sleep",
-      "file": "characters/hero_b_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "hero_b",
-      "anim": "sprint",
-      "file": "characters/hero_b_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_b",
-      "anim": "walk",
-      "file": "characters/hero_b_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_c",
-      "anim": "fishing",
-      "file": "characters/hero_c_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_c",
-      "anim": "idle",
-      "file": "characters/hero_c_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_c",
-      "anim": "sleep",
-      "file": "characters/hero_c_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "hero_c",
-      "anim": "sprint",
-      "file": "characters/hero_c_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hero_c",
-      "anim": "walk",
-      "file": "characters/hero_c_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_a",
-      "anim": "fishing",
-      "file": "characters/hooded_a_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_a",
-      "anim": "idle",
-      "file": "characters/hooded_a_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_a",
-      "anim": "sleep",
-      "file": "characters/hooded_a_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "hooded_a",
-      "anim": "sprint",
-      "file": "characters/hooded_a_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_a",
-      "anim": "walk",
-      "file": "characters/hooded_a_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_b",
-      "anim": "fishing",
-      "file": "characters/hooded_b_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_b",
-      "anim": "idle",
-      "file": "characters/hooded_b_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_b",
-      "anim": "sleep",
-      "file": "characters/hooded_b_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "hooded_b",
-      "anim": "sprint",
-      "file": "characters/hooded_b_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_b",
-      "anim": "walk",
-      "file": "characters/hooded_b_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_c",
-      "anim": "fishing",
-      "file": "characters/hooded_c_fishing.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 2,
-      "rows": 4,
-      "fps": 6,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_c",
-      "anim": "idle",
-      "file": "characters/hooded_c_idle.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 4,
-      "fps": 0,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_c",
-      "anim": "sleep",
-      "file": "characters/hooded_c_sleep.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 1,
-      "rows": 1,
-      "fps": 0,
-      "facings": [
-        "South"
-      ]
-    },
-    {
-      "id": "hooded_c",
-      "anim": "sprint",
-      "file": "characters/hooded_c_sprint.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 12,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    },
-    {
-      "id": "hooded_c",
-      "anim": "walk",
-      "file": "characters/hooded_c_walk.png",
-      "frameW": 64,
-      "frameH": 64,
-      "cols": 4,
-      "rows": 4,
-      "fps": 8,
-      "facings": [
-        "South",
-        "West",
-        "East",
-        "North"
-      ]
-    }
-  ],
-  "props": [
-    {
-      "id": "Chair1x1",
-      "file": "props/Chair1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "CompassCleanBlank-1400x1400",
-      "file": "props/CompassCleanBlank-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassCleanNaked-1400x1400",
-      "file": "props/CompassCleanNaked-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassCleanNakedwithWhite-1400x1400",
-      "file": "props/CompassCleanNakedwithWhite-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassCleanWithLetters-1400x1400",
-      "file": "props/CompassCleanWithLetters-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassCleanWithLettersAndWhite-1400x1400",
-      "file": "props/CompassCleanWithLettersAndWhite-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassRoughBlank-1400x1400",
-      "file": "props/CompassRoughBlank-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassRoughNaked-1400x1400",
-      "file": "props/CompassRoughNaked-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassRoughNakedwithWhite-1400x1400",
-      "file": "props/CompassRoughNakedwithWhite-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassRoughWithLetters-1400x1400",
-      "file": "props/CompassRoughWithLetters-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "CompassRoughWithLettersAndWhite-1400x1400",
-      "file": "props/CompassRoughWithLettersAndWhite-1400x1400.png",
-      "tilesW": 20,
-      "tilesH": 20,
-      "kind": "compass"
-    },
-    {
-      "id": "Pit1x1",
-      "file": "props/Pit1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Pitcircle1x1",
-      "file": "props/Pitcircle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableCircle1x1",
-      "file": "props/TableCircle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "arrow1x1",
-      "file": "props/arrow1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "barrel1x1",
-      "file": "props/barrel1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "barreltwo1x1",
-      "file": "props/barreltwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "bath1x2",
-      "file": "props/bath1x2.png",
-      "tilesW": 1,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "bed1x2",
-      "file": "props/bed1x2.png",
-      "tilesW": 1,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "beddouble2x2",
-      "file": "props/beddouble2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "bedtwo1x2",
-      "file": "props/bedtwo1x2.png",
-      "tilesW": 1,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "bedtwodouble2x2",
-      "file": "props/bedtwodouble2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "blackdot-1x1",
-      "file": "props/blackdot-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "book1x1",
-      "file": "props/book1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "bookcase1x1",
-      "file": "props/bookcase1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "booktwo1x1",
-      "file": "props/booktwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "bow-1x1",
-      "file": "props/bow-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "campfire1x1",
-      "file": "props/campfire1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "campfiretwo1x1",
-      "file": "props/campfiretwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "chest1x1",
-      "file": "props/chest1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "chesttwo1x1",
-      "file": "props/chesttwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "crack-1x1",
-      "file": "props/crack-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "crack-2x2",
-      "file": "props/crack-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "crate1x1",
-      "file": "props/crate1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "cratetwo1x1",
-      "file": "props/cratetwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "door1x1",
-      "file": "props/door1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "doorflip1x1",
-      "file": "props/doorflip1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "doortransparent1x1",
-      "file": "props/doortransparent1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "doortransparentflip.1x1",
-      "file": "props/doortransparentflip.1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "dresser1x1",
-      "file": "props/dresser1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "effectsBlacksquare1x1",
-      "file": "props/effectsBlacksquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "effectsgradientlinear",
-      "file": "props/effectsgradientlinear.png",
-      "tilesW": null,
-      "tilesH": null,
-      "kind": "decal"
-    },
-    {
-      "id": "effectsgradientradial",
-      "file": "props/effectsgradientradial.png",
-      "tilesW": null,
-      "tilesH": null,
-      "kind": "decal"
-    },
-    {
-      "id": "effectsgradientradial2",
-      "file": "props/effectsgradientradial2.png",
-      "tilesW": null,
-      "tilesH": null,
-      "kind": "decal"
-    },
-    {
-      "id": "effectswhitesquare1x1",
-      "file": "props/effectswhitesquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "fire",
-      "file": "props/fire.png",
-      "tilesW": null,
-      "tilesH": null,
-      "kind": "decal"
-    },
-    {
-      "id": "goopblood-2x2",
-      "file": "props/goopblood-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "grasstile5x5",
-      "file": "props/grasstile5x5.png",
-      "tilesW": 5,
-      "tilesH": 5,
-      "kind": "floor"
-    },
-    {
-      "id": "hay1x1",
-      "file": "props/hay1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "hay2x2",
-      "file": "props/hay2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "number0-1x1",
-      "file": "props/number0-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number1-1x1",
-      "file": "props/number1-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number2-1x1",
-      "file": "props/number2-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number3-1x1",
-      "file": "props/number3-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number4-1x1",
-      "file": "props/number4-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number5-1x1",
-      "file": "props/number5-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number6-1x1",
-      "file": "props/number6-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number7-1x1",
-      "file": "props/number7-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number8-1x1",
-      "file": "props/number8-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "number9-1x1",
-      "file": "props/number9-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "numberB-1x1",
-      "file": "props/numberB-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "number"
-    },
-    {
-      "id": "opencrate1x1",
-      "file": "props/opencrate1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "paper-pile1x1",
-      "file": "props/paper-pile1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "paper1x1",
-      "file": "props/paper1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "porticullis-1x1",
-      "file": "props/porticullis-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "pot1x1",
-      "file": "props/pot1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "potplant1x1",
-      "file": "props/potplant1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "potplanttwo1x1",
-      "file": "props/potplanttwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "rug-1x1",
-      "file": "props/rug-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "rug-2x2",
-      "file": "props/rug-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "rug2-1x1",
-      "file": "props/rug2-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "rug2-2x2",
-      "file": "props/rug2-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "rug3-1x1",
-      "file": "props/rug3-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "rug3-2x2",
-      "file": "props/rug3-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "rug4-1x1",
-      "file": "props/rug4-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "rug4-2x2",
-      "file": "props/rug4-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "sack1x1",
-      "file": "props/sack1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "sacktwo1x1",
-      "file": "props/sacktwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "shelf1x1",
-      "file": "props/shelf1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "shield-1x1",
-      "file": "props/shield-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "shield2-1x1",
-      "file": "props/shield2-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "silohoutte-1x1",
-      "file": "props/silohoutte-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "silohoutte2-1x1",
-      "file": "props/silohoutte2-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "staff-1x1",
-      "file": "props/staff-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "stairs1x1",
-      "file": "props/stairs1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "stairspiral-1x1",
-      "file": "props/stairspiral-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "stairspiral2-1x1",
-      "file": "props/stairspiral2-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "star-2x2",
-      "file": "props/star-2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "stonytile5x5",
-      "file": "props/stonytile5x5.png",
-      "tilesW": 5,
-      "tilesH": 5,
-      "kind": "floor"
-    },
-    {
-      "id": "sword-1x1",
-      "file": "props/sword-1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "table1x1",
-      "file": "props/table1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "table1x2-rough",
-      "file": "props/table1x2-rough.png",
-      "tilesW": 1,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "table1x2",
-      "file": "props/table1x2.png",
-      "tilesW": 1,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "tableCircleRough1x1",
-      "file": "props/tableCircleRough1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "tableCircleRough2x2",
-      "file": "props/tableCircleRough2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "tableRough1x1",
-      "file": "props/tableRough1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "tile5x5",
-      "file": "props/tile5x5.png",
-      "tilesW": 5,
-      "tilesH": 5,
-      "kind": "floor"
-    },
-    {
-      "id": "toilet1x1",
-      "file": "props/toilet1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "treasurepile1x1",
-      "file": "props/treasurepile1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "treasurepile2x2",
-      "file": "props/treasurepile2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "window1x1",
-      "file": "props/window1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "windowtwo1x1",
-      "file": "props/windowtwo1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Altar1x1",
-      "file": "props/Altar1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Arrow1x1",
-      "file": "props/Arrow1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Bed1x1",
-      "file": "props/Bed1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "BedDouble1x1",
-      "file": "props/BedDouble1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Bench1x1",
-      "file": "props/Bench1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Bookcase1x1",
-      "file": "props/Bookcase1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Cage1x1",
-      "file": "props/Cage1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Cask1x1",
-      "file": "props/Cask1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Chest1x1",
-      "file": "props/Chest1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Circle1x1",
-      "file": "props/Circle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "CircleDotted1x1",
-      "file": "props/CircleDotted1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "CircleFilled1x1",
-      "file": "props/CircleFilled1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "CoffinClosed1x1",
-      "file": "props/CoffinClosed1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "CoffinOpen1x1",
-      "file": "props/CoffinOpen1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Cross1x1",
-      "file": "props/Cross1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Curtain1x1",
-      "file": "props/Curtain1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "CurtainCorner1x1",
-      "file": "props/CurtainCorner1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Danger1x1",
-      "file": "props/Danger1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Door1x1",
-      "file": "props/Door1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorArchway1x1",
-      "file": "props/DoorArchway1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorConcealed1x1",
-      "file": "props/DoorConcealed1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorDouble1x1",
-      "file": "props/DoorDouble1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorFalse1x1",
-      "file": "props/DoorFalse1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorGate1x1",
-      "file": "props/DoorGate1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorLocked1x1",
-      "file": "props/DoorLocked1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorMagic1x1",
-      "file": "props/DoorMagic1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorPortcullis1x1",
-      "file": "props/DoorPortcullis1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorRevolve1way1x1",
-      "file": "props/DoorRevolve1way1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorRevolving1x1",
-      "file": "props/DoorRevolving1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorSecret1x1",
-      "file": "props/DoorSecret1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "DoorSlides1x1",
-      "file": "props/DoorSlides1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Fire1x1",
-      "file": "props/Fire1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "FireCamp1x1",
-      "file": "props/FireCamp1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Fireplace1x1",
-      "file": "props/Fireplace1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Fountain1x1",
-      "file": "props/Fountain1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Grave1x1",
-      "file": "props/Grave1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Illusion1x1",
-      "file": "props/Illusion1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Key1x1",
-      "file": "props/Key1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "LadderDown1x1",
-      "file": "props/LadderDown1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "LadderUp1x1",
-      "file": "props/LadderUp1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Light1x1",
-      "file": "props/Light1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Loot1x1",
-      "file": "props/Loot1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Lounge1x1",
-      "file": "props/Lounge1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "PitCircle1x1",
-      "file": "props/PitCircle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "PitClosedCircle1x1",
-      "file": "props/PitClosedCircle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "PitClosedSquare1x1",
-      "file": "props/PitClosedSquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "PitSquare1x1",
-      "file": "props/PitSquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Railing1x1",
-      "file": "props/Railing1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "RailingCorner1x1",
-      "file": "props/RailingCorner1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "RailingCurve1x1",
-      "file": "props/RailingCurve1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "RailingHalf1x1",
-      "file": "props/RailingHalf1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Square1x1",
-      "file": "props/Square1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "SquareDotted1x1",
-      "file": "props/SquareDotted1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "SquareFilled1x1",
-      "file": "props/SquareFilled1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "StairSpiralCircleBig2x2",
-      "file": "props/StairSpiralCircleBig2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "StairSpiralCircleDown1x1",
-      "file": "props/StairSpiralCircleDown1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "StairSpiralCircleUp1x1",
-      "file": "props/StairSpiralCircleUp1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "StairSpiralSquareBig2x2",
-      "file": "props/StairSpiralSquareBig2x2.png",
-      "tilesW": 2,
-      "tilesH": 2,
-      "kind": "prop"
-    },
-    {
-      "id": "StairSpiralSquareDown1x1",
-      "file": "props/StairSpiralSquareDown1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "StairSpiralSquareUp1x1",
-      "file": "props/StairSpiralSquareUp1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Stairs1x1_01",
-      "file": "props/Stairs1x1_01.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Statue1x1",
-      "file": "props/Statue1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "StatueSmall1x1",
-      "file": "props/StatueSmall1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Stool1x1",
-      "file": "props/Stool1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableLong2x1",
-      "file": "props/TableLong2x1.png",
-      "tilesW": 2,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableRectangle1x1",
-      "file": "props/TableRectangle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableRound1x1",
-      "file": "props/TableRound1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSet2x1",
-      "file": "props/TableSet2x1.png",
-      "tilesW": 2,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSet3x1",
-      "file": "props/TableSet3x1.png",
-      "tilesW": 3,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSetCircle1x1",
-      "file": "props/TableSetCircle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSetRect2x1",
-      "file": "props/TableSetRect2x1.png",
-      "tilesW": 2,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSetSquare1x1",
-      "file": "props/TableSetSquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSetTwo3x1",
-      "file": "props/TableSetTwo3x1.png",
-      "tilesW": 3,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TableSquare1x1",
-      "file": "props/TableSquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Throne1x1",
-      "file": "props/Throne1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Trap1x1",
-      "file": "props/Trap1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TrapdoorCieling1x1",
-      "file": "props/TrapdoorCieling1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TrapdoorFloor1x1",
-      "file": "props/TrapdoorFloor1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TrapdoorSecret1x1",
-      "file": "props/TrapdoorSecret1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "TriangleArrowhead1x1",
-      "file": "props/TriangleArrowhead1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Trigger1x1",
-      "file": "props/Trigger1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Unknown1x1",
-      "file": "props/Unknown1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "WellCircle1x1",
-      "file": "props/WellCircle1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "WellSquare1x1",
-      "file": "props/WellSquare1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    },
-    {
-      "id": "Window1x1",
-      "file": "props/Window1x1.png",
-      "tilesW": 1,
-      "tilesH": 1,
-      "kind": "prop"
-    }
-  ],
-  "overlays": [
-    {
-      "id": "Dungeon 1cm Grits_Alpha",
-      "file": "overlays/Dungeon 1cm Grits_Alpha.png",
-      "tilesW": 35,
-      "tilesH": 35
-    },
-    {
-      "id": "Dungeon 1inch Grits_Alpha",
-      "file": "overlays/Dungeon 1inch Grits_Alpha.png",
-      "tilesW": 89,
-      "tilesH": 89
-    }
-  ]
+    "tile": 64,
+    "characters": [
+        {
+            "id": "base_a",
+            "anim": "fishing",
+            "file": "characters/base_a_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_a",
+            "anim": "idle",
+            "file": "characters/base_a_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_a",
+            "anim": "sleep",
+            "file": "characters/base_a_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "base_a",
+            "anim": "sprint",
+            "file": "characters/base_a_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_a",
+            "anim": "walk",
+            "file": "characters/base_a_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_b",
+            "anim": "fishing",
+            "file": "characters/base_b_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_b",
+            "anim": "idle",
+            "file": "characters/base_b_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_b",
+            "anim": "sleep",
+            "file": "characters/base_b_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "base_b",
+            "anim": "sprint",
+            "file": "characters/base_b_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_b",
+            "anim": "walk",
+            "file": "characters/base_b_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_c",
+            "anim": "fishing",
+            "file": "characters/base_c_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_c",
+            "anim": "idle",
+            "file": "characters/base_c_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_c",
+            "anim": "sleep",
+            "file": "characters/base_c_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "base_c",
+            "anim": "sprint",
+            "file": "characters/base_c_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "base_c",
+            "anim": "walk",
+            "file": "characters/base_c_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_a",
+            "anim": "fishing",
+            "file": "characters/hero_a_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_a",
+            "anim": "idle",
+            "file": "characters/hero_a_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_a",
+            "anim": "sleep",
+            "file": "characters/hero_a_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "hero_a",
+            "anim": "sprint",
+            "file": "characters/hero_a_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_a",
+            "anim": "walk",
+            "file": "characters/hero_a_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_b",
+            "anim": "fishing",
+            "file": "characters/hero_b_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_b",
+            "anim": "idle",
+            "file": "characters/hero_b_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_b",
+            "anim": "sleep",
+            "file": "characters/hero_b_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "hero_b",
+            "anim": "sprint",
+            "file": "characters/hero_b_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_b",
+            "anim": "walk",
+            "file": "characters/hero_b_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_c",
+            "anim": "fishing",
+            "file": "characters/hero_c_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_c",
+            "anim": "idle",
+            "file": "characters/hero_c_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_c",
+            "anim": "sleep",
+            "file": "characters/hero_c_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "hero_c",
+            "anim": "sprint",
+            "file": "characters/hero_c_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hero_c",
+            "anim": "walk",
+            "file": "characters/hero_c_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_a",
+            "anim": "fishing",
+            "file": "characters/hooded_a_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_a",
+            "anim": "idle",
+            "file": "characters/hooded_a_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_a",
+            "anim": "sleep",
+            "file": "characters/hooded_a_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "hooded_a",
+            "anim": "sprint",
+            "file": "characters/hooded_a_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_a",
+            "anim": "walk",
+            "file": "characters/hooded_a_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_b",
+            "anim": "fishing",
+            "file": "characters/hooded_b_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_b",
+            "anim": "idle",
+            "file": "characters/hooded_b_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_b",
+            "anim": "sleep",
+            "file": "characters/hooded_b_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "hooded_b",
+            "anim": "sprint",
+            "file": "characters/hooded_b_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_b",
+            "anim": "walk",
+            "file": "characters/hooded_b_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_c",
+            "anim": "fishing",
+            "file": "characters/hooded_c_fishing.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 2,
+            "rows": 4,
+            "fps": 6,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_c",
+            "anim": "idle",
+            "file": "characters/hooded_c_idle.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 4,
+            "fps": 0,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_c",
+            "anim": "sleep",
+            "file": "characters/hooded_c_sleep.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 1,
+            "rows": 1,
+            "fps": 0,
+            "facings": [
+                "South"
+            ]
+        },
+        {
+            "id": "hooded_c",
+            "anim": "sprint",
+            "file": "characters/hooded_c_sprint.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 12,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        },
+        {
+            "id": "hooded_c",
+            "anim": "walk",
+            "file": "characters/hooded_c_walk.png",
+            "frameW": 64,
+            "frameH": 64,
+            "cols": 4,
+            "rows": 4,
+            "fps": 8,
+            "facings": [
+                "South",
+                "West",
+                "East",
+                "North"
+            ]
+        }
+    ],
+    "props": [
+        {
+            "id": "Chair1x1",
+            "file": "props/Chair1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "CompassCleanBlank-1400x1400",
+            "file": "props/CompassCleanBlank-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassCleanNaked-1400x1400",
+            "file": "props/CompassCleanNaked-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassCleanNakedwithWhite-1400x1400",
+            "file": "props/CompassCleanNakedwithWhite-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassCleanWithLetters-1400x1400",
+            "file": "props/CompassCleanWithLetters-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassCleanWithLettersAndWhite-1400x1400",
+            "file": "props/CompassCleanWithLettersAndWhite-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassRoughBlank-1400x1400",
+            "file": "props/CompassRoughBlank-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassRoughNaked-1400x1400",
+            "file": "props/CompassRoughNaked-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassRoughNakedwithWhite-1400x1400",
+            "file": "props/CompassRoughNakedwithWhite-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassRoughWithLetters-1400x1400",
+            "file": "props/CompassRoughWithLetters-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "CompassRoughWithLettersAndWhite-1400x1400",
+            "file": "props/CompassRoughWithLettersAndWhite-1400x1400.png",
+            "tilesW": 20,
+            "tilesH": 20,
+            "kind": "compass"
+        },
+        {
+            "id": "Pit1x1",
+            "file": "props/Pit1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Pitcircle1x1",
+            "file": "props/Pitcircle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableCircle1x1",
+            "file": "props/TableCircle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "arrow1x1",
+            "file": "props/arrow1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "barrel1x1",
+            "file": "props/barrel1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "barreltwo1x1",
+            "file": "props/barreltwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "bath1x2",
+            "file": "props/bath1x2.png",
+            "tilesW": 1,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "bed1x2",
+            "file": "props/bed1x2.png",
+            "tilesW": 1,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "beddouble2x2",
+            "file": "props/beddouble2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "bedtwo1x2",
+            "file": "props/bedtwo1x2.png",
+            "tilesW": 1,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "bedtwodouble2x2",
+            "file": "props/bedtwodouble2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "blackdot-1x1",
+            "file": "props/blackdot-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "book1x1",
+            "file": "props/book1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "bookcase1x1",
+            "file": "props/bookcase1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "booktwo1x1",
+            "file": "props/booktwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "bow-1x1",
+            "file": "props/bow-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "campfire1x1",
+            "file": "props/campfire1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "campfiretwo1x1",
+            "file": "props/campfiretwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "chest1x1",
+            "file": "props/chest1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "chesttwo1x1",
+            "file": "props/chesttwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "crack-1x1",
+            "file": "props/crack-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "crack-2x2",
+            "file": "props/crack-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "crate1x1",
+            "file": "props/crate1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "cratetwo1x1",
+            "file": "props/cratetwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "door1x1",
+            "file": "props/door1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "doorflip1x1",
+            "file": "props/doorflip1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "doortransparent1x1",
+            "file": "props/doortransparent1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "doortransparentflip.1x1",
+            "file": "props/doortransparentflip.1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "dresser1x1",
+            "file": "props/dresser1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "effectsBlacksquare1x1",
+            "file": "props/effectsBlacksquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "effectsgradientlinear",
+            "file": "props/effectsgradientlinear.png",
+            "tilesW": null,
+            "tilesH": null,
+            "kind": "decal"
+        },
+        {
+            "id": "effectsgradientradial",
+            "file": "props/effectsgradientradial.png",
+            "tilesW": null,
+            "tilesH": null,
+            "kind": "decal"
+        },
+        {
+            "id": "effectsgradientradial2",
+            "file": "props/effectsgradientradial2.png",
+            "tilesW": null,
+            "tilesH": null,
+            "kind": "decal"
+        },
+        {
+            "id": "effectswhitesquare1x1",
+            "file": "props/effectswhitesquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "fire",
+            "file": "props/fire.png",
+            "tilesW": null,
+            "tilesH": null,
+            "kind": "decal"
+        },
+        {
+            "id": "goopblood-2x2",
+            "file": "props/goopblood-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "grasstile5x5",
+            "file": "props/grasstile5x5.png",
+            "tilesW": 5,
+            "tilesH": 5,
+            "kind": "floor"
+        },
+        {
+            "id": "hay1x1",
+            "file": "props/hay1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "hay2x2",
+            "file": "props/hay2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "number0-1x1",
+            "file": "props/number0-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number1-1x1",
+            "file": "props/number1-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number2-1x1",
+            "file": "props/number2-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number3-1x1",
+            "file": "props/number3-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number4-1x1",
+            "file": "props/number4-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number5-1x1",
+            "file": "props/number5-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number6-1x1",
+            "file": "props/number6-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number7-1x1",
+            "file": "props/number7-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number8-1x1",
+            "file": "props/number8-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "number9-1x1",
+            "file": "props/number9-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "numberB-1x1",
+            "file": "props/numberB-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "number"
+        },
+        {
+            "id": "opencrate1x1",
+            "file": "props/opencrate1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "paper-pile1x1",
+            "file": "props/paper-pile1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "paper1x1",
+            "file": "props/paper1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "porticullis-1x1",
+            "file": "props/porticullis-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "pot1x1",
+            "file": "props/pot1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "potplant1x1",
+            "file": "props/potplant1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "potplanttwo1x1",
+            "file": "props/potplanttwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "rug-1x1",
+            "file": "props/rug-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "rug-2x2",
+            "file": "props/rug-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "rug2-1x1",
+            "file": "props/rug2-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "rug2-2x2",
+            "file": "props/rug2-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "rug3-1x1",
+            "file": "props/rug3-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "rug3-2x2",
+            "file": "props/rug3-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "rug4-1x1",
+            "file": "props/rug4-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "rug4-2x2",
+            "file": "props/rug4-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "sack1x1",
+            "file": "props/sack1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "sacktwo1x1",
+            "file": "props/sacktwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "shelf1x1",
+            "file": "props/shelf1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "shield-1x1",
+            "file": "props/shield-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "shield2-1x1",
+            "file": "props/shield2-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "silohoutte-1x1",
+            "file": "props/silohoutte-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "silohoutte2-1x1",
+            "file": "props/silohoutte2-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "staff-1x1",
+            "file": "props/staff-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "stairs1x1",
+            "file": "props/stairs1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "stairspiral-1x1",
+            "file": "props/stairspiral-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "stairspiral2-1x1",
+            "file": "props/stairspiral2-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "star-2x2",
+            "file": "props/star-2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "stonytile5x5",
+            "file": "props/stonytile5x5.png",
+            "tilesW": 5,
+            "tilesH": 5,
+            "kind": "floor"
+        },
+        {
+            "id": "sword-1x1",
+            "file": "props/sword-1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "table1x1",
+            "file": "props/table1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "table1x2-rough",
+            "file": "props/table1x2-rough.png",
+            "tilesW": 1,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "table1x2",
+            "file": "props/table1x2.png",
+            "tilesW": 1,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "tableCircleRough1x1",
+            "file": "props/tableCircleRough1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "tableCircleRough2x2",
+            "file": "props/tableCircleRough2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "tableRough1x1",
+            "file": "props/tableRough1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "tile5x5",
+            "file": "props/tile5x5.png",
+            "tilesW": 5,
+            "tilesH": 5,
+            "kind": "floor"
+        },
+        {
+            "id": "toilet1x1",
+            "file": "props/toilet1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "treasurepile1x1",
+            "file": "props/treasurepile1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "treasurepile2x2",
+            "file": "props/treasurepile2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "window1x1",
+            "file": "props/window1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "windowtwo1x1",
+            "file": "props/windowtwo1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Altar1x1",
+            "file": "props/Altar1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Arrow1x1",
+            "file": "props/Arrow1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Bed1x1",
+            "file": "props/Bed1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "BedDouble1x1",
+            "file": "props/BedDouble1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Bench1x1",
+            "file": "props/Bench1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Bookcase1x1",
+            "file": "props/Bookcase1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Cage1x1",
+            "file": "props/Cage1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Cask1x1",
+            "file": "props/Cask1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Chest1x1",
+            "file": "props/Chest1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Circle1x1",
+            "file": "props/Circle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "CircleDotted1x1",
+            "file": "props/CircleDotted1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "CircleFilled1x1",
+            "file": "props/CircleFilled1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "CoffinClosed1x1",
+            "file": "props/CoffinClosed1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "CoffinOpen1x1",
+            "file": "props/CoffinOpen1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Cross1x1",
+            "file": "props/Cross1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Curtain1x1",
+            "file": "props/Curtain1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "CurtainCorner1x1",
+            "file": "props/CurtainCorner1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Danger1x1",
+            "file": "props/Danger1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Door1x1",
+            "file": "props/Door1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorArchway1x1",
+            "file": "props/DoorArchway1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorConcealed1x1",
+            "file": "props/DoorConcealed1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorDouble1x1",
+            "file": "props/DoorDouble1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorFalse1x1",
+            "file": "props/DoorFalse1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorGate1x1",
+            "file": "props/DoorGate1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorLocked1x1",
+            "file": "props/DoorLocked1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorMagic1x1",
+            "file": "props/DoorMagic1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorPortcullis1x1",
+            "file": "props/DoorPortcullis1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorRevolve1way1x1",
+            "file": "props/DoorRevolve1way1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorRevolving1x1",
+            "file": "props/DoorRevolving1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorSecret1x1",
+            "file": "props/DoorSecret1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "DoorSlides1x1",
+            "file": "props/DoorSlides1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Fire1x1",
+            "file": "props/Fire1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "FireCamp1x1",
+            "file": "props/FireCamp1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Fireplace1x1",
+            "file": "props/Fireplace1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Fountain1x1",
+            "file": "props/Fountain1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Grave1x1",
+            "file": "props/Grave1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Illusion1x1",
+            "file": "props/Illusion1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Key1x1",
+            "file": "props/Key1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "LadderDown1x1",
+            "file": "props/LadderDown1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "LadderUp1x1",
+            "file": "props/LadderUp1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Light1x1",
+            "file": "props/Light1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Loot1x1",
+            "file": "props/Loot1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Lounge1x1",
+            "file": "props/Lounge1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "PitCircle1x1",
+            "file": "props/PitCircle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "PitClosedCircle1x1",
+            "file": "props/PitClosedCircle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "PitClosedSquare1x1",
+            "file": "props/PitClosedSquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "PitSquare1x1",
+            "file": "props/PitSquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Railing1x1",
+            "file": "props/Railing1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "RailingCorner1x1",
+            "file": "props/RailingCorner1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "RailingCurve1x1",
+            "file": "props/RailingCurve1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "RailingHalf1x1",
+            "file": "props/RailingHalf1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Square1x1",
+            "file": "props/Square1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "SquareDotted1x1",
+            "file": "props/SquareDotted1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "SquareFilled1x1",
+            "file": "props/SquareFilled1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "StairSpiralCircleBig2x2",
+            "file": "props/StairSpiralCircleBig2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "StairSpiralCircleDown1x1",
+            "file": "props/StairSpiralCircleDown1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "StairSpiralCircleUp1x1",
+            "file": "props/StairSpiralCircleUp1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "StairSpiralSquareBig2x2",
+            "file": "props/StairSpiralSquareBig2x2.png",
+            "tilesW": 2,
+            "tilesH": 2,
+            "kind": "prop"
+        },
+        {
+            "id": "StairSpiralSquareDown1x1",
+            "file": "props/StairSpiralSquareDown1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "StairSpiralSquareUp1x1",
+            "file": "props/StairSpiralSquareUp1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Stairs1x1_01",
+            "file": "props/Stairs1x1_01.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Statue1x1",
+            "file": "props/Statue1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "StatueSmall1x1",
+            "file": "props/StatueSmall1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Stool1x1",
+            "file": "props/Stool1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableLong2x1",
+            "file": "props/TableLong2x1.png",
+            "tilesW": 2,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableRectangle1x1",
+            "file": "props/TableRectangle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableRound1x1",
+            "file": "props/TableRound1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSet2x1",
+            "file": "props/TableSet2x1.png",
+            "tilesW": 2,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSet3x1",
+            "file": "props/TableSet3x1.png",
+            "tilesW": 3,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSetCircle1x1",
+            "file": "props/TableSetCircle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSetRect2x1",
+            "file": "props/TableSetRect2x1.png",
+            "tilesW": 2,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSetSquare1x1",
+            "file": "props/TableSetSquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSetTwo3x1",
+            "file": "props/TableSetTwo3x1.png",
+            "tilesW": 3,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TableSquare1x1",
+            "file": "props/TableSquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Throne1x1",
+            "file": "props/Throne1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Trap1x1",
+            "file": "props/Trap1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TrapdoorCieling1x1",
+            "file": "props/TrapdoorCieling1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TrapdoorFloor1x1",
+            "file": "props/TrapdoorFloor1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TrapdoorSecret1x1",
+            "file": "props/TrapdoorSecret1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "TriangleArrowhead1x1",
+            "file": "props/TriangleArrowhead1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Trigger1x1",
+            "file": "props/Trigger1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Unknown1x1",
+            "file": "props/Unknown1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "WellCircle1x1",
+            "file": "props/WellCircle1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "WellSquare1x1",
+            "file": "props/WellSquare1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "Window1x1",
+            "file": "props/Window1x1.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "goblin_swordsman",
+            "file": "sprites/goblin_swordsman.png",
+            "kind": "character"
+        },
+        {
+            "id": "goblin_brute",
+            "file": "sprites/goblin_brute.png",
+            "kind": "character"
+        },
+        {
+            "id": "goblin_archer",
+            "file": "sprites/goblin_archer.png",
+            "kind": "character"
+        },
+        {
+            "id": "goblin_shaman",
+            "file": "sprites/goblin_shaman.png",
+            "kind": "character"
+        },
+        {
+            "id": "knight",
+            "file": "sprites/knight.png",
+            "kind": "character"
+        },
+        {
+            "id": "priest",
+            "file": "sprites/priest.png",
+            "kind": "character"
+        },
+        {
+            "id": "rogue",
+            "file": "sprites/rogue.png",
+            "kind": "character"
+        },
+        {
+            "id": "wizard",
+            "file": "sprites/wizard.png",
+            "kind": "character"
+        },
+        {
+            "id": "fireball",
+            "file": "sprites/fireball.png",
+            "kind": "projectile"
+        },
+        {
+            "id": "iceball",
+            "file": "sprites/iceball.png",
+            "kind": "projectile"
+        },
+        {
+            "id": "earthball",
+            "file": "sprites/earthball.png",
+            "kind": "projectile"
+        },
+        {
+            "id": "lightningball",
+            "file": "sprites/lightningball.png",
+            "kind": "projectile"
+        },
+        {
+            "id": "chest_closed",
+            "file": "sprites/chest_closed.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "chest_open",
+            "file": "sprites/chest_open.png",
+            "tilesW": 1,
+            "tilesH": 1,
+            "kind": "prop"
+        },
+        {
+            "id": "club_256",
+            "file": "sprites/club_256.png",
+            "kind": "character"
+        },
+        {
+            "id": "club_256_2",
+            "file": "sprites/club_256_2.png",
+            "kind": "projectile"
+        }
+    ],
+    "overlays": [
+        {
+            "id": "Dungeon 1cm Grits_Alpha",
+            "file": "overlays/Dungeon 1cm Grits_Alpha.png",
+            "tilesW": 35,
+            "tilesH": 35
+        },
+        {
+            "id": "Dungeon 1inch Grits_Alpha",
+            "file": "overlays/Dungeon 1inch Grits_Alpha.png",
+            "tilesW": 89,
+            "tilesH": 89
+        }
+    ]
 }

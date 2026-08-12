@@ -18,13 +18,15 @@ internal data class AssetManifestFile(val tile: Int = 64, val props: List<Manife
 private val manifestJson = Json { ignoreUnknownKeys = true }
 
 /**
- * The real-gameplay counterpart to `:designer`'s `AssetManifest` — same manifest shape and the
- * same `assets/normalized/assets.json`, but loaded from `:ui`'s own bundled Compose Resources
- * (`Res.readBytes`, works uniformly on Android/iOS/Desktop) instead of `java.io.File`, which only
- * exists on the JVM and can't run on Android/iOS at all. `:designer` is a dev-time tool editing the
- * real repo folder live; `:ui` is the packaged game reading its own bundled copy — two genuinely
- * different runtimes, so this stays a parallel implementation rather than a shared one (same
- * reasoning as keeping `GameSpriteLoader` separate from `:designer`'s `SpriteLoader`).
+ * The real-gameplay counterpart to `:designer`'s `AssetManifest` — same manifest shape, and as of
+ * docs/23-sprite-rendering.md, the exact same physical `assets.json` file too (`:designer` now
+ * reads this module's own `composeResources` tree directly via `java.io.File`, rather than a
+ * separate repo-root duplicate that had to be kept in sync by hand). This loads it via `:ui`'s own
+ * bundled Compose Resources (`Res.readBytes`, works uniformly on Android/iOS/Desktop) instead of
+ * `java.io.File`, which only exists on the JVM and can't run on Android/iOS at all — two genuinely
+ * different runtimes reading the same source file, so this stays a parallel implementation rather
+ * than a shared one (same reasoning as keeping `GameSpriteLoader` separate from `:designer`'s
+ * `SpriteLoader`).
  *
  * `Res.readBytes` is suspend, so unlike `:designer`'s eager `by lazy`, this loads once into a
  * nullable cached value the first caller (`rememberGameAssetManifest`) populates.

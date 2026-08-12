@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.BasicText
@@ -104,7 +106,7 @@ fun ShopPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifier: Mo
 private fun ShopEditor(shop: ShopDef, catalog: Catalog, onChange: (ShopDef) -> Unit, onRemove: () -> Unit) {
     val items = catalog.items.values.toList()
 
-    Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+    Column(modifier = Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(16.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkLabel("ID: ${shop.id.raw}", modifier = Modifier.padding(end = 16.dp))
             InkButton("Remove Shop", onClick = onRemove)

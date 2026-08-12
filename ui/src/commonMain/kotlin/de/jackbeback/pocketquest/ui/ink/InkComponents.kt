@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -52,13 +53,13 @@ fun InkButton(label: String, modifier: Modifier = Modifier, emphasized: Boolean 
 }
 
 @Composable
-fun InkTextField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier) {
+fun InkTextField(value: String, onValueChange: (String) -> Unit, modifier: Modifier = Modifier, singleLine: Boolean = true) {
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier.border(1.dp, INK_FAINT).padding(6.dp),
         textStyle = TextStyle(color = INK, fontSize = 13.sp),
-        singleLine = true,
+        singleLine = singleLine,
     )
 }
 
@@ -96,6 +97,13 @@ fun <T> InkSelect(
                     .border(1.dp, INK)
                     .background(PAPER)
                     .widthIn(max = 260.dp)
+                    // A caller's own root Column can be `.verticalScroll()`'d now (the editor
+                    // panels' scroll-everything pass) — that ancestor hands this dropdown an
+                    // infinite max-height constraint to grow into, and Compose disallows a
+                    // scrollable measured under infinite height. `heightIn` caps it to a real
+                    // bound regardless of what any ancestor offers, fixing the crash and (as a
+                    // side effect) keeping a 74-option dropdown from growing absurdly tall.
+                    .heightIn(max = 320.dp)
                     .verticalScroll(rememberScrollState()),
             ) {
                 options.forEach { option ->
