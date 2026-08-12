@@ -45,6 +45,11 @@ Game design and product layer:
 | [28-sprite-import.md](28-sprite-import.md) | "Import…" button on the Archetype/Action sprite pickers — copies the file, updates assets.json, no restart needed |
 | [29-push-on-wall-hit.md](29-push-on-wall-hit.md) | Push effects can trigger an on-wall-hit sub-effect instead of just fizzling |
 | [30-hit-telegraph-text.md](30-hit-telegraph-text.md) | Animated HIT/MISS/SAVED/FAILED text over a character on attack/save resolution |
+| [31-wall-shadow-casting.md](31-wall-shadow-casting.md) | Directional (top-left) gradient shadows on floor cells bordering a wall |
+| [32-wall-hatch-osr-style.md](32-wall-hatch-osr-style.md) | A second, denser clustered/angled wall-hatch style, selectable per map alongside the original |
+| [33-wall-hatch-osr-packing.md](33-wall-hatch-osr-packing.md) | Replaces the OSR hatch's scatter algorithm with a packed line-growth generator, baked into the map |
+| [34-wall-hatch-osr-configurable-params.md](34-wall-hatch-osr-configurable-params.md) | Every OSR hatch generator knob (group size, density, angle, etc.) exposed as an editable per-map parameter |
+| [35-wall-background-punch-through.md](35-wall-background-punch-through.md) | A fourth wall style: a shared tiled background image, with Wall cells left unpainted to reveal it |
 
 Not yet written: 14 (UI shell).
 

@@ -62,16 +62,25 @@ import de.jackbeback.pocketquest.core.model.SpawnRole
 import de.jackbeback.pocketquest.core.model.SpawnZone
 import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.WallEdge
+import de.jackbeback.pocketquest.core.model.WallHatchOsrParams
+import de.jackbeback.pocketquest.core.model.WallStyle
 import de.jackbeback.pocketquest.core.model.opposite
 import de.jackbeback.pocketquest.core.rules.content.compressTerrainToRuns
 import de.jackbeback.pocketquest.core.rules.content.expandTerrainRuns
+import de.jackbeback.pocketquest.ui.BACKGROUND_ASSET_ID
+import de.jackbeback.pocketquest.ui.drawBackgroundImage
 import de.jackbeback.pocketquest.ui.drawWallHatch
+import de.jackbeback.pocketquest.ui.drawWallHatchOsr
+import de.jackbeback.pocketquest.ui.generateWallHatchOsr
+import kotlin.random.Random
+import de.jackbeback.pocketquest.ui.drawWallShadows
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
 import de.jackbeback.pocketquest.ui.ink.InkButton
 import de.jackbeback.pocketquest.ui.ink.InkLabel
 import de.jackbeback.pocketquest.ui.ink.InkSelect
+import de.jackbeback.pocketquest.ui.ink.InkStepper
 import de.jackbeback.pocketquest.ui.ink.InkTextField
 import de.jackbeback.pocketquest.ui.ink.InkTooltip
 import de.jackbeback.pocketquest.ui.ink.PAPER
@@ -131,6 +140,55 @@ private fun toggleWallEdge(edges: List<WallEdge>, pos: GridPos, side: Side): Lis
     return edges + direct
 }
 
+/**
+ * docs/34-wall-hatch-osr-configurable-params.md: every [WallHatchOsrParams] knob, editable — none
+ * of this applies live (see the Regenerate button just above it in the layout); changing a value
+ * here only takes effect the next time that button (or Save) actually re-runs the generator.
+ */
+@Composable
+private fun OsrHatchParamsEditor(params: WallHatchOsrParams, onChange: (WallHatchOsrParams) -> Unit) {
+    Column(modifier = Modifier.padding(top = 4.dp)) {
+        InkLabel("OSR HATCH PARAMETERS")
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            InkLabel("sub-cells/tile", modifier = Modifier.padding(end = 4.dp))
+            InkStepper(params.subcellsPerTile, min = 2, onValueChange = { onChange(params.copy(subcellsPerTile = it)) })
+            InkLabel("fade distance", modifier = Modifier.padding(start = 12.dp, end = 4.dp))
+            InkStepper(params.fadeDistanceCells, min = 1, onValueChange = { onChange(params.copy(fadeDistanceCells = it)) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            InkLabel("line length", modifier = Modifier.padding(end = 4.dp))
+            InkStepper(params.minLineLengthSubcells, min = 1, onValueChange = { onChange(params.copy(minLineLengthSubcells = it)) })
+            InkLabel("to", modifier = Modifier.padding(horizontal = 4.dp))
+            InkStepper(params.maxLineLengthSubcells, min = params.minLineLengthSubcells, onValueChange = { onChange(params.copy(maxLineLengthSubcells = it)) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            InkLabel("group size", modifier = Modifier.padding(end = 4.dp))
+            InkStepper(params.minGroupSize, min = 1, onValueChange = { onChange(params.copy(minGroupSize = it)) })
+            InkLabel("to", modifier = Modifier.padding(horizontal = 4.dp))
+            InkStepper(params.maxGroupSize, min = params.minGroupSize, onValueChange = { onChange(params.copy(maxGroupSize = it)) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            InkLabel("angle region", modifier = Modifier.padding(end = 4.dp))
+            InkStepper(params.angleRegionSubcells, min = 1, onValueChange = { onChange(params.copy(angleRegionSubcells = it)) })
+            InkLabel("angle wobble °", modifier = Modifier.padding(start = 12.dp, end = 4.dp))
+            FloatField(params.angleJitterDegrees, onChange = { onChange(params.copy(angleJitterDegrees = it.coerceAtLeast(0f))) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            InkLabel("coverage (0-1)", modifier = Modifier.padding(end = 4.dp))
+            FloatField(params.targetCoverage, onChange = { onChange(params.copy(targetCoverage = it.coerceIn(0f, 1f))) })
+            InkLabel("line width", modifier = Modifier.padding(start = 12.dp, end = 4.dp))
+            FloatField(params.lineWidthFraction, onChange = { onChange(params.copy(lineWidthFraction = it.coerceAtLeast(0.005f))) })
+        }
+    }
+}
+
+/** A [Float]-backed sibling of [EffectTemplateEditor.kt]'s `IntField` — same "local text buffer, only propagate a value that actually parses" technique. */
+@Composable
+private fun FloatField(value: Float, onChange: (Float) -> Unit) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    InkTextField(text, onValueChange = { text = it; it.toFloatOrNull()?.let(onChange) }, modifier = Modifier.width(56.dp))
+}
+
 /** Which of a cell's 4 edges a click lands nearest to — the square split into 4 triangles by its diagonals, standard directional-pad technique. [relX]/[relY] are the click position within the cell, each in [0,1). */
 private fun nearestSide(relX: Float, relY: Float): Side = when {
     relY < relX && relY < 1f - relX -> Side.North
@@ -177,7 +235,7 @@ private fun descriptionFor(asset: ManifestAsset?): String = when (asset) {
 /** A sub-region of a floor-texture sheet to stamp into one cell — picked once per cell so neighbouring tiles get visually varied swatches from the same sheet. */
 private data class FloorPatch(val sheet: ImageBitmap, val srcOffset: IntOffset, val srcSize: IntSize)
 
-/** The Wall branch here is only ever reached for the small toolbar swatch icon and for a map with `wallHatch = false` — the main canvas draws Wall cells via the shared procedural [drawWallHatch] instead, called separately before this loop runs (see [MapCanvas]). */
+/** The Wall branch here is only ever reached for the small toolbar swatch icon and for a map with `wallStyle == WallStyle.Flat` — the main canvas draws Wall cells via the shared procedural [drawWallHatch]/[drawWallHatchOsr] instead, called separately before this loop runs (see [MapCanvas]). */
 private fun DrawScope.drawTerrainCell(tile: TileType, rect: Rect, floorPatch: FloorPatch?) {
     when {
         tile == TileType.Wall -> drawRect(INK, rect.topLeft, rect.size)
@@ -393,15 +451,59 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
             }
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
                 InkLabel("WALL TEXTURE")
-                // Procedural (drawWallHatch, shared with :ui) draws live — no sprite/manifest id to
-                // pick, just on/off. BattleMapDef.wallHatch defaults true, matching floorTexture's
-                // "auto-applied, overridable" precedent this replaces.
+                // docs/32-wall-hatch-osr-style.md: Hatch draws live (drawWallHatch, shared with
+                // :ui) — no sprite/manifest id to pick. BattleMapDef.wallStyle defaults to Hatch,
+                // matching floorTexture's "auto-applied, overridable" precedent. Osr is different
+                // (docs/33): it renders pre-baked geometry, not a live computation — see the
+                // Regenerate button below.
                 InkSelect(
-                    selected = map.wallHatch,
-                    options = listOf(true, false),
-                    label = { if (it) "Hatched" else "Plain (flat fill)" },
-                    onSelect = { hatched -> updateMap { it.copy(wallHatch = hatched) } },
+                    selected = map.wallStyle,
+                    options = WallStyle.entries,
+                    label = {
+                        when (it) {
+                            WallStyle.Flat -> "Plain (flat fill)"
+                            WallStyle.Hatch -> "Hatched"
+                            WallStyle.Osr -> "Hatched (OSR)"
+                            WallStyle.Background -> "Background image"
+                        }
+                    },
+                    onSelect = { style -> updateMap { it.copy(wallStyle = style) } },
                     modifier = Modifier.padding(start = 8.dp),
+                )
+                if (map.wallStyle == WallStyle.Osr) {
+                    // docs/33-wall-hatch-osr-packing.md: painting walls never auto-regenerates —
+                    // this button (or Save, for a map that has no bake yet at all) is the only
+                    // trigger. A fresh random seed each click is the whole point: "don't like this
+                    // roll, try another."
+                    InkButton(
+                        "Regenerate Hatch",
+                        modifier = Modifier.padding(start = 8.dp),
+                        onClick = {
+                            val tiles = expandTerrainRuns(map.terrain)
+                            val seed = Random.nextLong()
+                            val lines = generateWallHatchOsr(
+                                isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
+                                cols = 0 until map.width,
+                                rows = 0 until map.height,
+                                seed = seed,
+                                params = map.wallHatchOsrParams,
+                            )
+                            updateMap { it.copy(wallHatchOsr = lines, wallHatchOsrSeed = seed) }
+                        },
+                    )
+                }
+                if (map.wallStyle == WallStyle.Background) {
+                    // docs/35-wall-background-punch-through.md: how far past the map's own edge
+                    // the tiled background still extends before stopping — resolved: bounded to
+                    // the map + a margin, not the whole pannable viewport.
+                    InkLabel("margin (tiles)", modifier = Modifier.padding(start = 12.dp, end = 4.dp))
+                    InkStepper(map.backgroundMarginTiles, min = 0, onValueChange = { updateMap { m -> m.copy(backgroundMarginTiles = it) } })
+                }
+            }
+            if (map.wallStyle == WallStyle.Osr) {
+                OsrHatchParamsEditor(
+                    params = map.wallHatchOsrParams,
+                    onChange = { params -> updateMap { it.copy(wallHatchOsrParams = params) } },
                 )
             }
             InkLabel("TERRAIN", modifier = Modifier.padding(top = 8.dp))
@@ -547,6 +649,13 @@ private fun MapCanvas(
         val sheet = SpriteLoader.load(PROPS_DIR + meta.file) ?: return@remember null
         sheet to (meta.tilesW ?: 1)
     }
+    // docs/35-wall-background-punch-through.md: only loaded when the map actually uses it, same
+    // "only decode what this map needs" discipline floorSwatch above already follows.
+    val backgroundImage = remember(map.wallStyle) {
+        if (map.wallStyle != WallStyle.Background) return@remember null
+        val meta = AssetManifest.prop(BACKGROUND_ASSET_ID) ?: return@remember null
+        SpriteLoader.load(PROPS_DIR + meta.file)
+    }
     var camera by remember(map.id) { mutableStateOf(Offset(-CANVAS_PADDING, -CANVAS_PADDING)) }
     var zoom by remember(map.id) { mutableStateOf(1f) }
     var lastPressPos by remember { mutableStateOf(Offset.Zero) }
@@ -608,6 +717,16 @@ private fun MapCanvas(
             fun toScreen(world: Offset) = worldToScreen(world, camera, zoom)
             val screenTile = TILE_PX * zoom
 
+            // docs/35-wall-background-punch-through.md: drawn first, under everything — floor
+            // cells paint opaquely over it in the very next pass, same as :ui's own Board.
+            backgroundImage?.let { bg ->
+                drawBackgroundImage(
+                    bg, map.width, map.height, map.backgroundMarginTiles, TILE_PX, zoom,
+                    screenToWorld = { screenToWorld(it, camera, zoom) },
+                    toScreen = ::toScreen,
+                )
+            }
+
             // Pick a stable-but-varied swatch cell from the floor sheet using the tile's own
             // position, so neighbouring floor tiles don't all show the identical sub-image.
             fun patchAt(swatch: Pair<ImageBitmap, Int>?, col: Int, row: Int): FloorPatch? = swatch?.let { (sheet, cols) ->
@@ -628,6 +747,23 @@ private fun MapCanvas(
                     drawTerrainCell(tile, rect, patchAt(floorSwatch, col, row))
                 }
             }
+            // docs/31-wall-shadow-casting.md: same ordering as the floor fill above — before grid
+            // lines, so they stay legible on top. Shared with :ui's real Board (drawWallShadows)
+            // so an author sees the same shadow while placing walls that they'll see in Playtest.
+            drawWallShadows(
+                isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
+                hasWallEdge = { pos, side ->
+                    val d = sideDelta(side)
+                    WallEdge(pos, side) in map.wallEdges ||
+                        WallEdge(GridPos(pos.col + d.col, pos.row + d.row), side.opposite()) in map.wallEdges
+                },
+                cols = 0 until map.width,
+                rows = 0 until map.height,
+                tilePx = TILE_PX,
+                zoom = zoom,
+                ink = INK,
+                toScreen = ::toScreen,
+            )
             // Grid lines drawn after floor fill (not before) so a filled Floor/hazard cell never
             // paints over the line under it — was the original "grid lines missing" bug.
             val gridTop = toScreen(Offset(0f, 0f)).y
@@ -647,31 +783,37 @@ private fun MapCanvas(
             // the sparse hand-drawn strokes — no solid backing — so grid lines were still visible in
             // the gaps between strokes even with hatch drawn last. An opaque PAPER base fill under the
             // hatch (same background tone as everywhere else) closes those gaps.
-            if (map.wallHatch) {
-                for (col in 0 until map.width) {
-                    for (row in 0 until map.height) {
-                        if (tiles[GridPos(col, row)] != TileType.Wall) continue
-                        val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                        drawRect(PAPER, rect.topLeft, rect.size)
+            when (map.wallStyle) {
+                WallStyle.Hatch, WallStyle.Osr -> {
+                    for (col in 0 until map.width) {
+                        for (row in 0 until map.height) {
+                            if (tiles[GridPos(col, row)] != TileType.Wall) continue
+                            val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                            drawRect(PAPER, rect.topLeft, rect.size)
+                        }
+                    }
+                    if (map.wallStyle == WallStyle.Hatch) {
+                        val isWall = { pos: GridPos -> (tiles[pos] ?: TileType.Floor) == TileType.Wall }
+                        drawWallHatch(isWall = isWall, cols = 0 until map.width, rows = 0 until map.height, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
+                    } else {
+                        // docs/33-wall-hatch-osr-packing.md: renders the last-baked geometry only —
+                        // painting doesn't regenerate it live, see the "Regenerate Hatch" button.
+                        drawWallHatchOsr(lines = map.wallHatchOsr, cols = 0 until map.width, rows = 0 until map.height, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
                     }
                 }
-                drawWallHatch(
-                    isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
-                    cols = 0 until map.width,
-                    rows = 0 until map.height,
-                    tilePx = TILE_PX,
-                    zoom = zoom,
-                    ink = INK,
-                    toScreen = ::toScreen,
-                )
-            } else {
-                for (col in 0 until map.width) {
-                    for (row in 0 until map.height) {
-                        if (tiles[GridPos(col, row)] != TileType.Wall) continue
-                        val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                        drawTerrainCell(TileType.Wall, rect, null)
+                WallStyle.Flat -> {
+                    for (col in 0 until map.width) {
+                        for (row in 0 until map.height) {
+                            if (tiles[GridPos(col, row)] != TileType.Wall) continue
+                            val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                            drawTerrainCell(TileType.Wall, rect, null)
+                        }
                     }
                 }
+                // docs/35-wall-background-punch-through.md: paints nothing — the background image
+                // drawn at the very top of this canvas is still sitting there untouched under a
+                // Wall cell, same reasoning as :ui's own Board.
+                WallStyle.Background -> Unit
             }
             // Automatic outline around every Wall mass (see wallOutlineSegments' doc comment) — drawn
             // for both hatch and flat rendering; a no-op visually on a flat wall (same INK color as

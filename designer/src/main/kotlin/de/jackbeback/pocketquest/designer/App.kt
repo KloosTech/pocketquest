@@ -29,6 +29,10 @@ import de.jackbeback.pocketquest.core.content.CatalogValidationException
 import de.jackbeback.pocketquest.core.content.CatalogValidator
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.TileType
+import de.jackbeback.pocketquest.core.model.WallStyle
+import de.jackbeback.pocketquest.core.rules.content.expandTerrainRuns
+import de.jackbeback.pocketquest.ui.generateWallHatchOsr
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -52,6 +56,29 @@ private fun validate(catalog: Catalog): List<String> =
     }
 
 private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Events, Shops, Pools, Maps, Dice, Playtest }
+
+/**
+ * docs/33-wall-hatch-osr-packing.md: ensures Save never ships a map switched to [WallStyle.Osr]
+ * with no baked geometry at all — but does NOT reroll a map that already has some (that would
+ * make every unrelated Save silently reshuffle every Osr map's look). Deterministic: uses each
+ * map's own stored `wallHatchOsrSeed` (0 by default), not a fresh random one, so re-running this
+ * on an already-baked-by-this-exact-call map is a no-op — safe to call on every Save unconditionally.
+ */
+private fun bakeMissingOsrHatch(catalog: Catalog): Catalog {
+    val bakedMaps = catalog.maps.mapValues { (_, map) ->
+        if (map.wallStyle != WallStyle.Osr || map.wallHatchOsr.isNotEmpty()) return@mapValues map
+        val tiles = expandTerrainRuns(map.terrain)
+        val lines = generateWallHatchOsr(
+            isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
+            cols = 0 until map.width,
+            rows = 0 until map.height,
+            seed = map.wallHatchOsrSeed,
+            params = map.wallHatchOsrParams,
+        )
+        map.copy(wallHatchOsr = lines)
+    }
+    return catalog.copy(maps = bakedMaps)
+}
 
 /**
  * Auto-loads `content/catalog.json` on startup if it exists — same canonical file
@@ -104,6 +131,7 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
                 modifier = Modifier.padding(end = 8.dp),
                 flashColor = if (justSaved) OK else null,
                 onClick = {
+                    catalog = bakeMissingOsrHatch(catalog)
                     val file = DesignerFileIo.defaultCatalogFile()
                     DesignerFileIo.save(file, catalog)
                     loadedFilePath = file.absolutePath
@@ -111,6 +139,7 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
                 },
             )
             InkButton("Save As…", modifier = Modifier.padding(end = 8.dp), onClick = {
+                catalog = bakeMissingOsrHatch(catalog)
                 val file = DesignerFileIo.chooseSaveFile() ?: return@InkButton
                 DesignerFileIo.save(file, catalog)
                 loadedFilePath = file.absolutePath

@@ -2088,6 +2088,11 @@
             "id": "club_256_2",
             "file": "sprites/club_256_2.png",
             "kind": "projectile"
+        },
+        {
+            "id": "background",
+            "file": "sprites/background.png",
+            "kind": "background"
         }
     ],
     "overlays": [

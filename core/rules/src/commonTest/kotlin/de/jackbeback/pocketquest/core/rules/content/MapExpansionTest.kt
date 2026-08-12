@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.core.rules.content
 
 import de.jackbeback.pocketquest.core.model.BattleMapDef
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.HatchLine
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.PropId
 import de.jackbeback.pocketquest.core.model.PropLayer
@@ -10,6 +11,7 @@ import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.TerrainRun
 import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.WallEdge
+import de.jackbeback.pocketquest.core.model.WallStyle
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -95,20 +97,31 @@ class MapExpansionTest {
         val placement = PropPlacement(PropId("chest1x1"), GridPos(1, 1), PropLayer.Object)
         val def = BattleMapDef(
             id = MapId("room"), width = 4, height = 4,
-            props = listOf(placement), floorTexture = "stonytile5x5", wallHatch = false,
+            props = listOf(placement), floorTexture = "stonytile5x5", wallStyle = WallStyle.Flat,
         )
         val map = def.toBattleMap()
         assertEquals(listOf(placement), map.props)
         assertEquals("stonytile5x5", map.floorTexture)
-        assertEquals(false, map.wallHatch)
+        assertEquals(WallStyle.Flat, map.wallStyle)
     }
 
     @Test
-    fun battleMapDefToBattleMapDefaultsWallHatchOn() {
-        // Every map saved before wallHatch existed decodes with this default — "on by default,
-        // overridable" only works if the fallback here matches BattleMapDef's own.
+    fun battleMapDefToBattleMapCarriesBakedOsrHatchGeometryThrough() {
+        // docs/33-wall-hatch-osr-packing.md: wallHatchOsr carries across unchanged (:ui only ever
+        // renders it), but wallHatchOsrSeed does NOT — it's :designer-only bookkeeping, meaningless
+        // once the bake itself has already been copied over.
+        val line = HatchLine(1f, 1f, 2f, 1f, 0.03f)
+        val def = BattleMapDef(id = MapId("room"), width = 4, height = 4, wallStyle = WallStyle.Osr, wallHatchOsr = listOf(line), wallHatchOsrSeed = 99L)
+        assertEquals(listOf(line), def.toBattleMap().wallHatchOsr)
+    }
+
+    @Test
+    fun battleMapDefToBattleMapDefaultsWallStyleToHatch() {
+        // Every map saved before wallStyle existed (or before it was still the Boolean wallHatch)
+        // decodes with this default — "on by default, overridable" only works if the fallback here
+        // matches BattleMapDef's own.
         val def = BattleMapDef(id = MapId("room"), width = 4, height = 4)
-        assertEquals(true, def.toBattleMap().wallHatch)
+        assertEquals(WallStyle.Hatch, def.toBattleMap().wallStyle)
     }
 
     @Test

@@ -93,6 +93,7 @@ import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.WallEdge
+import de.jackbeback.pocketquest.core.model.WallStyle
 import de.jackbeback.pocketquest.ui.assets.GameAssetManifest
 import de.jackbeback.pocketquest.ui.assets.GameSpriteLoader
 import de.jackbeback.pocketquest.core.rules.action.allActions
@@ -601,7 +602,7 @@ private data class PropSprite(val bitmap: ImageBitmap, val tilesW: Int, val tile
  * flat-color rendering for those — same "missing asset just means no image" contract
  * `GameSpriteLoader` already establishes, never a crash.
  */
-private data class MapAssets(val floor: TexSheet?, val props: Map<String, PropSprite>)
+private data class MapAssets(val floor: TexSheet?, val props: Map<String, PropSprite>, val background: ImageBitmap?)
 
 /**
  * Loads once per distinct [map] (`produceState`'s key in [Board]'s caller) — `:designer`'s
@@ -619,7 +620,14 @@ private suspend fun loadMapAssets(map: BattleMap): MapAssets {
         val bitmap = GameSpriteLoader.load(meta.file) ?: return@mapNotNull null
         id to PropSprite(bitmap, meta.tilesW ?: 1, meta.tilesH ?: 1)
     }.toMap()
-    return MapAssets(floor, props)
+    // docs/35-wall-background-punch-through.md: only loaded for a map actually using
+    // WallStyle.Background — every other style never references it.
+    val background = if (map.wallStyle == WallStyle.Background) {
+        manifest.prop(BACKGROUND_ASSET_ID)?.let { GameSpriteLoader.load(it.file) }
+    } else {
+        null
+    }
+    return MapAssets(floor, props, background)
 }
 
 /**
@@ -678,6 +686,9 @@ private fun DrawScope.drawTexturedCell(sheet: TexSheet, col: Int, row: Int, rect
         dstSize = IntSize(rect.width.roundToInt(), rect.height.roundToInt()),
     )
 }
+
+/** docs/35-wall-background-punch-through.md: the manifest id `background.png` was imported under — must match the entry `AssetManifest`/`GameAssetManifest` actually resolve. */
+const val BACKGROUND_ASSET_ID = "background"
 
 /**
  * doc07: "the grid is one Canvas, not 400 composables." Grid lines and
@@ -828,20 +839,47 @@ private fun DrawScope.drawGrid(map: BattleMap, mapAssets: MapAssets?, camera: Of
     fun toScreen(world: Offset) = worldToScreen(world, camera, zoom, viewport)
     val screenTile = TILE_PX * zoom
 
+    // docs/35-wall-background-punch-through.md: drawn first, under everything — floor cells paint
+    // opaquely over it in the very next pass below, same as they always have; only WallStyle.Background's
+    // wall cells (which paint nothing at all — see the `when` below) ever let it actually show through.
+    mapAssets?.background?.let { bg ->
+        drawBackgroundImage(
+            bg, map.width, map.height, map.backgroundMarginTiles, TILE_PX, zoom,
+            screenToWorld = { screenToWorld(it, camera, zoom, viewport) },
+            toScreen = ::toScreen,
+        )
+    }
+
     // Floor fill drawn before grid lines so a textured cell never paints over the line under it —
     // MapEditorPanel.kt's own drawTerrainCell/grid-line split settled this ordering first, ported
     // here rather than rediscovering it via the same "grid lines missing" bug.
     val floorSheet = mapAssets?.floor
-    if (floorSheet != null) {
-        for (col in cols.first..cols.last) {
-            for (row in rows.first..rows.last) {
-                val pos = GridPos(col, row)
-                if (map.tileAt(pos) == TileType.Wall) continue
-                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+    for (col in cols.first..cols.last) {
+        for (row in rows.first..rows.last) {
+            val pos = GridPos(col, row)
+            if (map.tileAt(pos) == TileType.Wall) continue
+            val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+            if (floorSheet != null) {
                 drawTexturedCell(floorSheet, col, row, rect)
+            } else if (mapAssets?.background != null) {
+                // docs/35: "no floor texture" used to mean "nothing drawn here at all" — safe only
+                // because the Canvas's own blank backdrop happened to already be PAPER-toned. Once
+                // a background image is drawn underneath, that assumption breaks: an untextured
+                // floor cell would show the background straight through it. An explicit opaque
+                // PAPER fill restores "floor always reads as solid ground" regardless of what's
+                // drawn beneath this pass.
+                drawRect(color = PAPER, topLeft = rect.topLeft, size = rect.size)
             }
         }
     }
+
+    // docs/31-wall-shadow-casting.md: same "before grid lines" ordering as the floor fill above,
+    // for the same reason — the faint grid lines stay legible on top instead of getting muddied.
+    drawWallShadows(
+        isWall = { map.tileAt(it) == TileType.Wall },
+        hasWallEdge = map::hasWallEdge,
+        cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen,
+    )
 
     val yTop = toScreen(Offset(0f, rows.first * TILE_PX)).y
     val yBottom = toScreen(Offset(0f, (rows.last + 1) * TILE_PX)).y
@@ -868,24 +906,37 @@ private fun DrawScope.drawGrid(map: BattleMap, mapAssets: MapAssets?, camera: Of
     // visible area every frame regardless of how little of it was actually walls, heavy enough to
     // stutter panning/clicking) — no bleed past a wall cell's edge, so floor cells need no special
     // handling here at all, same as before this feature existed.
-    if (map.wallHatch) {
-        for (col in cols.first..cols.last) {
-            for (row in rows.first..rows.last) {
-                if (map.tileAt(GridPos(col, row)) != TileType.Wall) continue
-                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                drawRect(color = PAPER, topLeft = rect.topLeft, size = rect.size)
+    when (map.wallStyle) {
+        WallStyle.Hatch, WallStyle.Osr -> {
+            for (col in cols.first..cols.last) {
+                for (row in rows.first..rows.last) {
+                    if (map.tileAt(GridPos(col, row)) != TileType.Wall) continue
+                    val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                    drawRect(color = PAPER, topLeft = rect.topLeft, size = rect.size)
+                }
+            }
+            val isWall = { pos: GridPos -> map.tileAt(pos) == TileType.Wall }
+            if (map.wallStyle == WallStyle.Hatch) {
+                drawWallHatch(isWall = isWall, cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
+            } else {
+                drawWallHatchOsr(lines = map.wallHatchOsr, cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
             }
         }
-        drawWallHatch(isWall = { map.tileAt(it) == TileType.Wall }, cols = cols, rows = rows, tilePx = TILE_PX, zoom = zoom, ink = INK, toScreen = ::toScreen)
-    } else {
-        for (col in cols.first..cols.last) {
-            for (row in rows.first..rows.last) {
-                val pos = GridPos(col, row)
-                if (map.tileAt(pos) != TileType.Wall) continue
-                val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
-                drawRect(color = INK, topLeft = rect.topLeft, size = rect.size)
+        WallStyle.Flat -> {
+            for (col in cols.first..cols.last) {
+                for (row in rows.first..rows.last) {
+                    val pos = GridPos(col, row)
+                    if (map.tileAt(pos) != TileType.Wall) continue
+                    val rect = Rect(toScreen(Offset(col * TILE_PX, row * TILE_PX)), Size(screenTile, screenTile))
+                    drawRect(color = INK, topLeft = rect.topLeft, size = rect.size)
+                }
             }
         }
+        // docs/35-wall-background-punch-through.md: paints nothing at all — the background image
+        // drawn at the very top of this function is still sitting there untouched, so a Wall cell
+        // simply shows it through, "punched" relative to every floor cell around it (which DID get
+        // painted opaque by the floor-fill pass above, same as any other style).
+        WallStyle.Background -> Unit
     }
     // Automatic outline around every Wall mass — a no-op visually on a flat wall (same INK color as
     // its own fill) but is what gives a hatched wall the clean solid border authored in :designer,

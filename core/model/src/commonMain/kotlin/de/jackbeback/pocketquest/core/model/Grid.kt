@@ -80,10 +80,10 @@ data class BattleMap(
     val height: Int,
     val terrain: Map<GridPos, TileType> = emptyMap(),
     val wallEdges: Set<WallEdge> = emptySet(),
-    /** Carried straight from [BattleMapDef] purely for `:ui`'s Board to render — no rules-engine consumer, same as `floorTexture`/`wallHatch` below. */
+    /** Carried straight from [BattleMapDef] purely for `:ui`'s Board to render — no rules-engine consumer, same as `floorTexture`/`wallStyle` below. */
     val props: List<PropPlacement> = emptyList(),
     val floorTexture: String? = null,
-    val wallHatch: Boolean = true,
+    val wallStyle: WallStyle = WallStyle.Hatch,
     /**
      * Carried from [BattleMapDef.fogOfWar] — unlike the rendering-only flags above, this one IS read
      * by `:core:rules`' visibility computation and the AI's hidden-enemy skip-turn check. Defaults
@@ -95,6 +95,10 @@ data class BattleMap(
      * default-on carries through regardless of this constructor default.
      */
     val fogOfWar: Boolean = false,
+    /** docs/33-wall-hatch-osr-packing.md: the baked OSR-hatch stroke list, carried straight from [BattleMapDef] — `:ui`'s Board only ever renders it, never generates. */
+    val wallHatchOsr: List<HatchLine> = emptyList(),
+    /** docs/35-wall-background-punch-through.md: carried straight from [BattleMapDef] — only meaningful when [wallStyle] is [WallStyle.Background]. */
+    val backgroundMarginTiles: Int = 4,
 ) {
     fun inBounds(pos: GridPos): Boolean =
         pos.col in 0 until width && pos.row in 0 until height

@@ -1076,7 +1076,9 @@
                         }
                     ]
                 }
-            ]
+            ],
+            "wallStyle": "Background",
+            "backgroundMarginTiles": 1
         },
         "map2": {
             "id": "map2",
@@ -2759,7 +2761,8 @@
                         }
                     ]
                 }
-            ]
+            ],
+            "wallStyle": "Background"
         }
     },
     "encounters": {

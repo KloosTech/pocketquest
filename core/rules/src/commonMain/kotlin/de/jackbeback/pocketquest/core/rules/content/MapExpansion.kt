@@ -53,9 +53,12 @@ fun compressTerrainToRuns(tiles: Map<GridPos, TileType>, width: Int, height: Int
 
 /**
  * Expands [BattleMapDef.terrain] into the runtime [BattleMap] the resolver's targeting/pathfinding
- * actually reads. `props`/`floorTexture`/`wallHatch` carry straight across unchanged — pure
- * rendering data `:ui`'s Board reads off `state.map`, never touched by the resolver. `fogOfWar` also
- * carries straight across, but unlike those three IS read by the resolver/AI layer (visibility,
- * hidden-enemy skip-turn).
+ * actually reads. `props`/`floorTexture`/`wallStyle`/`wallHatchOsr`/`backgroundMarginTiles` carry
+ * straight across unchanged — pure rendering data `:ui`'s Board reads off `state.map`, never
+ * touched by the resolver. `wallHatchOsrSeed` does NOT carry across — it's `:designer`-only
+ * bookkeeping for regenerating the bake later, meaningless once the bake result itself has already
+ * been copied over. `fogOfWar` also carries straight across, but unlike the rendering-only fields
+ * IS read by the resolver/AI layer (visibility, hidden-enemy skip-turn).
  */
-fun BattleMapDef.toBattleMap(): BattleMap = BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet(), props, floorTexture, wallHatch, fogOfWar)
+fun BattleMapDef.toBattleMap(): BattleMap =
+    BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet(), props, floorTexture, wallStyle, fogOfWar, wallHatchOsr, backgroundMarginTiles)
