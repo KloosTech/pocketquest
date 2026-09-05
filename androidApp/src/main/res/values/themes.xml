@@ -1,0 +1,4 @@
+<resources>
+    <!-- Fully Compose-drawn — no XML views, no need for an AppCompat/Material theme dependency. -->
+    <style name="Theme.PocketQuest" parent="android:Theme.Material.Light.NoActionBar" />
+</resources>

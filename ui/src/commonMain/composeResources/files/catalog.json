@@ -1,0 +1,4173 @@
+{
+    "archetypes": {
+        "archetype1": {
+            "id": "archetype1",
+            "name": "Warrior",
+            "abilities": {
+                "str": 12,
+                "dex": 10,
+                "con": 12,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 28,
+            "baseAc": 10,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 10,
+            "actions": [
+                "move",
+                "action5",
+                "action7",
+                "action8"
+            ],
+            "aiProfile": "profile1",
+            "spriteId": "knight",
+            "isPlayerCharacter": true
+        },
+        "archetype2": {
+            "id": "archetype2",
+            "name": "Goblin",
+            "abilities": {
+                "str": 10,
+                "dex": 10,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 8,
+            "baseAc": 8,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "move",
+                "action2"
+            ],
+            "aiProfile": "profile1",
+            "spriteId": "goblin_swordsman"
+        },
+        "archetype3": {
+            "id": "archetype3",
+            "name": "Goblin Brute",
+            "abilities": {
+                "str": 14,
+                "dex": 10,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 24,
+            "baseAc": 8,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "move",
+                "action4"
+            ],
+            "aiProfile": "profile1",
+            "spriteId": "goblin_brute"
+        },
+        "archetype4": {
+            "id": "archetype4",
+            "name": "Goblin Archer",
+            "abilities": {
+                "str": 10,
+                "dex": 12,
+                "con": 10,
+                "int": 10,
+                "wis": 10,
+                "cha": 10
+            },
+            "baseMaxHp": 10,
+            "baseAc": 8,
+            "speedTiles": 6,
+            "baseMaxAp": 2,
+            "baseMaxMana": 0,
+            "actions": [
+                "move"
+            ],
+            "aiProfile": "profile2",
+            "spriteId": "goblin_archer"
+        }
+    },
+    "statuses": {
+        "status1": {
+            "id": "status1",
+            "name": "Bleeding",
+            "stackPolicy": "AddStacks",
+            "onTurnStart": [
+                {
+                    "type": "dealDamage",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "amount": 0,
+                    "damageType": "Piercing",
+                    "perStack": 2
+                }
+            ],
+            "icon": "blood_256_2",
+            "decayStacksPerTurn": 1
+        },
+        "status2": {
+            "id": "status2",
+            "name": "Shield Up",
+            "stackPolicy": "Refresh",
+            "modifiers": [
+                {
+                    "type": "add",
+                    "stat": "ArmorClass",
+                    "value": 4
+                }
+            ],
+            "icon": "shield_256",
+            "decayStacksPerTurn": 1
+        },
+        "status3": {
+            "id": "status3",
+            "name": "Daze",
+            "stackPolicy": "Refresh"
+        }
+    },
+    "items": {
+        "item1": {
+            "id": "item1",
+            "name": "Ring of Strength",
+            "validSlots": [
+                "Ring1",
+                "Ring2"
+            ],
+            "basePrice": 1,
+            "icon": "club"
+        },
+        "item2": {
+            "id": "item2",
+            "name": "Ring of Dexterity",
+            "validSlots": [
+                "Ring2",
+                "Ring1"
+            ],
+            "icon": "club"
+        },
+        "item3": {
+            "id": "item3",
+            "name": "Ring of Constitution",
+            "validSlots": [
+                "Ring1",
+                "Ring2"
+            ],
+            "icon": "club"
+        }
+    },
+    "actions": {
+        "move": {
+            "id": "move",
+            "name": "Move",
+            "cost": {
+                "action": {
+                    "type": "movement",
+                    "tiles": 6
+                }
+            },
+            "targeting": {
+                "mode": "Path",
+                "range": {
+                    "type": "tiles",
+                    "n": 1
+                },
+                "shape": {
+                    "type": "single"
+                },
+                "requiresLoS": false
+            },
+            "effects": []
+        },
+        "action2": {
+            "id": "action2",
+            "name": "Basic Punch",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SingleEntity",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "single"
+                },
+                "filter": {
+                    "excludeSelf": true
+                }
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "eachTarget"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 4,
+                    "damage": {
+                        "count": 1,
+                        "sides": 4,
+                        "modifier": 2
+                    },
+                    "damageType": "Bludgeoning"
+                }
+            ]
+        },
+        "action3": {
+            "id": "action3",
+            "name": "Fire Ball",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "mana": 2,
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "Point",
+                "range": {
+                    "type": "tiles",
+                    "n": 4
+                },
+                "shape": {
+                    "type": "sphere",
+                    "radius": 1
+                },
+                "maxTargets": 9
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 0,
+                    "damage": {
+                        "count": 1,
+                        "sides": 6
+                    },
+                    "damageType": "Fire"
+                }
+            ],
+            "projectileSprite": "fireball"
+        },
+        "action4": {
+            "id": "action4",
+            "name": "Big Swing",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "Direction",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "cone",
+                    "length": 2,
+                    "degrees": 93
+                },
+                "maxTargets": 3
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 6,
+                    "damage": {
+                        "count": 1,
+                        "sides": 12
+                    },
+                    "damageType": "Bludgeoning"
+                },
+                {
+                    "type": "rollSave",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "ability": "Dex",
+                    "dc": 12,
+                    "onSuccess": [
+                        {
+                            "type": "push",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "awayFrom": {
+                                "type": "caster"
+                            },
+                            "distance": 2,
+                            "onWallHit": [
+                                {
+                                    "type": "dealDamage",
+                                    "target": {
+                                        "type": "eachTarget"
+                                    },
+                                    "amount": 20,
+                                    "damageType": "Bludgeoning"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "projectileSprite": "club_256_2"
+        },
+        "action5": {
+            "id": "action5",
+            "name": "Slice",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SingleEntity",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "single"
+                },
+                "filter": {
+                    "excludeSelf": true
+                }
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 0,
+                    "damage": {
+                        "count": 1,
+                        "sides": 8
+                    },
+                    "damageType": "Slashing"
+                },
+                {
+                    "type": "rollSave",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "ability": "Con",
+                    "dc": 12,
+                    "onFail": [
+                        {
+                            "type": "applyStatus",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "status": "status1",
+                            "stacks": 2,
+                            "expiry": {
+                                "type": "turns",
+                                "n": 1
+                            }
+                        }
+                    ]
+                }
+            ],
+            "projectileSprite": "slice_256"
+        },
+        "action6": {
+            "id": "action6",
+            "name": "Basic Shot",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SingleEntity",
+                "range": {
+                    "type": "tiles",
+                    "n": 5
+                },
+                "shape": {
+                    "type": "single"
+                }
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 4,
+                    "damage": {
+                        "count": 1,
+                        "sides": 4
+                    },
+                    "damageType": "Piercing",
+                    "ability": "Dex"
+                }
+            ]
+        },
+        "action7": {
+            "id": "action7",
+            "name": "Shield Up",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "SelfOnly",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "rect",
+                    "width": 2,
+                    "height": 3
+                },
+                "filter": {
+                    "faction": "Player"
+                }
+            },
+            "effects": [
+                {
+                    "type": "applyStatus",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "status": "status2",
+                    "expiry": {
+                        "type": "onConcentrationLost"
+                    }
+                }
+            ],
+            "projectileSprite": "shield_256_2",
+            "description": "Pull Up Your Shield and Defend yourself and surrounding Tiles"
+        },
+        "action8": {
+            "id": "action8",
+            "name": "Shield Bash",
+            "cost": {
+                "action": {
+                    "type": "main"
+                },
+                "apCost": 1
+            },
+            "targeting": {
+                "mode": "Direction",
+                "range": {
+                    "type": "melee"
+                },
+                "shape": {
+                    "type": "line",
+                    "length": 4
+                },
+                "maxTargets": 4
+            },
+            "effects": [
+                {
+                    "type": "rollAttack",
+                    "attacker": {
+                        "type": "caster"
+                    },
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "attackBonus": 0,
+                    "damage": {
+                        "count": 1,
+                        "sides": 6
+                    },
+                    "damageType": "Bludgeoning"
+                },
+                {
+                    "type": "rollSave",
+                    "target": {
+                        "type": "eachTarget"
+                    },
+                    "ability": "Str",
+                    "dc": 10,
+                    "onFail": [
+                        {
+                            "type": "applyStatus",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "status": "status1",
+                            "expiry": {
+                                "type": "permanent"
+                            }
+                        }
+                    ]
+                },
+                {
+                    "type": "teleport",
+                    "who": {
+                        "type": "caster"
+                    }
+                }
+            ],
+            "projectileSprite": "shield_256_2",
+            "description": "Dash with your shield up "
+        }
+    },
+    "features": {
+        "feature1": {
+            "id": "feature1",
+            "name": "New Feature 1",
+            "grantsActions": [
+                "action2"
+            ]
+        }
+    },
+    "maps": {
+        "map1": {
+            "id": "map1",
+            "name": "Bed Room",
+            "width": 10,
+            "height": 10,
+            "terrain": [
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "length": 10,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 4
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 5
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 6
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 7
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 7
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 8
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "length": 10,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                }
+            ],
+            "wallEdges": [
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 2,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 7,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 6
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 8
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 7,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 9
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 9
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 8
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 2,
+                        "row": 9
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 1
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 4
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 4
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 6
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 5
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 4
+                    },
+                    "side": "West"
+                }
+            ],
+            "props": [
+                {
+                    "prop": "bedtwodouble2x2",
+                    "at": {
+                        "col": 1,
+                        "row": 1
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 4,
+                        "row": 1
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "rug4-2x2",
+                    "at": {
+                        "col": 6,
+                        "row": 2
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "treasurepile2x2",
+                    "at": {
+                        "col": 1,
+                        "row": 7
+                    },
+                    "layer": "Object"
+                }
+            ],
+            "spawns": [
+                {
+                    "role": "Party",
+                    "tiles": [
+                        {
+                            "col": 3,
+                            "row": 2
+                        }
+                    ]
+                },
+                {
+                    "role": "Enemy",
+                    "tiles": [
+                        {
+                            "col": 7,
+                            "row": 2
+                        },
+                        {
+                            "col": 7,
+                            "row": 3
+                        }
+                    ]
+                },
+                {
+                    "role": "LootCommon",
+                    "tiles": [
+                        {
+                            "col": 7,
+                            "row": 1
+                        },
+                        {
+                            "col": 8,
+                            "row": 1
+                        },
+                        {
+                            "col": 6,
+                            "row": 1
+                        }
+                    ]
+                }
+            ],
+            "wallStyle": "Background",
+            "backgroundMarginTiles": 1,
+            "triggers": [
+                {
+                    "id": "3a20fce7-27c0-4e35-9c25-0f2a85a6ba4d",
+                    "at": {
+                        "col": 6,
+                        "row": 2
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "Such a nice Rug"
+                        }
+                    ]
+                },
+                {
+                    "id": "0a60c36a-d5b3-4f35-bbe3-bb6545ea6593",
+                    "at": {
+                        "col": 3,
+                        "row": 2
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "hello"
+                        }
+                    ]
+                }
+            ]
+        },
+        "map2": {
+            "id": "map2",
+            "name": "Big1",
+            "width": 22,
+            "height": 22,
+            "terrain": [
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "length": 22,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 1
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 1
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 2
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 2
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 3
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 7,
+                        "row": 3
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 3
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 3
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 4
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 8,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 4
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 18,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 8,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 8,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 12,
+                        "row": 6
+                    },
+                    "length": 4,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 7
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 7
+                    },
+                    "length": 4,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 7
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 7
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 8
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 8
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 14,
+                        "row": 8
+                    },
+                    "length": 8,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 9
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 16,
+                        "row": 9
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 2,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 10
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 10
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 11
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 9,
+                        "row": 11
+                    },
+                    "length": 6,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 11
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 12
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 12
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 16,
+                        "row": 12
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 12
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 13
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 13
+                    },
+                    "length": 12,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 13
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 14
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 14
+                    },
+                    "length": 12,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 14
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 15
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 15
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 16,
+                        "row": 15
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 15
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 16
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 5,
+                        "row": 16
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 16
+                    },
+                    "length": 5,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 17
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 17
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 17
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 17
+                    },
+                    "length": 5,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 18
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 11,
+                        "row": 18
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 19
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 19
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 7,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 17,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 21,
+                        "row": 20
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 21
+                    },
+                    "length": 22,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                }
+            ],
+            "wallEdges": [
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 0
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 4
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 4
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 4
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 1
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 0
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 1
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 7
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 7
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 7
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 6
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 6
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 6
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 5
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 5
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 11,
+                        "row": 4
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 10,
+                        "row": 3
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 3
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 5
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 11,
+                        "row": 7
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 8
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 8
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 8
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 8
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 9
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 10
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 10
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 11
+                    },
+                    "side": "East"
+                }
+            ],
+            "props": [
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 1,
+                        "row": 20
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 8,
+                        "row": 8
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 18,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 19,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "opencrate1x1",
+                    "at": {
+                        "col": 20,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 5,
+                        "row": 14
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 16,
+                        "row": 20
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 20,
+                        "row": 10
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 20,
+                        "row": 7
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "barreltwo1x1",
+                    "at": {
+                        "col": 6,
+                        "row": 1
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 10,
+                        "row": 4
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "dresser1x1",
+                    "at": {
+                        "col": 11,
+                        "row": 4
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "tableRough1x1",
+                    "at": {
+                        "col": 1,
+                        "row": 17
+                    },
+                    "layer": "Object"
+                },
+                {
+                    "prop": "Chair1x1",
+                    "at": {
+                        "col": 1,
+                        "row": 16
+                    },
+                    "layer": "Object"
+                }
+            ],
+            "spawns": [
+                {
+                    "role": "Party",
+                    "tiles": [
+                        {
+                            "col": 19,
+                            "row": 20
+                        },
+                        {
+                            "col": 19,
+                            "row": 18
+                        },
+                        {
+                            "col": 20,
+                            "row": 19
+                        }
+                    ]
+                },
+                {
+                    "role": "Enemy",
+                    "tiles": [
+                        {
+                            "col": 10,
+                            "row": 17
+                        },
+                        {
+                            "col": 10,
+                            "row": 18
+                        },
+                        {
+                            "col": 19,
+                            "row": 14
+                        },
+                        {
+                            "col": 19,
+                            "row": 2
+                        },
+                        {
+                            "col": 19,
+                            "row": 6
+                        },
+                        {
+                            "col": 17,
+                            "row": 3
+                        },
+                        {
+                            "col": 13,
+                            "row": 1
+                        },
+                        {
+                            "col": 11,
+                            "row": 1
+                        },
+                        {
+                            "col": 11,
+                            "row": 2
+                        },
+                        {
+                            "col": 1,
+                            "row": 1
+                        },
+                        {
+                            "col": 2,
+                            "row": 1
+                        },
+                        {
+                            "col": 3,
+                            "row": 1
+                        },
+                        {
+                            "col": 7,
+                            "row": 4
+                        },
+                        {
+                            "col": 7,
+                            "row": 5
+                        },
+                        {
+                            "col": 7,
+                            "row": 6
+                        }
+                    ]
+                },
+                {
+                    "role": "Elite",
+                    "tiles": [
+                        {
+                            "col": 2,
+                            "row": 2
+                        },
+                        {
+                            "col": 19,
+                            "row": 13
+                        },
+                        {
+                            "col": 19,
+                            "row": 1
+                        },
+                        {
+                            "col": 20,
+                            "row": 2
+                        }
+                    ]
+                }
+            ],
+            "wallStyle": "Background"
+        },
+        "map3": {
+            "id": "map3",
+            "name": "Tutorial",
+            "width": 5,
+            "height": 20,
+            "terrain": [
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "length": 5,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 1
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 2
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 3,
+                        "row": 3
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 4
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 5
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 6
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 7
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 3,
+                        "row": 7
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 8
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 9
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 10
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 11
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 3,
+                        "row": 11
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 12
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 12
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 13
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 2,
+                        "row": 13
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 14
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 14
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 15
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 15
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 16
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 16
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 17
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 2,
+                        "row": 17
+                    },
+                    "length": 3,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 18
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 0,
+                        "row": 19
+                    },
+                    "length": 5,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                }
+            ],
+            "props": [
+                {
+                    "prop": "WellSquare1x1",
+                    "at": {
+                        "col": 3,
+                        "row": 15
+                    },
+                    "layer": "Object"
+                }
+            ],
+            "spawns": [
+                {
+                    "role": "LootCommon",
+                    "tiles": [
+                        {
+                            "col": 2,
+                            "row": 1
+                        }
+                    ]
+                },
+                {
+                    "role": "Enemy",
+                    "tiles": [
+                        {
+                            "col": 3,
+                            "row": 10
+                        },
+                        {
+                            "col": 1,
+                            "row": 10
+                        }
+                    ]
+                },
+                {
+                    "role": "Party",
+                    "tiles": [
+                        {
+                            "col": 3,
+                            "row": 18
+                        }
+                    ]
+                }
+            ],
+            "wallStyle": "Background",
+            "triggers": [
+                {
+                    "id": "5df465b2-9985-45c5-93d0-b26b73751039",
+                    "at": {
+                        "col": 2,
+                        "row": 18
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "This is the Tutorial. Keep waking and all the Mechaniks will be explained to you."
+                        }
+                    ]
+                },
+                {
+                    "id": "43e0fde9-b5f9-4dda-b149-6b0f131fc512",
+                    "at": {
+                        "col": 1,
+                        "row": 18
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "You are currently in exploration Mode. When no Enemies are pressent you can move freely without spending Action Points (AP)"
+                        }
+                    ]
+                },
+                {
+                    "id": "b501d1b3-2cd9-4756-ba19-7232d0b8c39a",
+                    "at": {
+                        "col": 1,
+                        "row": 17
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "Combat is Turn-based. And you Spend AP to perform Actions like Moving or Attacking."
+                        }
+                    ]
+                },
+                {
+                    "id": "02e9372e-f52d-42c5-aec9-5162aa615521",
+                    "at": {
+                        "col": 2,
+                        "row": 14
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "Be carefull. Stepping in the Line of Sight of an enemy Will trigger Combat."
+                        }
+                    ]
+                },
+                {
+                    "id": "d2b35bf6-52cf-4997-9a14-263c968250fb",
+                    "at": {
+                        "col": 1,
+                        "row": 16
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "Continue to the next Tile to see an Attack Roll. The Roll determins if Your attack Hits, and if Successful triggers a Damage Roll which you can inspect in the Battle Log in the top Right.The Roll is allways associated with one of your Skills and challenged against the Same Stat of the Enemy."
+                        }
+                    ]
+                },
+                {
+                    "id": "521f1be7-cbbf-4666-a9ed-8004a9773bbc",
+                    "at": {
+                        "col": 2,
+                        "row": 16
+                    },
+                    "effects": [
+                        {
+                            "type": "rollAttack",
+                            "attacker": {
+                                "type": "caster"
+                            },
+                            "target": {
+                                "type": "caster"
+                            },
+                            "attackBonus": 0,
+                            "damage": {
+                                "count": 0,
+                                "sides": 6
+                            },
+                            "damageType": "Bludgeoning"
+                        }
+                    ]
+                },
+                {
+                    "id": "2eb1c008-b7e1-4395-8ab2-f43a4792b6f2",
+                    "at": {
+                        "col": 3,
+                        "row": 16
+                    },
+                    "effects": [
+                        {
+                            "type": "showMessage",
+                            "text": "Besides the Attack Roll there is also a Save Roll.Failing or Suceeding a Save Roll can have different Effects. Step on the Next tile to Perform a Save roll against the Trap."
+                        }
+                    ]
+                },
+                {
+                    "id": "5b699836-c043-4392-92f8-d76dc5b9596c",
+                    "at": {
+                        "col": 3,
+                        "row": 15
+                    },
+                    "effects": [
+                        {
+                            "type": "rollSave",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "ability": "Str",
+                            "dc": 10,
+                            "onSuccess": [
+                                {
+                                    "type": "heal",
+                                    "target": {
+                                        "type": "eachTarget"
+                                    },
+                                    "amount": 2
+                                }
+                            ],
+                            "onFail": [
+                                {
+                                    "type": "dealDamage",
+                                    "target": {
+                                        "type": "eachTarget"
+                                    },
+                                    "amount": 2,
+                                    "damageType": "Bludgeoning"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "id": "c14e398e-e6b4-4159-aa39-662559d40894",
+                    "at": {
+                        "col": 1,
+                        "row": 14
+                    },
+                    "effects": [
+                        {
+                            "type": "heal",
+                            "target": {
+                                "type": "eachTarget"
+                            },
+                            "amount": 20
+                        }
+                    ]
+                }
+            ]
+        },
+        "map4": {
+            "id": "map4",
+            "name": "Boss1",
+            "width": 10,
+            "height": 10,
+            "wallEdges": [
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 2,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 2,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 7,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 7,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 9
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 0
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 1
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 4
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 6
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 7
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 8
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 8
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 9
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 9
+                    },
+                    "side": "South"
+                }
+            ],
+            "spawns": [
+                {
+                    "role": "Party",
+                    "tiles": [
+                        {
+                            "col": 0,
+                            "row": 9
+                        }
+                    ]
+                },
+                {
+                    "role": "Enemy",
+                    "tiles": [
+                        {
+                            "col": 3,
+                            "row": 2
+                        },
+                        {
+                            "col": 5,
+                            "row": 4
+                        },
+                        {
+                            "col": 7,
+                            "row": 6
+                        }
+                    ]
+                },
+                {
+                    "role": "Boss",
+                    "tiles": [
+                        {
+                            "col": 9,
+                            "row": 0
+                        }
+                    ]
+                },
+                {
+                    "role": "LootLegendary",
+                    "tiles": [
+                        {
+                            "col": 7,
+                            "row": 0
+                        },
+                        {
+                            "col": 9,
+                            "row": 2
+                        }
+                    ]
+                }
+            ],
+            "wallStyle": "Background"
+        }
+    },
+    "encounters": {
+        "encounter1": {
+            "id": "encounter1",
+            "name": "The Wakeup",
+            "mapId": "map1",
+            "enemies": [
+                {
+                    "archetype": "archetype2",
+                    "count": 2
+                }
+            ],
+            "scaling": {
+                "extraEnemiesPerPartySize": 2
+            },
+            "goldMin": 12,
+            "goldMax": 24,
+            "lootSpawns": [
+                {
+                    "loot": "loot1",
+                    "role": "LootCommon",
+                    "count": 3
+                }
+            ]
+        },
+        "encounter2": {
+            "id": "encounter2",
+            "name": "The Big One",
+            "mapId": "map2",
+            "enemies": [
+                {
+                    "archetype": "archetype2",
+                    "count": 8
+                },
+                {
+                    "archetype": "archetype4",
+                    "count": 4
+                },
+                {
+                    "archetype": "archetype3",
+                    "role": "Elite"
+                }
+            ],
+            "goldMin": 52,
+            "goldMax": 100
+        },
+        "encounter3": {
+            "id": "encounter3",
+            "name": "Tutorial",
+            "mapId": "map3",
+            "enemies": [
+                {
+                    "archetype": "archetype2",
+                    "count": 2
+                }
+            ],
+            "lootSpawns": [
+                {
+                    "loot": "loot1",
+                    "role": "LootCommon"
+                }
+            ]
+        },
+        "encounter4": {
+            "id": "encounter4",
+            "name": "The Boss",
+            "mapId": "map4",
+            "enemies": [
+                {
+                    "archetype": "archetype2",
+                    "count": 3
+                },
+                {
+                    "archetype": "archetype3",
+                    "role": "Boss"
+                }
+            ],
+            "goldMin": 12,
+            "goldMax": 12,
+            "lootSpawns": [
+                {
+                    "loot": "loot1",
+                    "role": "LootLegendary",
+                    "count": 2
+                }
+            ]
+        }
+    },
+    "aiProfiles": {
+        "profile1": {
+            "id": "profile1",
+            "name": "Basic Melee",
+            "tiers": [
+                {
+                    "condition": {
+                        "type": "enemyCountInRange",
+                        "range": 5,
+                        "atLeast": 2
+                    },
+                    "goal": {
+                        "type": "useAction",
+                        "category": "Damage",
+                        "targetPreference": "Farthest"
+                    }
+                },
+                {
+                    "condition": {
+                        "type": "always"
+                    },
+                    "goal": {
+                        "type": "approach"
+                    }
+                }
+            ]
+        },
+        "profile2": {
+            "id": "profile2",
+            "name": "Basic Archer",
+            "tiers": [
+                {
+                    "condition": {
+                        "type": "enemyCountInRange",
+                        "range": 3,
+                        "atLeast": 2
+                    },
+                    "goal": {
+                        "type": "useAction",
+                        "targetPreference": "LowestHpPercent"
+                    }
+                }
+            ]
+        }
+    },
+    "events": {
+        "event1": {
+            "id": "event1",
+            "title": "Rest",
+            "body": "You Rest",
+            "choices": [
+                {
+                    "label": "Eat",
+                    "outcomeText": "You Eat something and HEAL",
+                    "effects": [
+                        {
+                            "type": "de.jackbeback.pocketquest.core.model.RunEffect.HealParty",
+                            "amount": 8,
+                            "target": "LowestHpMember"
+                        }
+                    ]
+                },
+                {
+                    "label": "Search for Loot",
+                    "check": {
+                        "ability": "Con",
+                        "dc": 10
+                    },
+                    "outcomeText": "You use your Freetime to look for more loot",
+                    "successText": "You find something useful.",
+                    "successEffects": [
+                        {
+                            "type": "de.jackbeback.pocketquest.core.model.RunEffect.GrantItem",
+                            "item": "item1"
+                        }
+                    ],
+                    "failureText": "You stumble into trouble instead.",
+                    "failureEffects": [
+                        {
+                            "type": "de.jackbeback.pocketquest.core.model.RunEffect.ForceCombat",
+                            "encounter": "encounter1"
+                        }
+                    ]
+                }
+            ]
+        }
+    },
+    "shops": {
+        "shop1": {
+            "id": "shop1",
+            "act": 1,
+            "stock": [
+                {
+                    "item": "item1",
+                    "price": 0
+                },
+                {
+                    "item": "item2",
+                    "price": 0
+                },
+                {
+                    "item": "item3",
+                    "price": 0
+                }
+            ]
+        }
+    },
+    "encounterPools": [
+        {
+            "act": 1,
+            "kind": "Combat",
+            "entries": [
+                "encounter1"
+            ]
+        },
+        {
+            "act": 1,
+            "kind": "Combat",
+            "entries": [
+                "encounter2"
+            ]
+        },
+        {
+            "act": 1,
+            "kind": "Boss",
+            "entries": [
+                "encounter4"
+            ]
+        }
+    ],
+    "eventPools": [
+        {
+            "act": 1,
+            "entries": []
+        }
+    ],
+    "shopPools": [
+        {
+            "act": 1,
+            "entries": []
+        }
+    ],
+    "loot": {
+        "loot1": {
+            "id": "loot1",
+            "name": "Common Chest",
+            "closedSprite": "chest_close_256",
+            "openSprite": "chest_open_256",
+            "table": [
+                {
+                    "item": "item1"
+                },
+                {
+                    "item": "item2"
+                },
+                {
+                    "item": "item3"
+                }
+            ]
+        }
+    }
+}
