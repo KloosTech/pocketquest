@@ -28,4 +28,6 @@ data class Archetype(
     val spriteId: String? = null,
     /** docs/26-character-detail-card.md: authored flavor/lore text, shown as the Inspect card's top banner. */
     val description: String = "",
+    /** Shows up as a pickable option in character creation. Purely a UI filter — an archetype can still be spawned as a monster in an EncounterSpec regardless of this flag. */
+    val isPlayerCharacter: Boolean = false,
 )

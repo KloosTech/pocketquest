@@ -5,6 +5,7 @@ import de.jackbeback.pocketquest.core.meta.ChampionRecord
 import de.jackbeback.pocketquest.core.meta.ChampionStatus
 import de.jackbeback.pocketquest.core.meta.MetaState
 import de.jackbeback.pocketquest.core.meta.Unlock
+import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Controller
@@ -18,19 +19,28 @@ fun maxPartySize(meta: MetaState): Int = if (Unlock.PartyMode in meta.unlocks) 3
 /**
  * docs/12-progression.md's "Bootstrapping the roster: the first character" — the one case a
  * `ChampionRecord` is created before any run rather than picked from an existing roster, entering
- * directly as `OnRun` ("not Available first, since it has nowhere to be available yet").
+ * directly as `OnRun` ("not Available first, since it has nowhere to be available yet"). [status]
+ * defaults to that bootstrap case; creating an *additional* champion from the Hub passes
+ * `ChampionStatus.Available` instead, since it isn't joining a run immediately.
  */
-fun createChampion(meta: MetaState, id: ChampionId, name: String, archetype: ArchetypeId): MetaState {
+fun createChampion(
+    meta: MetaState,
+    id: ChampionId,
+    name: String,
+    archetype: ArchetypeId,
+    abilityBonuses: AbilityScores = AbilityScores.ZERO,
+    status: ChampionStatus = ChampionStatus.OnRun,
+): MetaState {
     require(id !in meta.roster) { "Champion ${id.raw} already exists" }
-    val record = ChampionRecord(id = id, name = name, archetype = archetype, status = ChampionStatus.OnRun)
+    val record = ChampionRecord(id = id, name = name, archetype = archetype, abilityBonuses = abilityBonuses, status = status)
     return meta.copy(roster = meta.roster + (id to record))
 }
 
-/** Shared by [formParty] and the very-first-run bootstrap (`:app`'s composition root) — a fresh, full-health `PartyMember` built from a [ChampionRecord]'s persisted equipment. */
+/** Shared by [formParty] and the very-first-run bootstrap (`:app`'s composition root) — a fresh, full-health `PartyMember` built from a [ChampionRecord]'s persisted equipment and ability-score point-buy. */
 fun ChampionRecord.toFreshPartyMember(cat: Catalog): PartyMember {
     val member = PartyMember(
         memberId = MemberId(id.raw), name = name, archetype = archetype,
-        hp = 0, mana = 0, equipment = equipment, controller = Controller.Human,
+        hp = 0, mana = 0, equipment = equipment, abilityBonuses = abilityBonuses, controller = Controller.Human,
     )
     return member.atFullHealth(cat)
 }

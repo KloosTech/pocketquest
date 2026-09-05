@@ -12,6 +12,7 @@ import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EventCheck
 import de.jackbeback.pocketquest.core.model.EventChoice
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.Inventory
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.NodeType

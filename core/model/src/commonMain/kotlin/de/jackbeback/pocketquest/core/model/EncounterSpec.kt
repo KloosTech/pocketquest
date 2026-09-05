@@ -18,18 +18,29 @@ data class EncounterSpec(
     val scaling: EncounterScaling = EncounterScaling(),
     val goldMin: Int = 0,
     val goldMax: Int = 0,
-    val loot: List<LootEntry> = emptyList(),
+    /** docs/37-lootable-containers.md: replaces the old auto-granted `loot: List<LootEntry>` — which [LootDef] containers fill which rarity-tier spawn tiles, mirroring [enemies]/[EnemySpawn] exactly. */
+    val lootSpawns: List<LootSpawn> = emptyList(),
 )
 
 @Serializable
 data class EnemySpawn(val archetype: ArchetypeId, val role: SpawnRole = SpawnRole.Enemy, val count: Int = 1)
 
+/** docs/37-lootable-containers.md: "this many copies of this container, filling this rarity role's pooled tiles" — the loot-placement counterpart to [EnemySpawn]. */
+@Serializable
+data class LootSpawn(val loot: LootId, val role: SpawnRole, val count: Int = 1)
+
 /**
- * docs/11-run-state.md's finishEncounter step 3 ("loot rolled from run.rng into the inventory") —
- * each entry is an independent Bernoulli roll at [chance], not a weighted pick from the list.
+ * docs/37-lootable-containers.md: owned by a [LootDef]'s own `table`, reusable across every
+ * encounter/map a container appears on. docs/38-loot-reveal-screen.md: [weight] used to be an
+ * independent-Bernoulli `chance` (each entry rolled on its own, 0..N hits possible) — changed to a
+ * single weighted pick across the whole table (`RngState.pickWeighted`, `core/rules/Dice.kt`) so a
+ * container yields exactly one item, the shape a slot-machine reveal needs. Not normalized: a table
+ * summing to 1.0 always yields something; one summing below 1.0 has a real chance of "nothing" (the
+ * unclaimed remainder); one summing past 1.0 makes its tail entries partly/fully unreachable — an
+ * authoring mistake, not an engine error.
  */
 @Serializable
-data class LootEntry(val item: ItemId, val chance: Double = 1.0)
+data class LootEntry(val item: ItemId, val weight: Double = 1.0)
 
 /**
  * doc11: "enemies instantiated from the EncounterSpec, scaled by act and party size" — no formula

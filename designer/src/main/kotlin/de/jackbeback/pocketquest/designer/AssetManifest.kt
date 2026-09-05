@@ -64,6 +64,12 @@ object AssetManifest {
     /** docs/24-projectile-travel-animation.md: kind == "projectile" — linkable via [designer.ActionPanel]'s projectile-sprite picker (ActionDef.projectileSprite). */
     val projectileSprites: List<ManifestAsset> get() = file.props.filter { it.kind == "projectile" }
 
+    /** docs/38-loot-reveal-screen.md: kind == "item" — linkable via [designer.ItemPanel]'s icon picker (ItemDef.icon), shown in the loot-reveal slot machine's reel. */
+    val itemSprites: List<ManifestAsset> get() = file.props.filter { it.kind == "item" }
+
+    /** docs/40-status-icons.md: kind == "status" — linkable via [designer.StatusPanel]'s icon picker (StatusDef.icon), drawn in a row above any entity carrying that status. */
+    val statusSprites: List<ManifestAsset> get() = file.props.filter { it.kind == "status" }
+
     val overlays: List<ManifestAsset> get() = file.overlays
 
     fun prop(id: String): ManifestAsset? = file.props.find { it.id == id }

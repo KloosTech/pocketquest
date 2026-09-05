@@ -64,10 +64,28 @@ object CatalogValidator {
             }
         }
 
+        // docs/36-map-triggers.md: same referential-integrity check as an action's own effects.
+        for (map in catalog.maps.values) {
+            for (trigger in map.triggers) {
+                trigger.effects.forEach {
+                    checkEffectTemplate(it, "map '${map.id.raw}' trigger '${trigger.id.raw}'", catalog, problems)
+                }
+            }
+        }
+
         for (item in catalog.items.values) {
             item.grantsFeature?.let { featureId ->
                 if (featureId !in catalog.features) {
                     problems += "Item '${item.id.raw}' grants unknown feature '${featureId.raw}'"
+                }
+            }
+            for (effect in item.useEffects) checkRunEffect(effect, "Item '${item.id.raw}'.useEffects", catalog, problems)
+        }
+
+        for (loot in catalog.loot.values) {
+            for (entry in loot.table) {
+                if (entry.item !in catalog.items) {
+                    problems += "Loot '${loot.id.raw}' references unknown item '${entry.item.raw}'"
                 }
             }
         }
@@ -95,12 +113,15 @@ object CatalogValidator {
                     problems += "Encounter '${encounter.id.raw}' references unknown archetype '${spawn.archetype.raw}'"
                 }
             }
-            for (entry in encounter.loot) {
-                if (entry.item !in catalog.items) {
-                    problems += "Encounter '${encounter.id.raw}' references unknown loot item '${entry.item.raw}'"
+            for (lootSpawn in encounter.lootSpawns) {
+                if (lootSpawn.loot !in catalog.loot) {
+                    problems += "Encounter '${encounter.id.raw}' references unknown loot container '${lootSpawn.loot.raw}'"
                 }
             }
-            val neededByRole = encounter.enemies.groupBy { it.role }.mapValues { (_, spawns) -> spawns.sumOf { it.count } }
+            // docs/37-lootable-containers.md: enemies and loot spawns both pop from the same
+            // per-role pooled tile lists, so both feed the same needed-vs-available check.
+            val neededByRole = (encounter.enemies.map { it.role to it.count } + encounter.lootSpawns.map { it.role to it.count })
+                .groupBy({ it.first }, { it.second }).mapValues { (_, counts) -> counts.sum() }
             for ((role, needed) in neededByRole) {
                 val available = map.spawns.filter { it.role == role }.sumOf { it.tiles.size }
                 if (available < needed) {
@@ -182,8 +203,13 @@ object CatalogValidator {
                     problems += "$owner references unknown archetype '${template.archetype.raw}'"
                 }
 
+            is EffectTemplate.RemoveStatus ->
+                if (template.status !in catalog.statuses) {
+                    problems += "$owner references unknown status '${template.status.raw}'"
+                }
+
             is EffectTemplate.DealDamage, is EffectTemplate.RollAttack, is EffectTemplate.Push, is EffectTemplate.Teleport,
-            is EffectTemplate.DestroyEntity, is EffectTemplate.Heal,
+            is EffectTemplate.DestroyEntity, is EffectTemplate.Heal, is EffectTemplate.ShowMessage,
             -> Unit
         }
     }

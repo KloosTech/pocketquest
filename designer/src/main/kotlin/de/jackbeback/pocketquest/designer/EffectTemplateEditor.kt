@@ -31,11 +31,12 @@ import de.jackbeback.pocketquest.ui.ink.InkLabel
 import de.jackbeback.pocketquest.ui.ink.InkSelect
 import de.jackbeback.pocketquest.ui.ink.InkTextField
 
-private enum class EffectKind { DealDamage, ApplyStatus, RollAttack, RollSave, Push, Teleport, SpawnEntity, DestroyEntity, Heal }
+private enum class EffectKind { DealDamage, ApplyStatus, RemoveStatus, RollAttack, RollSave, Push, Teleport, SpawnEntity, DestroyEntity, Heal, ShowMessage }
 
 private fun EffectTemplate.kind(): EffectKind = when (this) {
     is EffectTemplate.DealDamage -> EffectKind.DealDamage
     is EffectTemplate.ApplyStatus -> EffectKind.ApplyStatus
+    is EffectTemplate.RemoveStatus -> EffectKind.RemoveStatus
     is EffectTemplate.RollAttack -> EffectKind.RollAttack
     is EffectTemplate.RollSave -> EffectKind.RollSave
     is EffectTemplate.Push -> EffectKind.Push
@@ -43,11 +44,13 @@ private fun EffectTemplate.kind(): EffectKind = when (this) {
     is EffectTemplate.SpawnEntity -> EffectKind.SpawnEntity
     is EffectTemplate.DestroyEntity -> EffectKind.DestroyEntity
     is EffectTemplate.Heal -> EffectKind.Heal
+    is EffectTemplate.ShowMessage -> EffectKind.ShowMessage
 }
 
 private fun defaultFor(kind: EffectKind, catalog: Catalog): EffectTemplate = when (kind) {
     EffectKind.DealDamage -> EffectTemplate.DealDamage(Ref.EachTarget, 0, DamageType.Bludgeoning)
     EffectKind.ApplyStatus -> EffectTemplate.ApplyStatus(Ref.EachTarget, catalog.statuses.keys.firstOrNull() ?: StatusId(""), 1, Expiry.Permanent)
+    EffectKind.RemoveStatus -> EffectTemplate.RemoveStatus(Ref.EachTarget, catalog.statuses.keys.firstOrNull() ?: StatusId(""))
     EffectKind.RollAttack -> EffectTemplate.RollAttack(Ref.Caster, Ref.EachTarget, 0, damage = DiceSpec(1, 6), damageType = DamageType.Bludgeoning)
     EffectKind.RollSave -> EffectTemplate.RollSave(Ref.EachTarget, Ability.Str, 10)
     EffectKind.Push -> EffectTemplate.Push(Ref.EachTarget, Ref.Caster, 1)
@@ -55,18 +58,19 @@ private fun defaultFor(kind: EffectKind, catalog: Catalog): EffectTemplate = whe
     EffectKind.SpawnEntity -> EffectTemplate.SpawnEntity(catalog.archetypes.keys.firstOrNull() ?: ArchetypeId(""), Faction.Enemy, Controller.Ai(AiProfileId("standard")))
     EffectKind.DestroyEntity -> EffectTemplate.DestroyEntity(Ref.EachTarget)
     EffectKind.Heal -> EffectTemplate.Heal(Ref.EachTarget, 0)
+    EffectKind.ShowMessage -> EffectTemplate.ShowMessage("")
 }
 
 /**
- * doc20's "type dropdown + inline fields per row" pattern applied to [EffectTemplate]'s 9 variants
- * — Action's `effects` and Status's `onTurnStart` both use this. [RollSave] recurses into two
- * nested lists (`onSuccess`/`onFail`); nothing else does, so recursion stays bounded in practice.
+ * doc20's "type dropdown + inline fields per row" pattern applied to [EffectTemplate]'s variants —
+ * Action's `effects` and Status's `onTurnStart` both use this. [RollSave] recurses into two nested
+ * lists (`onSuccess`/`onFail`); nothing else does, so recursion stays bounded in practice.
  *
- * [Expiry] is deliberately only offered as Permanent/OnConcentrationLost here — `EndOfTurnOf`/
- * `StartOfTurnOf`/`EndOfRound` need a real `EntityId`/round number that doesn't exist at authoring
- * time (`EffectTemplateInstantiate.kt` passes `ApplyStatus.expiry` straight through unresolved), so
- * exposing them here would only let someone author a status that expires against a meaningless
- * hardcoded id. Those three stay handler-constructed-only, same as before this editor existed.
+ * [Expiry] offers Permanent/Until concentration lost/Turns here — `EndOfTurnOf`/`StartOfTurnOf`/
+ * `EndOfRound` still stay handler-constructed-only, since they need a real `EntityId`/absolute round
+ * number that doesn't exist at authoring time. `Turns` (docs/41) sidesteps that: it's a relative
+ * "expires after N rounds" the `applyStatus` handler resolves into a concrete `EndOfRound` using
+ * whatever round it's actually applied on, not something authored here as an absolute number.
  */
 @Composable
 fun EffectTemplateListEditor(effects: List<EffectTemplate>, catalog: Catalog, onChange: (List<EffectTemplate>) -> Unit, modifier: Modifier = Modifier) {
@@ -100,7 +104,10 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
             when (value) {
                 is EffectTemplate.DealDamage -> {
                     RefPicker(value.target, { onChange(value.copy(target = it)) }, modifier = Modifier.padding(end = 8.dp))
-                    IntField(value.amount) { onChange(value.copy(amount = it)) }
+                    IntField(value.amount, label = "flat") { onChange(value.copy(amount = it)) }
+                    // docs/42-status-stack-scaling.md: only meaningful inside a status's own
+                    // onTurnStart list — a no-op (multiplies by 0 stacks) everywhere else.
+                    IntField(value.perStack, label = "per stack") { onChange(value.copy(perStack = it)) }
                     InkSelect(value.damageType, DamageType.entries, { it.name }, { onChange(value.copy(damageType = it)) }, modifier = Modifier.padding(start = 8.dp))
                 }
                 is EffectTemplate.ApplyStatus -> {
@@ -108,6 +115,11 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
                     StatusSelect(value.status, catalog) { onChange(value.copy(status = it)) }
                     IntField(value.stacks, label = "stacks") { onChange(value.copy(stacks = it)) }
                     ExpirySelect(value.expiry) { onChange(value.copy(expiry = it)) }
+                }
+                // docs/41-status-duration-and-ability-mods.md: the healing/cleanse counterpart to ApplyStatus.
+                is EffectTemplate.RemoveStatus -> {
+                    RefPicker(value.target, { onChange(value.copy(target = it)) }, modifier = Modifier.padding(end = 8.dp))
+                    StatusSelect(value.status, catalog) { onChange(value.copy(status = it)) }
                 }
                 is EffectTemplate.RollAttack -> {
                     RefPicker(value.attacker, { onChange(value.copy(attacker = it)) }, modifier = Modifier.padding(end = 8.dp))
@@ -140,6 +152,8 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
                     RefPicker(value.target, { onChange(value.copy(target = it)) }, modifier = Modifier.padding(end = 8.dp))
                     IntField(value.amount) { onChange(value.copy(amount = it)) }
                 }
+                // docs/36-map-triggers.md: no Ref — static authored text, nothing to resolve per-target.
+                is EffectTemplate.ShowMessage -> InkTextField(value.text, onValueChange = { onChange(value.copy(text = it)) }, modifier = Modifier.width(280.dp))
             }
         }
         if (value is EffectTemplate.RollSave) {
@@ -193,11 +207,45 @@ private fun ArchetypeSelect(selected: ArchetypeId, catalog: Catalog, onSelect: (
     }
 }
 
-/** Only the two authorable-ahead-of-time [Expiry] variants — see this file's own doc comment. */
+private enum class ExpiryKind { Permanent, OnConcentrationLost, Turns }
+
+/** `EndOfTurnOf`/`StartOfTurnOf`/`EndOfRound` are never authored here — see this file's own doc comment — so they fall back to Permanent for display only; nothing writes them back. */
+private fun Expiry.expiryKind(): ExpiryKind = when (this) {
+    is Expiry.Permanent -> ExpiryKind.Permanent
+    is Expiry.OnConcentrationLost -> ExpiryKind.OnConcentrationLost
+    is Expiry.Turns -> ExpiryKind.Turns
+    is Expiry.EndOfTurnOf, is Expiry.StartOfTurnOf, is Expiry.EndOfRound -> ExpiryKind.Permanent
+}
+
+/** The three authorable-ahead-of-time [Expiry] shapes — see this file's own doc comment. */
 @Composable
 private fun ExpirySelect(selected: Expiry, onSelect: (Expiry) -> Unit) {
-    val options = listOf<Expiry>(Expiry.Permanent, Expiry.OnConcentrationLost)
-    InkSelect(selected, options, { if (it is Expiry.Permanent) "Permanent" else "Until concentration lost" }, onSelect, modifier = Modifier.padding(start = 8.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        InkSelect(
+            selected.expiryKind(),
+            ExpiryKind.entries,
+            {
+                when (it) {
+                    ExpiryKind.Permanent -> "Permanent"
+                    ExpiryKind.OnConcentrationLost -> "Until concentration lost"
+                    ExpiryKind.Turns -> "Turns"
+                }
+            },
+            { kind ->
+                onSelect(
+                    when (kind) {
+                        ExpiryKind.Permanent -> Expiry.Permanent
+                        ExpiryKind.OnConcentrationLost -> Expiry.OnConcentrationLost
+                        ExpiryKind.Turns -> Expiry.Turns(1)
+                    },
+                )
+            },
+            modifier = Modifier.padding(start = 8.dp),
+        )
+        if (selected is Expiry.Turns) {
+            IntField(selected.n, label = "turns") { onSelect(Expiry.Turns(it.coerceAtLeast(1))) }
+        }
+    }
 }
 
 @Composable

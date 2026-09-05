@@ -341,12 +341,56 @@ class RollEffectTest {
     }
 
     @Test
+    fun rollSaveDcIsDerivedFromCastersOwnModifierWhenSourceIsSet() {
+        // Caster Con 16 -> mod +3 -> dc 10+3=13 (the effect's own authored dc is ignored once a
+        // real source is set). Target Con 12 -> mod +1; expected-mode roll is a flat 11, so
+        // 11+1=12 < 13 -> fails, distinct from whatever the (ignored) authored dc=999 would give.
+        val s = scenario {
+            archetype("caster") { hp = 10; abilities(con = 16) }
+            archetype("dummy") { hp = 20; abilities(con = 12) }
+            entity("wizard") { archetype("caster"); at(0, 0); hp(10) }
+            entity("hero") { archetype("dummy"); at(1, 0); hp(20) }
+        }
+        val effect = Effect.RollSave(s.id("hero"), Ability.Con, dc = 999, source = s.id("wizard"))
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.SaveRolled>(out.events.single())
+        assertEquals(13, rolled.dc)
+        assertEquals(1, rolled.mod)
+        assertTrue(!rolled.success)
+    }
+
+    @Test
+    fun rollSaveFallsBackToAuthoredDcWhenSourceIsNull() {
+        val s = scenario {
+            archetype("dummy") { hp = 20; abilities(con = 12) }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20) }
+        }
+        val effect = Effect.RollSave(s.id("hero"), Ability.Con, dc = 12) // no source -> authored dc used as-is
+        val out = applyEffect(s.state, effect, emptyMap(), s.catalog, RngMode.Expected)
+
+        val rolled = assertIs<GameEvent.SaveRolled>(out.events.single())
+        assertEquals(12, rolled.dc)
+    }
+
+    @Test
     fun rollSaveOnMissingTargetFizzles() {
         val s = scenario {
             archetype("dummy") { hp = 10 }
             entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
         }
         val out = applyEffect(s.state, Effect.RollSave(EntityId(999), Ability.Con, dc = 10), emptyMap(), s.catalog, RngMode.Expected)
+        assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
+    }
+
+    @Test
+    fun rollSaveOnDeadTargetFizzles() {
+        // NEEDED_IMPROVEMENTS.md: a corpse has no way to react to a forced save.
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("corpse") { archetype("dummy"); at(0, 0); hp(0) }
+        }
+        val out = applyEffect(s.state, Effect.RollSave(s.id("corpse"), Ability.Con, dc = 10), emptyMap(), s.catalog, RngMode.Expected)
         assertIs<Rejection.TargetMissing>((out.events.single() as GameEvent.Fizzled).reason)
     }
 

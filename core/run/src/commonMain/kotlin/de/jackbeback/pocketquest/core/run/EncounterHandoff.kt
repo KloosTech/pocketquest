@@ -3,10 +3,9 @@ package de.jackbeback.pocketquest.core.run
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.GameState
-import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.NodeType
-import de.jackbeback.pocketquest.core.rules.chance
 import de.jackbeback.pocketquest.core.rules.content.startEncounterWithParty
+import de.jackbeback.pocketquest.core.rules.pickWeighted
 import de.jackbeback.pocketquest.core.rules.rollRange
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.core.rules.stat.stats
@@ -53,18 +52,14 @@ fun finishEncounter(run: RunState, final: GameState, cat: Catalog): RunState {
     }
 
     var rng = final.rng
-    val capacity = carryCapacity(updatedParty, cat)
-    var carried = run.inventory.items.size
-    val lootedItems = mutableListOf<ItemId>()
-    for (entry in handle.spec.loot) {
-        val (advanced, hit) = rng.chance(entry.chance)
+    // docs/38-loot-reveal-screen.md: rolled here (fixed, deterministic) but NOT granted — granting
+    // is deferred to revealLoot, one chest at a time, so capacity can be checked against whatever
+    // order the player actually reveals them in. docs/37: gated on openedLoot — a container the
+    // party never walked onto never contributes here at all, "unopened loot is lost" by construction.
+    val pendingLootReveal = final.lootPlacements.filter { it.at in final.openedLoot }.map { placement ->
+        val (advanced, item) = rng.pickWeighted(cat.lootDef(placement.loot).table)
         rng = advanced
-        // docs/13: capacity "blocks the pickup outright" whenever an item would be added — loot is
-        // no exception, it just never enters the inventory rather than failing the whole encounter.
-        if (hit && carried < capacity) {
-            lootedItems += entry.item
-            carried++
-        }
+        PendingLoot(at = placement.at, loot = placement.loot, item = item)
     }
     val (advancedRng, goldReward) = rng.rollRange(handle.spec.goldMin, handle.spec.goldMax)
     rng = advancedRng
@@ -76,10 +71,10 @@ fun finishEncounter(run: RunState, final: GameState, cat: Catalog): RunState {
 
     return run.copy(
         party = updatedParty,
-        inventory = run.inventory.copy(items = run.inventory.items + lootedItems),
         gold = run.gold + goldReward,
         encounter = null,
         outcome = if (wonTheBoss) RunOutcome.Success else null,
         rng = rng,
+        pendingLootReveal = pendingLootReveal,
     )
 }

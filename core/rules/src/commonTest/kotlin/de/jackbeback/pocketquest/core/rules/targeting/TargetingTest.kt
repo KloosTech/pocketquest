@@ -44,6 +44,30 @@ class TargetingTest {
     }
 
     @Test
+    fun legalTargetsFindsALiveEntityEvenWhenACorpseSharesItsTile() {
+        // Player-reported bug: a corpse's pos is never cleared (docs/39-corpse-movement.md), so a
+        // living entity can end up sharing a tile with a dead one once it walks there (corpses
+        // don't block movement). GameState.occupancy used to resolve that tile to whichever entity
+        // came later in `entities`' own list order — arbitrary w.r.t. which one is alive — so the
+        // corpse winning made the tile silently untargetable even with a live enemy standing on it.
+        val s = scenario {
+            archetype("dummy") { hp = 10 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10) }
+            entity("corpse") { archetype("dummy"); at(2, 0); hp(0); faction(Faction.Enemy) }
+            entity("goblin") { archetype("dummy"); at(5, 0); hp(10); faction(Faction.Enemy) }
+        }
+        // Real gameplay never spawns two entities on the same tile — it happens later, when a live
+        // entity walks onto a corpse's still-there `pos` (corpses don't block movement). The
+        // scenario DSL's own build-time invariant forbids authoring that directly, so this mutates
+        // the already-built state to match how it actually arises.
+        val goblinId = s.id("goblin")
+        val moved = s.state.copy(entities = s.state.entities.map { if (it.id == goblinId) it.copy(pos = GridPos(2, 0)) else it })
+        val def = actionDefWith(Targeting(TargetMode.SingleEntity, Range.Tiles(5), Shape.Single, filter = TargetFilter(faction = Faction.Enemy, requireAlive = true)))
+        val legal = legalTargets(moved, s.id("hero"), def, s.catalog)
+        assertEquals(setOf(GridPos(2, 0)), legal, "the live goblin sharing the corpse's tile must still be a legal target")
+    }
+
+    @Test
     fun legalTargetsExcludesTilesOutOfRange() {
         val s = scenario {
             archetype("dummy") { hp = 10 }

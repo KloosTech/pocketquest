@@ -1,7 +1,9 @@
 package de.jackbeback.pocketquest.core.meta
 
+import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.Equipment
+import de.jackbeback.pocketquest.core.model.Inventory
 import kotlinx.serialization.Serializable
 import kotlin.jvm.JvmInline
 
@@ -21,13 +23,22 @@ data class MetaState(
     val roster: Map<ChampionId, ChampionRecord> = emptyMap(),
     /** The one permanent currency stash — credited by run completion and idle accrual, see doc12. */
     val bank: Int = 0,
+    /**
+     * docs/47-inventory-screen.md: the between-runs item bag — `RunState.inventory` is run-scoped
+     * and evaporates at run end; this is where its contents land instead, but only on
+     * `RunOutcome.Success` (see `resolveRunOutcome`), same "gains bank only on survival" rule
+     * `RunState.gold`'s own doc comment already states for currency. Unbounded — no carry-capacity
+     * limit here, unlike the run-scoped `Inventory`'s STR-summed cap.
+     */
+    val stash: Inventory = Inventory(),
     val unlocks: Set<Unlock> = emptySet(),
     val schemaVersion: Int = CURRENT_META_SCHEMA,
 )
 
 /**
- * A persistent character. `equipment` is the only thing that changes over a Champion's life —
- * there is no leveling (docs/10-game-loop.md "No leveling"), so power comes entirely from gear.
+ * A persistent character. `equipment` changes over a Champion's life via gear — there is no
+ * leveling (docs/10-game-loop.md "No leveling") — and `abilityBonuses` is fixed once at creation
+ * (the 2-point ability-score point-buy spent in `CharacterCreationScreen`, never re-spent after).
  */
 @Serializable
 data class ChampionRecord(
@@ -35,6 +46,7 @@ data class ChampionRecord(
     val name: String,
     val archetype: ArchetypeId,
     val equipment: Equipment = Equipment.EMPTY,
+    val abilityBonuses: AbilityScores = AbilityScores.ZERO,
     val status: ChampionStatus = ChampionStatus.Available,
     /** Epoch millis; idle-accrual income is computed from the elapsed time since this, once on app open — never a live clock read inside a deterministic layer. */
     val lastAccrualAt: Long = 0L,

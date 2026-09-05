@@ -1,5 +1,21 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
+// Keeps the Android/iOS-bundled catalog snapshot in sync with the live-edited `content/catalog.json`
+// on every Gradle configuration pass — desktop's own `:app:Main.kt` still reads that file directly
+// off disk (so `:designer`'s hot-edit-without-rebuild workflow keeps working), but an installed
+// Android/iOS app has no live filesystem to read from, so it needs its own bundled copy baked into
+// Compose Resources instead. A plain file copy at configuration time rather than a dedicated Gradle
+// task: Compose Multiplatform's resource-processing tasks are named per target combination and shift
+// with target/AGP versions, so hooking a specific task name is more fragile than just always
+// re-copying a single small JSON file before anything else runs.
+rootDir.resolve("content/catalog.json").let { source ->
+    if (source.exists()) {
+        val dest = file("src/commonMain/composeResources/files/catalog.json")
+        dest.parentFile.mkdirs()
+        source.copyTo(dest, overwrite = true)
+    }
+}
+
 plugins {
     alias(libs.plugins.kotlinMultiplatform)
     alias(libs.plugins.androidLibrary)
@@ -46,6 +62,7 @@ kotlin {
             implementation(compose.foundation)
             implementation(compose.animation)
             implementation(compose.ui)
+            implementation(compose.material3)
             implementation(compose.components.resources)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
@@ -57,6 +74,11 @@ kotlin {
         val desktopMain by getting {
             dependencies {
                 implementation(compose.desktop.currentOs)
+            }
+        }
+        val androidMain by getting {
+            dependencies {
+                implementation(libs.androidx.activity.compose)
             }
         }
     }

@@ -2,6 +2,8 @@ package de.jackbeback.pocketquest.core.rules
 
 import de.jackbeback.pocketquest.core.model.AdvSide
 import de.jackbeback.pocketquest.core.model.DiceSpec
+import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.LootEntry
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
@@ -70,6 +72,24 @@ fun RngState.rollRange(min: Int, max: Int): Pair<RngState, Int> {
 fun RngState.chance(probability: Double): Pair<RngState, Boolean> {
     val rng = rngFor(this)
     return copy(calls = calls + 1) to (rng.nextDouble() < probability)
+}
+
+/**
+ * docs/38-loot-reveal-screen.md: one weighted pick across [entries] — draws a single `nextDouble()`
+ * and walks the cumulative [LootEntry.weight], returning the entry it lands in. Landing past the
+ * last entry's cumulative sum (the table's weights don't add up to 1.0) returns `null` — the
+ * table's own unclaimed probability mass ("nothing"), not an error. Weights are used as literal
+ * probability mass, never normalized — see [LootEntry]'s own doc comment for why.
+ */
+fun RngState.pickWeighted(entries: List<LootEntry>): Pair<RngState, ItemId?> {
+    val rng = rngFor(this)
+    val roll = rng.nextDouble()
+    var cumulative = 0.0
+    for (entry in entries) {
+        cumulative += entry.weight
+        if (roll < cumulative) return copy(calls = calls + 1) to entry.item
+    }
+    return copy(calls = calls + 1) to null
 }
 
 fun resolveAdvantage(sides: Set<AdvSide>): RollMode = when {

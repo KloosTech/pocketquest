@@ -99,6 +99,8 @@ data class BattleMap(
     val wallHatchOsr: List<HatchLine> = emptyList(),
     /** docs/35-wall-background-punch-through.md: carried straight from [BattleMapDef] — only meaningful when [wallStyle] is [WallStyle.Background]. */
     val backgroundMarginTiles: Int = 4,
+    /** docs/36-map-triggers.md: carried straight from [BattleMapDef] — read by the exploration hop loop and the combat `MoveAlong` handler, not just rendered. */
+    val triggers: List<TriggerPlacement> = emptyList(),
 ) {
     fun inBounds(pos: GridPos): Boolean =
         pos.col in 0 until width && pos.row in 0 until height

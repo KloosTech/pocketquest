@@ -18,3 +18,5 @@ import kotlin.jvm.JvmInline
 @JvmInline @Serializable value class EncounterId(val raw: String)
 @JvmInline @Serializable value class EventId(val raw: String)
 @JvmInline @Serializable value class ShopId(val raw: String)
+@JvmInline @Serializable value class TriggerId(val raw: String)
+@JvmInline @Serializable value class LootId(val raw: String)

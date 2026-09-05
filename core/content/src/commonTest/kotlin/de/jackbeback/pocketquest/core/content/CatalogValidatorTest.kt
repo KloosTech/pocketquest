@@ -33,6 +33,7 @@ import de.jackbeback.pocketquest.core.model.ItemDef
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.Range
+import de.jackbeback.pocketquest.core.model.RunEffect
 import de.jackbeback.pocketquest.core.model.Ref
 import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.SpawnRole
@@ -192,6 +193,22 @@ class CatalogValidatorTest {
         CatalogValidator.validate(catalog)
     }
 
+    @Test
+    fun itemUseEffectReferencingAnUndefinedItemFailsValidation() {
+        val potion = ItemDef(id = ItemId("potion"), name = "Potion", useEffects = listOf(RunEffect.GrantItem(ItemId("missingBottle"))))
+        val catalog = Catalog(items = mapOf(potion.id to potion))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
+        assertTrue(e.problems.single().contains("Item 'potion'.useEffects references unknown item 'missingBottle'"))
+    }
+
+    @Test
+    fun itemUseEffectReferencingKnownContentPassesValidation() {
+        val bottle = ItemDef(id = ItemId("bottle"), name = "Empty Bottle")
+        val potion = ItemDef(id = ItemId("potion"), name = "Potion", useEffects = listOf(RunEffect.GrantItem(bottle.id)))
+        val catalog = Catalog(items = mapOf(potion.id to potion, bottle.id to bottle))
+        CatalogValidator.validate(catalog)
+    }
+
     // --- Encounter / Map (docs/16-art-direction.md's Encounter and Map editors) ---
 
     private fun mapDef(id: String = "room1", enemyTiles: Int = 1) = BattleMapDef(
@@ -220,15 +237,30 @@ class CatalogValidatorTest {
     }
 
     @Test
-    fun encounterReferencingAnUndefinedLootItemFailsValidation() {
+    fun encounterReferencingAnUndefinedLootContainerFailsValidation() {
         val map = mapDef()
         val encounter = EncounterSpec(
             id = EncounterId("goblinAmbush"), name = "Goblin Ambush", mapId = map.id,
-            loot = listOf(de.jackbeback.pocketquest.core.model.LootEntry(de.jackbeback.pocketquest.core.model.ItemId("potion"))),
+            lootSpawns = listOf(
+                de.jackbeback.pocketquest.core.model.LootSpawn(
+                    de.jackbeback.pocketquest.core.model.LootId("chest1"), de.jackbeback.pocketquest.core.model.SpawnRole.LootCommon,
+                ),
+            ),
         )
         val catalog = Catalog(maps = mapOf(map.id to map), encounters = mapOf(encounter.id to encounter))
         val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
-        assertTrue(e.problems.any { it.contains("unknown loot item 'potion'") }, "expected an unknown-loot-item problem, got: ${e.problems}")
+        assertTrue(e.problems.any { it.contains("unknown loot container 'chest1'") }, "expected an unknown-loot-container problem, got: ${e.problems}")
+    }
+
+    @Test
+    fun lootContainerReferencingAnUndefinedItemFailsValidation() {
+        val loot = de.jackbeback.pocketquest.core.model.LootDef(
+            id = de.jackbeback.pocketquest.core.model.LootId("chest1"),
+            table = listOf(de.jackbeback.pocketquest.core.model.LootEntry(de.jackbeback.pocketquest.core.model.ItemId("potion"))),
+        )
+        val catalog = Catalog(loot = mapOf(loot.id to loot))
+        val e = assertFailsWith<CatalogValidationException> { CatalogValidator.validate(catalog) }
+        assertTrue(e.problems.any { it.contains("unknown item 'potion'") }, "expected an unknown-item problem, got: ${e.problems}")
     }
 
     @Test

@@ -4,6 +4,8 @@ import de.jackbeback.pocketquest.core.model.Ability
 import de.jackbeback.pocketquest.core.model.AdvSide
 import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.Faction
+import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.LootEntry
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
@@ -153,5 +155,41 @@ class DiceTest {
     fun differentRollContextKindsNeverMatch() {
         assertFalse(RollContext.AttackRoll(vs = null).matches(RollContext.SavingThrow(Ability.Dex)))
         assertFalse(RollContext.SavingThrow(Ability.Dex).matches(RollContext.AbilityCheck(Skill.Stealth)))
+    }
+
+    // --- docs/38-loot-reveal-screen.md: pickWeighted ---
+
+    @Test
+    fun pickWeightedAlwaysHitsAFullWeightTable() {
+        val table = listOf(LootEntry(ItemId("sword"), weight = 1.0))
+        for (calls in 0L until 100L) {
+            val (_, item) = RngState(seed = 1, calls = calls).pickWeighted(table)
+            assertEquals(ItemId("sword"), item)
+        }
+    }
+
+    @Test
+    fun pickWeightedCanReturnNothingWhenWeightsLeaveHeadroom() {
+        val table = listOf(LootEntry(ItemId("sword"), weight = 0.1))
+        val results = (0L until 200L).map { RngState(seed = 9, calls = it).pickWeighted(table).second }
+        assertTrue(results.any { it == null }, "a low-weight table should sometimes land on nothing")
+        assertTrue(results.any { it == ItemId("sword") }, "a low-weight table should sometimes still hit")
+    }
+
+    @Test
+    fun pickWeightedRespectsCumulativeOrder() {
+        // First entry claims [0, 0.5), second claims [0.5, 1.0) — over enough draws both must appear,
+        // and nothing outside the two authored items should ever come back.
+        val table = listOf(LootEntry(ItemId("a"), weight = 0.5), LootEntry(ItemId("b"), weight = 0.5))
+        val results = (0L until 200L).map { RngState(seed = 3, calls = it).pickWeighted(table).second }
+        assertTrue(results.contains(ItemId("a")))
+        assertTrue(results.contains(ItemId("b")))
+        assertTrue(results.all { it == ItemId("a") || it == ItemId("b") })
+    }
+
+    @Test
+    fun pickWeightedAdvancesRngCalls() {
+        val (next, _) = RngState(seed = 1).pickWeighted(listOf(LootEntry(ItemId("x"), weight = 1.0)))
+        assertEquals(1, next.calls)
     }
 }

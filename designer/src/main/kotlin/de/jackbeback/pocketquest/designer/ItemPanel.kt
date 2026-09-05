@@ -114,6 +114,11 @@ private fun ItemEditor(item: ItemDef, catalog: Catalog, onChange: (ItemDef) -> U
         }
         InkTextField(item.name, onValueChange = { onChange(item.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
 
+        // docs/38-loot-reveal-screen.md: the only visual an item ever gets — shown in this row and
+        // in the loot-reveal reel. No icon falls back to a text-only chip in both places.
+        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("ICON") }
+        ItemIconPicker(item.icon, onSelect = { onChange(item.copy(icon = it)) })
+
         Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("BASE PRICE (docs/13: sell value is 50% of this)") }
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkStepper(item.basePrice, min = 0, onValueChange = { onChange(item.copy(basePrice = it)) })
@@ -149,6 +154,53 @@ private fun ItemEditor(item: ItemDef, catalog: Catalog, onChange: (ItemDef) -> U
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("MODIFIERS") }
         ModifierListEditor(item.modifiers, onChange = { onChange(item.copy(modifiers = it)) })
+
+        // docs/47-inventory-screen.md: empty means not consumable (pure gear/quest item) —
+        // non-empty means "Use" applies these and removes one copy. An item can have both this
+        // and VALID SLOTS above (equippable AND consumable).
+        Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("USE EFFECTS (empty = not consumable)") }
+        RunEffectListEditor(item.useEffects, catalog, onChange = { onChange(item.copy(useEffects = it)) })
+    }
+}
+
+/** docs/38-loot-reveal-screen.md: same shape as `LootPanel.kt`'s closed/open `SpritePicker`, pointed at `AssetManifest.itemSprites` (`kind = "item"`) instead of `characterSprites`. */
+@Composable
+private fun ItemIconPicker(selectedId: String?, onSelect: (String?) -> Unit) {
+    val options = listOf<ManifestAsset?>(null) + AssetManifest.itemSprites
+    val current = options.find { it?.id == selectedId }
+    var justImported by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        InkSelect(
+            selected = current,
+            options = options,
+            label = { it?.id ?: "(none)" },
+            onSelect = { onSelect(it?.id) },
+            modifier = Modifier.width(200.dp),
+            itemContent = { asset ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                    if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                    BasicText(asset?.id ?: "(none)", style = TextStyle(color = INK, fontSize = 13.sp))
+                }
+            },
+        )
+        if (current != null) {
+            val bmp = remember(current.file) { SpriteLoader.load(PROPS_DIR + current.file) }
+            if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
+        }
+        InkButton(
+            "Import…",
+            modifier = Modifier.padding(start = 8.dp),
+            onClick = {
+                val source = chooseImageFile() ?: return@InkButton
+                val imported = AssetManifest.importSprite(source, kind = "item") ?: return@InkButton
+                onSelect(imported.id)
+                justImported = true
+            },
+        )
+    }
+    if (justImported) {
+        InkLabel("Imported — restart :designer:run to see it in Playtest.", modifier = Modifier.padding(top = 4.dp))
     }
 }
 

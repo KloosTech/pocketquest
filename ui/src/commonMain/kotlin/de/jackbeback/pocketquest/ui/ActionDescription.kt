@@ -17,6 +17,7 @@ import de.jackbeback.pocketquest.core.model.EffectTemplate
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Range
 import de.jackbeback.pocketquest.core.model.Shape
+import de.jackbeback.pocketquest.core.model.StatusDef
 import de.jackbeback.pocketquest.core.model.Targeting
 import de.jackbeback.pocketquest.core.rules.targeting.tilesInShape
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -31,21 +32,46 @@ import de.jackbeback.pocketquest.ui.ink.PAPER
 fun describeEffects(effects: List<EffectTemplate>, catalog: Catalog): String =
     effects.joinToString(" ") { describeEffect(it, catalog) }
 
+/**
+ * docs/43-status-inspect-and-corner-badge.md: same mechanical-text idea as [describeEffects], for a
+ * status's own `ON TURN START` list plus its stack decay — "what does carrying this actually do,"
+ * not just its name. Reuses [describeEffects] wholesale rather than duplicating the per-EffectTemplate
+ * phrasing.
+ */
+fun describeStatus(def: StatusDef, catalog: Catalog): String = buildString {
+    if (def.onTurnStart.isNotEmpty()) append(describeEffects(def.onTurnStart, catalog))
+    if (def.decayStacksPerTurn > 0) {
+        if (isNotEmpty()) append(" ")
+        val plural = if (def.decayStacksPerTurn != 1) "s" else ""
+        append("Loses ${def.decayStacksPerTurn} stack$plural at the end of your turn.")
+    }
+}
+
 private fun describeEffect(effect: EffectTemplate, catalog: Catalog): String = when (effect) {
     is EffectTemplate.RollAttack ->
         "Does [${effect.ability.name}] Attack roll which does ${diceText(effect.damage)} ${effect.damageType.name} damage."
     is EffectTemplate.RollSave -> buildString {
-        append("Causes [${effect.ability.name}] Save roll vs DC ${effect.dc}.")
+        // NEEDED_IMPROVEMENTS.md: effect.dc is only a fallback for a sourceless save (no caster —
+        // e.g. a status's own tick); every real action-cast save ignores it and derives 10 + the
+        // caster's own ability modifier instead (Handlers.kt's rollSave, SAVE_DC_BASE). No live
+        // caster is available here to compute an actual number, so this describes the formula.
+        append("Causes [${effect.ability.name}] Save vs DC 10 + caster's ${effect.ability.name} modifier.")
         if (effect.onSuccess.isNotEmpty()) append(" On success: ${describeEffects(effect.onSuccess, catalog)}")
         if (effect.onFail.isNotEmpty()) append(" On fail: ${describeEffects(effect.onFail, catalog)}")
     }
-    is EffectTemplate.DealDamage -> "Deals ${effect.amount} ${effect.damageType.name} damage."
+    is EffectTemplate.DealDamage -> when {
+        effect.perStack != 0 && effect.amount == 0 -> "Deals ${effect.perStack} ${effect.damageType.name} damage per stack."
+        effect.perStack != 0 -> "Deals ${effect.amount} ${effect.damageType.name} damage (+${effect.perStack} per stack)."
+        else -> "Deals ${effect.amount} ${effect.damageType.name} damage."
+    }
     is EffectTemplate.Push -> "Pushes the target ${effect.distance} tiles away."
     is EffectTemplate.Heal -> "Heals ${effect.amount} HP."
     is EffectTemplate.ApplyStatus -> "Applies ${catalog.statusDef(effect.status).name} (${effect.stacks}x)."
     is EffectTemplate.Teleport -> "Teleports the target."
     is EffectTemplate.SpawnEntity -> "Summons ${catalog.archetype(effect.archetype).name}."
     is EffectTemplate.DestroyEntity -> "Destroys the target."
+    is EffectTemplate.ShowMessage -> "Shows a message."
+    is EffectTemplate.RemoveStatus -> "Removes ${catalog.statusDef(effect.status).name}."
 }
 
 private fun diceText(spec: DiceSpec): String {

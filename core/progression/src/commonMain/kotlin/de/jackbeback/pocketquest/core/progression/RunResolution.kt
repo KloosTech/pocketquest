@@ -25,7 +25,16 @@ fun resolveRunOutcome(meta: MetaState, run: RunState): MetaState {
             // Idempotent past the first grant — doc12's "Unlocking Party mode" only actually fires
             // this for the solo pre-roster run, but re-adding an already-present Unlock on every
             // later Success is a harmless no-op, not a special case worth branching on.
-            meta.copy(roster = roster, bank = meta.bank + run.gold, unlocks = meta.unlocks + Unlock.PartyMode)
+            //
+            // docs/47-inventory-screen.md: run.inventory (unequipped items) banks into meta.stash
+            // the same way run.gold already banks into meta.bank — both forfeited on Failure below,
+            // both credited only here on Success.
+            meta.copy(
+                roster = roster,
+                bank = meta.bank + run.gold,
+                stash = meta.stash.copy(items = meta.stash.items + run.inventory.items),
+                unlocks = meta.unlocks + Unlock.PartyMode,
+            )
         }
 
         RunOutcome.Failure -> {

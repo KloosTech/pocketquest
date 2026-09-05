@@ -77,6 +77,8 @@ fun GameEvent.kind(): ReactionTriggerKind = when (this) {
     is GameEvent.EntitySpawned -> ReactionTriggerKind.EntitySpawned
     is GameEvent.EntityDestroyed -> ReactionTriggerKind.EntityDestroyed
     is GameEvent.DamageRolled -> ReactionTriggerKind.DamageRolled
+    is GameEvent.MessageShown -> ReactionTriggerKind.MessageShown
+    is GameEvent.LootOpened -> ReactionTriggerKind.LootOpened
 }
 
 /** Which entities this event's reaction naturally concerns — feeds the reaction's ActionCtx.targets. */
@@ -107,6 +109,10 @@ internal fun targetsFor(event: GameEvent): List<EntityId> = when (event) {
     is GameEvent.EntitySpawned -> listOf(event.entityId)
     is GameEvent.EntityDestroyed -> listOf(event.target)
     is GameEvent.DamageRolled -> listOf(event.attacker, event.target)
+    // No entity is meaningfully "concerned" by a message display — mirrors Fizzled's own empty case.
+    is GameEvent.MessageShown -> emptyList()
+    // Same reasoning — a loot container isn't an Entity, nothing to name here.
+    is GameEvent.LootOpened -> emptyList()
 }
 
 /**

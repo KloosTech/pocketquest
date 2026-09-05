@@ -4,6 +4,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -23,10 +25,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
@@ -34,6 +39,7 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.core.model.DiceSpec
+import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.RollBreakdown
 import de.jackbeback.pocketquest.core.model.RollTerm
 import de.jackbeback.pocketquest.ui.ink.DANGER
@@ -313,11 +319,31 @@ fun ModifierChip(term: RollTerm) {
  * player sees one consistent roll presentation everywhere a d20 actually matters.
  */
 @Composable
-fun RollCard(overlay: DiceRollOverlay, world: VisualWorld, modifier: Modifier = Modifier) {
+fun RollCard(
+    overlay: DiceRollOverlay,
+    world: VisualWorld,
+    modifier: Modifier = Modifier,
+    sprites: Map<EntityId, ImageBitmap> = emptyMap(),
+    colors: Map<EntityId, Color> = emptyMap(),
+) {
     Column(
         modifier = modifier.background(PAPER_SHEET).border(1.dp, INK).padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // "Who vs whom" — an attack roll's attacker/target, or a save's caster/target (source null,
+        // e.g. a status's own tick, just skips this row rather than showing one blank portrait).
+        val attackerId = overlay.attackerId
+        val defenderId = overlay.defenderId
+        if (attackerId != null && defenderId != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RollPortrait(attackerId, sprites, colors)
+                Spacer(Modifier.size(6.dp))
+                BasicText(if (overlay.title == "Attack Roll") "Attacks" else "vs", style = TextStyle(color = INK_FAINT, fontSize = 11.sp))
+                Spacer(Modifier.size(6.dp))
+                RollPortrait(defenderId, sprites, colors)
+            }
+            Spacer(Modifier.size(10.dp))
+        }
         BasicText(overlay.title, style = TextStyle(color = INK, fontSize = 15.sp))
         Spacer(Modifier.size(8.dp))
         BasicText("DIFFICULTY CLASS", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
@@ -342,5 +368,16 @@ fun RollCard(overlay: DiceRollOverlay, world: VisualWorld, modifier: Modifier = 
             Spacer(Modifier.size(10.dp))
             Row { overlay.breakdown.terms.forEach { ModifierChip(it) } }
         }
+    }
+}
+
+/** Same sprite-or-colored-circle token TurnOrderStrip's turn-order row already uses (App.kt) — reused here for RollCard's "who vs whom" header. */
+@Composable
+private fun RollPortrait(id: EntityId, sprites: Map<EntityId, ImageBitmap>, colors: Map<EntityId, Color>) {
+    val sprite = sprites[id]
+    if (sprite != null) {
+        Image(bitmap = sprite, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.size(32.dp).clip(CircleShape))
+    } else {
+        Box(Modifier.size(32.dp).background(colors[id] ?: Color.Gray, CircleShape))
     }
 }

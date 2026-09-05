@@ -26,6 +26,7 @@ import de.jackbeback.pocketquest.core.rules.targeting.affectedBy
 import de.jackbeback.pocketquest.core.rules.targeting.findPath
 import de.jackbeback.pocketquest.core.rules.targeting.legalTargets
 import de.jackbeback.pocketquest.core.rules.targeting.pathCost
+import de.jackbeback.pocketquest.core.rules.targeting.rangeInTiles
 import de.jackbeback.pocketquest.core.rules.targeting.reachableTiles
 
 /** What the AI decided to do, and why — `score` is exposed for tests/debugging, not used by the caller. Only meaningful for a [defaultScoredChoice] pick; a tier-driven pick carries 0. */
@@ -254,21 +255,25 @@ private fun resolveMoveRelativeToNearestEnemy(state: GameState, entityId: Entity
         .minByOrNull { it.chebyshevDistanceTo(pos) } ?: return null
 
     val moveActionId = entity.allActions(cat).firstOrNull { cat.actionDef(it).targeting.mode == TargetMode.Path } ?: return null
-    // Budget by whichever is smaller: full speed, or AP actually left this turn — using speed alone
-    // would offer destinations `canPerform` then rejects for costing more AP than the entity has,
-    // the same "static speed instead of real AP budget" bug an earlier pass fixed in legalTargets.
-    val budget = minOf(entity.stats(cat).speedTiles, entity.resources?.ap ?: 0)
+    // Budget must mirror `legalTargets`' own Path-mode formula exactly (`minOf(maxRange, ap)`) — not
+    // reinvent it from `speedTiles`. A move action's authored `range` is itself a ceiling (same as any
+    // other action), so an entity with plenty of speed/AP left can still be capped short by a small
+    // range; computing budget from `speedTiles` instead let the AI aim at a destination `canPerform`
+    // would always reject, returning null every turn no matter how much closer it should be able to
+    // get (found live: a goblin whose move action's range was smaller than its speed never moved at
+    // all, since every candidate destination past that range was rejected).
+    val moveDef = cat.actionDef(moveActionId)
+    val budget = minOf(rangeInTiles(moveDef.targeting.range), entity.resources?.ap ?: 0)
     val destination = if (toward) {
         approachDestination(pos, nearestEnemy, budget, state)
     } else {
-        val reachable = reachableTiles(pos, budget, state.map, state.occupancy)
+        val reachable = reachableTiles(pos, budget, state.map, state.blockingOccupancy)
         (reachable + pos).maxByOrNull { it.chebyshevDistanceTo(nearestEnemy) }
     } ?: return null
     if (destination == pos) return null
 
     val ctx = ActionCtx(entityId, targets = emptyList(), point = destination)
-    val def = cat.actionDef(moveActionId)
-    if (canPerform(state, entityId, def, ctx, cat).isNotEmpty()) return null
+    if (canPerform(state, entityId, moveDef, ctx, cat).isNotEmpty()) return null
     return AiDecision(moveActionId, ctx, score = 0)
 }
 
@@ -290,7 +295,7 @@ private fun approachDestination(pos: GridPos, target: GridPos, budget: Int, stat
     val route = ADJACENT_OFFSETS
         .map { (dc, dr) -> GridPos(target.col + dc, target.row + dr) }
         .filter { state.map.inBounds(it) && state.map.canCross(it, target) }
-        .mapNotNull { findPath(pos, it, state.map, state.occupancy) }
+        .mapNotNull { findPath(pos, it, state.map, state.blockingOccupancy) }
         .minByOrNull { it.pathCost(state.map) } ?: return null
 
     var spent = 0

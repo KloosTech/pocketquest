@@ -57,8 +57,8 @@ fun compressTerrainToRuns(tiles: Map<GridPos, TileType>, width: Int, height: Int
  * straight across unchanged — pure rendering data `:ui`'s Board reads off `state.map`, never
  * touched by the resolver. `wallHatchOsrSeed` does NOT carry across — it's `:designer`-only
  * bookkeeping for regenerating the bake later, meaningless once the bake result itself has already
- * been copied over. `fogOfWar` also carries straight across, but unlike the rendering-only fields
- * IS read by the resolver/AI layer (visibility, hidden-enemy skip-turn).
+ * been copied over. `fogOfWar`/`triggers` also carry straight across, but unlike the rendering-only
+ * fields ARE read by the resolver/AI layer (visibility, hidden-enemy skip-turn, docs/36 trigger firing).
  */
 fun BattleMapDef.toBattleMap(): BattleMap =
-    BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet(), props, floorTexture, wallStyle, fogOfWar, wallHatchOsr, backgroundMarginTiles)
+    BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet(), props, floorTexture, wallStyle, fogOfWar, wallHatchOsr, backgroundMarginTiles, triggers)

@@ -140,6 +140,8 @@ sealed interface Effect {
         val target: EntityId,
         val ability: Ability,
         val dc: Int,
+        /** Whoever forced this save (the caster of the action that spawned it) — null for a save with no clear instigator (e.g. a status's own onTurnStart tick). Purely presentational (docs: roll-card "who vs whom" portraits), never read by resolution logic itself. */
+        val source: EntityId? = null,
         val advantage: Set<AdvSide> = emptySet(),
         val onSuccess: List<Effect> = emptyList(),
         val onFail: List<Effect> = emptyList(),
@@ -185,4 +187,13 @@ sealed interface Effect {
      */
     @Serializable @SerialName("refillMana")
     data class RefillMana(val who: EntityId) : Effect
+
+    /**
+     * docs/36-map-triggers.md: no state change of its own — exists purely to drive
+     * [GameEvent.MessageShown], which `:ui`'s Director turns into a blocking modal Beat. First
+     * consumer is trigger authoring (tutorial/story text), but not trigger-specific itself, same as
+     * any other effect that only exists to emit an event — a scroll or trap could use it later.
+     */
+    @Serializable @SerialName("showMessage")
+    data class ShowMessage(val text: String) : Effect
 }

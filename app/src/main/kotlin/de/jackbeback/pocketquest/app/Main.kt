@@ -4,14 +4,10 @@ import androidx.room.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import de.jackbeback.pocketquest.core.content.CatalogLoader
 import de.jackbeback.pocketquest.core.content.CatalogValidator
-import de.jackbeback.pocketquest.core.model.EncounterPool
-import de.jackbeback.pocketquest.core.model.EventPool
-import de.jackbeback.pocketquest.core.model.NodeType
-import de.jackbeback.pocketquest.core.model.ShopPool
 import de.jackbeback.pocketquest.data.MetaRepository
 import de.jackbeback.pocketquest.data.PocketQuestDatabase
 import de.jackbeback.pocketquest.data.RunRepository
-import de.jackbeback.pocketquest.ui.run.ContentPools
+import de.jackbeback.pocketquest.ui.run.resolvePools
 import de.jackbeback.pocketquest.ui.runDesktopRunApp
 import java.io.File
 
@@ -23,33 +19,6 @@ import java.io.File
 private fun defaultCatalogFile(): File {
     val repoRoot = listOf(File("."), File(".."), File("../..")).firstOrNull { File(it, "assets").isDirectory } ?: File(".")
     return File(File(repoRoot, "content"), "catalog.json")
-}
-
-/**
- * Falls back to for whichever pool category a catalog hasn't been authored yet in `:designer`'s
- * Pools tab (Pass 9f) — every authored [EncounterId] offered as Combat content for every act, plus
- * the Boss slot every run's final node needs (`generateGraph` always forces one there regardless of
- * weights). No events/shops are synthesized: a catalog with none authored just never rolls those
- * node types (`ContentPools.availableNodeTypeWeights` already excludes an empty pool).
- */
-private fun placeholderPools(catalog: de.jackbeback.pocketquest.core.model.Catalog): ContentPools {
-    val encounterIds = catalog.encounters.keys.toList()
-    if (encounterIds.isEmpty()) return ContentPools()
-    val combatPools = (1..3).map { act -> EncounterPool(act = act, kind = NodeType.Combat, entries = encounterIds) }
-    val bossPool = EncounterPool(act = 3, kind = NodeType.Boss, entries = encounterIds)
-    val eventPools = catalog.events.keys.toList().let { ids -> if (ids.isEmpty()) emptyList() else (1..3).map { act -> EventPool(act, ids) } }
-    val shopPools = catalog.shops.keys.toList().let { ids -> if (ids.isEmpty()) emptyList() else (1..3).map { act -> ShopPool(act, ids) } }
-    return ContentPools(encounters = combatPools + bossPool, events = eventPools, shops = shopPools)
-}
-
-/** Prefers whatever's hand-authored in `:designer`'s Pools tab; falls back per-category to [placeholderPools] only where the catalog hasn't been authored yet. */
-private fun resolvePools(catalog: de.jackbeback.pocketquest.core.model.Catalog): ContentPools {
-    val fallback = placeholderPools(catalog)
-    return ContentPools(
-        encounters = catalog.encounterPools.ifEmpty { fallback.encounters },
-        events = catalog.eventPools.ifEmpty { fallback.events },
-        shops = catalog.shopPools.ifEmpty { fallback.shops },
-    )
 }
 
 fun main() {

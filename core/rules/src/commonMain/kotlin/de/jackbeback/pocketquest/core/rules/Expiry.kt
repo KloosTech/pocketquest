@@ -24,6 +24,9 @@ fun Expiry.matches(moment: TurnMoment): Boolean = when (this) {
     is Expiry.EndOfTurnOf -> moment is TurnMoment.EndOfTurn && moment.who == who && moment.round == round
     is Expiry.StartOfTurnOf -> moment is TurnMoment.StartOfTurn && moment.who == who && moment.round == round
     is Expiry.EndOfRound -> moment is TurnMoment.EndOfRound && moment.round == round
+    // Never actually stored — Handlers.kt's applyStatus resolves this into a concrete EndOfRound
+    // the moment a status is applied, so this branch exists only for exhaustiveness.
+    is Expiry.Turns -> false
 }
 
 /** Every status sharing [link], across every entity — concentration breaking removes all of them at once. */

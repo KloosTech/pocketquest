@@ -1,16 +1,23 @@
 package de.jackbeback.pocketquest.core.rules.content
 
 import de.jackbeback.pocketquest.core.model.AbilityScores
+import de.jackbeback.pocketquest.core.model.Actor
 import de.jackbeback.pocketquest.core.model.Archetype
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.BattleMapDef
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.EncounterId
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EnemySpawn
+import de.jackbeback.pocketquest.core.model.Entity
+import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.Health
 import de.jackbeback.pocketquest.core.model.MapId
+import de.jackbeback.pocketquest.core.model.Resources
+import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.SpawnRole
 import de.jackbeback.pocketquest.core.model.SpawnZone
 import kotlin.test.Test
@@ -103,5 +110,23 @@ class StartEncounterTest {
         val state = startEncounter(catalog(map, encounter), encounter, party = listOf(hero.id))
         assertTrue(state.revealedTiles.isNotEmpty())
         assertTrue(GridPos(1, 0) in state.revealedTiles, "adjacent to the party's own spawn tile")
+    }
+
+    @Test
+    fun startEncounterWithPartyRefillsApForEntitiesArrivingWithZero() {
+        // The real gameplay path (PartyMember.toEntity, :core:run) hands startEncounterWithParty
+        // Entities with ap=0 hardcoded, relying on this to seed full AP the same way the enemy
+        // loop above already does — unlike the plain startEncounter(catalog, encounter, party:
+        // List<ArchetypeId>) overload this file's other tests use, which builds already-full-AP
+        // Entities itself and so never exercised this gap.
+        val map = BattleMapDef(id = MapId("room"), width = 3, height = 3, spawns = listOf(SpawnZone(SpawnRole.Party, listOf(GridPos(0, 0)))))
+        val encounter = EncounterSpec(EncounterId("e1"), "E1", map.id)
+        val zeroApMember = Entity(
+            EntityId(0), hero.id, pos = null, health = Health(hero.baseMaxHp),
+            resources = Resources(ap = 0, mana = hero.baseMaxMana), actor = Actor(Faction.Player, Controller.Human),
+        )
+        val (state, spawnIds) = startEncounterWithParty(catalog(map, encounter), encounter, party = listOf(zeroApMember), rng = RngState(0L))
+        val spawned = state.entities.single { it.id == spawnIds.single() }
+        assertEquals(hero.baseMaxAp, spawned.resources?.ap)
     }
 }

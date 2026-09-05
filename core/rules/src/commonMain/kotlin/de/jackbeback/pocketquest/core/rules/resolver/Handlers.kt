@@ -29,10 +29,14 @@ import de.jackbeback.pocketquest.core.model.Resistance
 import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RollContext
 import de.jackbeback.pocketquest.core.model.RollMode
+import de.jackbeback.pocketquest.core.model.SlotValue
 import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.rules.TurnMoment
 import de.jackbeback.pocketquest.core.rules.abilityModifier
+import de.jackbeback.pocketquest.core.rules.fireTriggerIfAny
+import de.jackbeback.pocketquest.core.rules.openLootIfAny
+import de.jackbeback.pocketquest.core.rules.action.STATUS_STACKS_SLOT
 import de.jackbeback.pocketquest.core.rules.action.instantiate
 import de.jackbeback.pocketquest.core.rules.d20Detailed
 import de.jackbeback.pocketquest.core.rules.matches
@@ -64,7 +68,7 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
     when (effect) {
         is Effect.Ask -> error("Ask must be intercepted by run() before reaching a handler")
         is Effect.DealDamage -> dealDamage(state, effect, cat)
-        is Effect.MoveAlong -> moveAlong(state, effect)
+        is Effect.MoveAlong -> moveAlong(state, effect, cat)
         is Effect.SpendCost -> spendCost(state, effect)
         is Effect.ApplyStatus -> applyStatus(state, effect, cat)
         is Effect.RollAttack -> rollAttack(state, effect, cat, mode)
@@ -82,6 +86,7 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.Teleport -> teleport(state, effect)
         is Effect.SpawnEntity -> spawnEntity(state, effect, cat)
         is Effect.DestroyEntity -> destroyEntity(state, effect)
+        is Effect.ShowMessage -> HandlerOutcome(state, listOf(GameEvent.MessageShown(effect.text)))
     }
 
 /**
@@ -173,7 +178,12 @@ private fun heal(state: GameState, effect: Effect.Heal, cat: Catalog): HandlerOu
 
     val maxHp = target.stats(cat).maxHp
     val newCurrent = (health.current + amountF.roundToInt()).coerceAtMost(maxHp)
-    val newState = state.withEntity(target.id) { it.copy(health = it.health!!.copy(current = newCurrent)) }
+    // docs/39-corpse-movement.md: mirrors dealDamage's own blocksMovement flip — a revived entity
+    // blocks its tile again like any other combatant, same "always reflects current alive/dead
+    // status" reasoning (idempotent no-op if it was already healthy).
+    val newState = state.withEntity(target.id) {
+        it.copy(health = it.health!!.copy(current = newCurrent), blocksMovement = newCurrent > 0)
+    }
     val actualHealed = newCurrent - health.current
     val events = mutableListOf<GameEvent>(GameEvent.Healed(target.id, actualHealed, effect.source))
     if (health.current == 0 && newCurrent > 0) events += GameEvent.Revived(target.id)
@@ -319,7 +329,14 @@ private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog
 
     // Step 7: Apply.
     val newCurrent = (finalHealth.current - remaining).coerceAtLeast(0)
-    var newState = state.withEntity(finalTarget.id) { it.copy(health = it.health!!.copy(current = newCurrent, temp = temp)) }
+    // docs/39-corpse-movement.md: a downed/dead entity stops blocking movement the instant it hits
+    // 0 HP — found live: nothing ever removed a dead entity from `occupancy`, so a corpse permanently
+    // blocked its tile and could strand the party with no legal path. `heal`'s Revived branch below
+    // flips this back on — a revived ally is a normal combatant again, occupying its tile like any
+    // other entity.
+    var newState = state.withEntity(finalTarget.id) {
+        it.copy(health = it.health!!.copy(current = newCurrent, temp = temp), blocksMovement = newCurrent > 0)
+    }
     events += GameEvent.DamageTaken(finalTarget.id, remaining, type)
     if (newCurrent == 0) {
         events += GameEvent.Died(finalTarget.id)
@@ -354,23 +371,42 @@ private fun dealDamage(state: GameState, effect: Effect.DealDamage, cat: Catalog
     return HandlerOutcome(newState, events, spawn)
 }
 
-private fun moveAlong(state: GameState, effect: Effect.MoveAlong): HandlerOutcome {
+private fun moveAlong(state: GameState, effect: Effect.MoveAlong, cat: Catalog): HandlerOutcome {
     val who = state.byId[effect.who] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
     val from = who.pos ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
     if (effect.index !in effect.path.indices) return HandlerOutcome(state)
 
     val to = effect.path[effect.index]
-    if (!state.map.isWalkable(to) || state.occupancy.containsKey(to)) {
+    if (!state.map.isWalkable(to) || state.blockingOccupancy.containsKey(to)) {
         // docs/29-push-on-wall-hit.md: still fizzles (the log line/Rejection event is unchanged),
         // but now also spawns onWallHit — empty for ordinary movement, populated only when this
         // MoveAlong came from a Push that authored one.
         return fizzle(state, effect, Rejection.Blocked(to)).copy(spawn = effect.onWallHit)
     }
 
-    val newState = state.withEntity(who.id) { it.copy(pos = to) }
+    var newState = state.withEntity(who.id) { it.copy(pos = to) }
     val nextIndex = effect.index + 1
-    val spawn = if (nextIndex < effect.path.size) listOf(effect.copy(index = nextIndex)) else emptyList()
-    return HandlerOutcome(newState, listOf(GameEvent.MoveStepped(who.id, from, to)), spawn)
+    val continuation = if (nextIndex < effect.path.size) listOf(effect.copy(index = nextIndex)) else emptyList()
+
+    // docs/36-map-triggers.md: same "stop mid-path, fire extra effects, then resume" shape
+    // onWallHit already established — the trigger's own effects run before the walk continues.
+    val triggerFire = fireTriggerIfAny(newState, who.id, to, cat)
+    val spawn = if (triggerFire != null) {
+        newState = triggerFire.first
+        triggerFire.second + continuation
+    } else {
+        continuation
+    }
+
+    // docs/37-lootable-containers.md: pure state flip, no effects to push — only an event, for the log line.
+    val events = mutableListOf<GameEvent>(GameEvent.MoveStepped(who.id, from, to))
+    val lootOpen = openLootIfAny(newState, who.id, to)
+    if (lootOpen != null) {
+        newState = lootOpen.first
+        events += GameEvent.LootOpened(lootOpen.second.at, lootOpen.second.loot)
+    }
+
+    return HandlerOutcome(newState, events, spawn)
 }
 
 /**
@@ -400,7 +436,7 @@ private fun push(state: GameState, effect: Effect.Push): HandlerOutcome {
 private fun teleport(state: GameState, effect: Effect.Teleport): HandlerOutcome {
     val who = state.byId[effect.who] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
     val from = who.pos ?: return fizzle(state, effect, Rejection.TargetMissing(effect.who))
-    if (!state.map.isWalkable(effect.to) || state.occupancy.containsKey(effect.to)) {
+    if (!state.map.isWalkable(effect.to) || state.blockingOccupancy.containsKey(effect.to)) {
         return fizzle(state, effect, Rejection.Blocked(effect.to))
     }
 
@@ -415,7 +451,7 @@ private fun teleport(state: GameState, effect: Effect.Teleport): HandlerOutcome 
  * own doc comment) — reinforcements don't cut into a round already in progress.
  */
 private fun spawnEntity(state: GameState, effect: Effect.SpawnEntity, cat: Catalog): HandlerOutcome {
-    if (!state.map.isWalkable(effect.pos) || state.occupancy.containsKey(effect.pos)) {
+    if (!state.map.isWalkable(effect.pos) || state.blockingOccupancy.containsKey(effect.pos)) {
         return fizzle(state, effect, Rejection.Blocked(effect.pos))
     }
 
@@ -493,34 +529,42 @@ private fun applyStatus(state: GameState, effect: Effect.ApplyStatus, cat: Catal
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
     val def = cat.statusDef(effect.status)
     val existing = target.statuses.find { it.def == effect.status }
+    // docs/41-status-duration-and-ability-mods.md: Expiry.Turns is authoring-only — resolved into a
+    // concrete EndOfRound the instant a status is actually applied, using whatever round it lands
+    // on. Never Effect.ApplyStatus.expiry unresolved past this point, and never what an ActiveStatus
+    // actually stores.
+    val expiry = when (val e = effect.expiry) {
+        is Expiry.Turns -> Expiry.EndOfRound(state.turn.round + e.n)
+        else -> e
+    }
     val incoming = ActiveStatus(
         def = effect.status,
         sourceId = effect.sourceId,
         linkId = effect.linkId,
         stacks = effect.stacks,
-        expiry = effect.expiry,
+        expiry = expiry,
         appliedAtVersion = state.version,
     )
 
-    fun replace(stacks: Int, expiry: Expiry): HandlerOutcome {
+    fun replace(stacks: Int, resolvedExpiry: Expiry): HandlerOutcome {
         val without = target.statuses.filterNot { it.def == effect.status }
-        val applied = incoming.copy(stacks = stacks, expiry = expiry)
+        val applied = incoming.copy(stacks = stacks, expiry = resolvedExpiry)
         val newState = state.withEntity(target.id) { it.copy(statuses = without + applied) }
-        return HandlerOutcome(newState, listOf(GameEvent.StatusApplied(target.id, effect.status, stacks, expiry)))
+        return HandlerOutcome(newState, listOf(GameEvent.StatusApplied(target.id, effect.status, stacks, resolvedExpiry)))
     }
 
     return when (def.stackPolicy) {
-        StackPolicy.Refresh -> replace(stacks = 1, expiry = effect.expiry)
-        StackPolicy.AddStacks -> replace(stacks = (existing?.stacks ?: 0) + effect.stacks, expiry = effect.expiry)
+        StackPolicy.Refresh -> replace(stacks = 1, resolvedExpiry = expiry)
+        StackPolicy.AddStacks -> replace(stacks = (existing?.stacks ?: 0) + effect.stacks, resolvedExpiry = expiry)
         StackPolicy.KeepStrongest ->
             if (existing != null && existing.stacks >= effect.stacks) {
                 HandlerOutcome(state) // incoming is weaker or equal — dropped silently, nothing changes
             } else {
-                replace(stacks = effect.stacks, expiry = effect.expiry)
+                replace(stacks = effect.stacks, resolvedExpiry = expiry)
             }
         StackPolicy.Independent -> {
             val newState = state.withEntity(target.id) { it.copy(statuses = it.statuses + incoming) }
-            HandlerOutcome(newState, listOf(GameEvent.StatusApplied(target.id, effect.status, effect.stacks, effect.expiry)))
+            HandlerOutcome(newState, listOf(GameEvent.StatusApplied(target.id, effect.status, effect.stacks, expiry)))
         }
     }
 }
@@ -584,29 +628,43 @@ private fun rollAttack(state: GameState, effect: Effect.RollAttack, cat: Catalog
     return HandlerOutcome(damageRoll.state, listOf(rolledEvent) + damageRolledEvent, spawn)
 }
 
+/** "Spell save DC" convention (10 + the forcing caster's own modifier in the save's ability) — no proficiency/casting-stat concept exists here, so this is the whole formula, not a base a bonus adds to. */
+private const val SAVE_DC_BASE = 10
+
 private fun rollSave(state: GameState, effect: Effect.RollSave, cat: Catalog, mode: RngMode): HandlerOutcome {
     val target = state.byId[effect.target] ?: return fizzle(state, effect, Rejection.TargetMissing(effect.target))
+    // Same "dead and missing share one rejection" idiom rollAttack/dealDamage already use — a
+    // corpse forced to roll a save it has no way to react to (NEEDED_IMPROVEMENTS.md).
+    if ((target.health?.current ?: 0) <= 0) return fizzle(state, effect, Rejection.TargetMissing(effect.target))
 
     val targetStats = target.stats(cat)
     val breakdown = target.rollBreakdown(cat, effect.ability)
     val mod = breakdown.total
+    // effect.dc is only the fallback for a save with no real caster (e.g. a status's own
+    // onTurnStart tick) — whenever a caster exists, the DC is derived from THEM, not authored on
+    // the action: 10 + the caster's own modifier in this save's ability, same ability both sides
+    // roll (docs: the caster's Con vs the target's Con, not a separate "casting stat" concept).
+    val dc = effect.source?.let { state.byId[it] }
+        ?.let { caster -> SAVE_DC_BASE + abilityModifier(caster.stats(cat).abilities.forAbility(effect.ability)) }
+        ?: effect.dc
     val derivedAdvantage = targetStats.rollGrants
         .filter { it.ctx.matches(RollContext.SavingThrow(effect.ability)) }
         .map { it.side }
         .toSet()
     val advantageMode = resolveAdvantage(effect.advantage + derivedAdvantage)
     val (rollValue, otherD20, afterD20) = rollD20(state, mode, advantageMode)
-    val success = rollValue + mod >= effect.dc
+    val success = rollValue + mod >= dc
 
     val rolledEvent = GameEvent.SaveRolled(
         target = target.id,
         ability = effect.ability,
         d20 = rollValue,
         mod = mod,
-        dc = effect.dc,
+        dc = dc,
         success = success,
         breakdown = breakdown,
         otherD20 = otherD20,
+        source = effect.source,
     )
     val spawn = if (success) effect.onSuccess else effect.onFail
     return HandlerOutcome(afterD20, listOf(rolledEvent), spawn)
@@ -748,12 +806,47 @@ private fun isDead(entity: Entity): Boolean {
 private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): HandlerOutcome {
     val endingId = effect.who
     if (state.byId[endingId] == null) return HandlerOutcome(state)
+    // docs/44-end-turn-guard.md: a no-op, not just a defensive nicety — found live: `:ui`'s "End
+    // Turn" button captures the active entity id once per click and fires a new coroutine per
+    // click; spamming it can queue a second call for an entity that ISN'T active anymore (the AI
+    // turn a prior click already advanced past). With no check here, that stale call silently
+    // advanced turn.activeIndex a second time — skipping the real active entity's ENTIRE turn (no
+    // decision, no action, nothing) before it ever got a chance to act. Only checked when `order`
+    // is non-empty — an empty order is a genuinely corrupt state the `check()` below still needs to
+    // catch with a real exception, not have this guard silently swallow first.
+    if (state.turn.order.isNotEmpty() && endingId != state.turn.order.getOrNull(state.turn.activeIndex)) {
+        return HandlerOutcome(state)
+    }
 
     val events = mutableListOf<GameEvent>()
     var working = state
 
     // step 6
     working = expireStatuses(working, TurnMoment.EndOfTurn(endingId, working.turn.round), events)
+
+    // docs/42-status-stack-scaling.md: decay fires on the ENDING entity's own turn — a status ticked
+    // at the start of this same turn (step 4, above, on a PRIOR call) already saw the pre-decay
+    // stack count, so decay only affects what the NEXT tick sees. A different axis from
+    // StackPolicy, which only governs what happens when the status is applied again — decay fires
+    // every turn regardless of reapplication.
+    val endingEntity = working.byId[endingId]
+    if (endingEntity != null) {
+        val decayedStatuses = endingEntity.statuses.mapNotNull { status ->
+            val decay = cat.statusDef(status.def).decayStacksPerTurn
+            if (decay <= 0) return@mapNotNull status
+            val newStacks = status.stacks - decay
+            if (newStacks <= 0) {
+                events += GameEvent.StatusExpired(endingId, status.def)
+                null
+            } else {
+                events += GameEvent.StatusApplied(endingId, status.def, newStacks, status.expiry)
+                status.copy(stacks = newStacks)
+            }
+        }
+        if (decayedStatuses != endingEntity.statuses) {
+            working = working.withEntity(endingId) { it.copy(statuses = decayedStatuses) }
+        }
+    }
     events += GameEvent.TurnEnded(endingId)
 
     // step 7 — advance past any dead entity still sitting in turn.order (nothing removes them;
@@ -799,13 +892,18 @@ private fun endTurn(state: GameState, effect: Effect.EndTurn, cat: Catalog): Han
     val preResetResources = nextActive.resources
     if (preResetResources != null) events += GameEvent.ResourcesReset(nextActiveId, stats.maxAp, preResetResources.mana)
 
-    // step 4
+    // step 4 — docs/42-status-stack-scaling.md: STATUS_STACKS_SLOT carries the ticking status's own
+    // current stack count, so an onTurnStart DealDamage can scale off it (Bleed's "2 per stack").
     val tickEffects = nextActive.statuses.flatMap { status ->
         val def = cat.statusDef(status.def)
         if (def.onTurnStart.isEmpty()) {
             emptyList()
         } else {
-            val ctx = ActionCtx(caster = status.sourceId ?: nextActiveId, targets = listOf(nextActiveId))
+            val ctx = ActionCtx(
+                caster = status.sourceId ?: nextActiveId,
+                targets = listOf(nextActiveId),
+                slots = mapOf(STATUS_STACKS_SLOT to SlotValue.IntSlot(status.stacks)),
+            )
             def.onTurnStart.flatMap { it.instantiate(working, ctx, cat) }
         }
     }

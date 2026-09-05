@@ -8,7 +8,17 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Ref
+import de.jackbeback.pocketquest.core.model.SlotKey
 import de.jackbeback.pocketquest.core.model.SlotValue
+
+/**
+ * docs/42-status-stack-scaling.md: the well-known [SlotKey] `endTurn`'s `onTurnStart` tick
+ * (`Handlers.kt`) populates with the ticking status's own current stack count, as a
+ * [SlotValue.IntSlot] — the only producer, and [EffectTemplate.DealDamage.perStack] the only
+ * consumer. Absent (and so treated as 0 stacks) in every other `ActionCtx` a regular action ever
+ * builds, which is exactly why `perStack` is a safe no-op outside a status's own onTurnStart list.
+ */
+val STATUS_STACKS_SLOT = SlotKey("statusStacks")
 
 private fun resolveRef(ref: Ref, ctx: ActionCtx): List<EntityId> = when (ref) {
     Ref.Caster -> listOf(ctx.caster)
@@ -17,6 +27,8 @@ private fun resolveRef(ref: Ref, ctx: ActionCtx): List<EntityId> = when (ref) {
     is Ref.Slot -> listOfNotNull((ctx.slots[ref.key] as? SlotValue.EntitySlot)?.value)
 }
 
+private fun stackCount(ctx: ActionCtx): Int = (ctx.slots[STATUS_STACKS_SLOT] as? SlotValue.IntSlot)?.value ?: 0
+
 /**
  * Resolves every [Ref] placeholder into a concrete [Effect]. `EachTarget` expands to one effect per
  * target. Takes [state] — [EffectTemplate.Push] is the first template that needs board geometry
@@ -24,7 +36,7 @@ private fun resolveRef(ref: Ref, ctx: ActionCtx): List<EntityId> = when (ref) {
  */
 fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): List<Effect> = when (this) {
     is EffectTemplate.DealDamage ->
-        resolveRef(target, ctx).map { Effect.DealDamage(it, amount, damageType, tags = tags) }
+        resolveRef(target, ctx).map { Effect.DealDamage(it, amount + perStack * stackCount(ctx), damageType, tags = tags) }
 
     is EffectTemplate.ApplyStatus -> {
         val sourceId = caster?.let { resolveRef(it, ctx).firstOrNull() }
@@ -46,6 +58,7 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
                 target = t,
                 ability = ability,
                 dc = dc,
+                source = ctx.caster,
                 advantage = advantage,
                 onSuccess = onSuccess.flatMap { it.instantiate(state, scopedCtx, cat) },
                 onFail = onFail.flatMap { it.instantiate(state, scopedCtx, cat) },
@@ -88,4 +101,9 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
         val sourceId = source?.let { resolveRef(it, ctx).firstOrNull() }
         resolveRef(target, ctx).map { Effect.Heal(it, amount, source = sourceId) }
     }
+
+    is EffectTemplate.ShowMessage -> listOf(Effect.ShowMessage(text))
+
+    is EffectTemplate.RemoveStatus ->
+        resolveRef(target, ctx).map { Effect.RemoveStatus(it, status) }
 }

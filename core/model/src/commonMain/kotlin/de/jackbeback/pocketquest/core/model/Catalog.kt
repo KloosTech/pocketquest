@@ -21,6 +21,17 @@ data class StatusDef(
     val healSteps: List<HealStep> = emptyList(),
     /** docs/21-ai-behavior-spec.md: the AI can't otherwise tell a buff from a debuff (an `ApplyStatus` effect doesn't say) — needed so `AiActionCategory.BuffAlly`/`DebuffEnemy` are actually derivable. Defaults true so every pre-existing status stays classified as beneficial, matching how they were all authored as buffs/heals-adjacent so far. */
     val beneficial: Boolean = true,
+    /** docs/40-status-icons.md: a manifest sprite id (`kind = "status"`), drawn in a row above any entity currently carrying this status. Null falls back to no icon (that status just doesn't appear in the row) — same missing-asset-is-never-a-crash contract every other sprite-id field already follows. */
+    val icon: String? = null,
+    /**
+     * docs/42-status-stack-scaling.md: how many stacks this status loses at the END of its bearer's
+     * own turn (Bleed's "2 per turn, then loses a stack" shape) — 0 (default) means it never decays
+     * on its own, matching every pre-existing status. A DIFFERENT axis from [stackPolicy] (which only
+     * governs what happens when this status is APPLIED again while already active) — decay fires
+     * every turn regardless of whether the status was ever reapplied. Reaching 0 stacks removes the
+     * status entirely, same as any other `StatusExpired`.
+     */
+    val decayStacksPerTurn: Int = 0,
 )
 
 @Serializable
@@ -42,6 +53,16 @@ data class ItemDef(
     val basePrice: Int = 0,
     /** doc11-run-state.md: how an equipped item grants actions/modifiers beyond its own `modifiers` list — resolves through the same `Entity.grantedActions()`/`stats()` pipeline a `FeatureDef` already feeds (doc17 1.6/1.7). Null means the item is passive-only. */
     val grantsFeature: FeatureId? = null,
+    /** docs/38-loot-reveal-screen.md: a manifest sprite id (`kind = "item"`), resolved through the same `AssetManifest.prop`/`GameAssetManifest.prop` flat lookup every other sprite-id field already uses. Null falls back to a text-only chip wherever an item needs a visual (the loot-reveal reel, the editor). */
+    val icon: String? = null,
+    /**
+     * docs/47-inventory-screen.md: empty means the item isn't consumable (pure gear, or a quest
+     * item) — non-empty means "Use" applies these via `applyRunEffect` (the same function events
+     * already use) and removes one copy of the item from wherever it came from. No charges/stacks —
+     * single-use only; `ItemInstance.charges` stays a separate, unrelated, still-unimplemented
+     * concept. An item can have both `validSlots` and `useEffects` (equippable AND consumable).
+     */
+    val useEffects: List<RunEffect> = emptyList(),
 )
 
 /**
@@ -81,6 +102,8 @@ data class Catalog(
     val encounterPools: List<EncounterPool> = emptyList(),
     val eventPools: List<EventPool> = emptyList(),
     val shopPools: List<ShopPool> = emptyList(),
+    /** docs/37-lootable-containers.md's Loot editor output — reusable lootable-container definitions, placed via rarity-tier `SpawnZone`s and referenced by `EncounterSpec.lootSpawns`. */
+    val loot: Map<LootId, LootDef> = emptyMap(),
 ) {
     fun archetype(id: ArchetypeId): Archetype =
         archetypes[id] ?: error("Unknown archetype: ${id.raw}")
@@ -108,6 +131,9 @@ data class Catalog(
 
     fun shopDef(id: ShopId): ShopDef =
         shops[id] ?: error("Unknown shop: ${id.raw}")
+
+    fun lootDef(id: LootId): LootDef =
+        loot[id] ?: error("Unknown loot: ${id.raw}")
 
     /**
      * Deliberately non-throwing, unlike every accessor above — [Archetype.aiProfile] defaults to

@@ -11,7 +11,10 @@ import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Health
 import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.LootDef
 import de.jackbeback.pocketquest.core.model.LootEntry
+import de.jackbeback.pocketquest.core.model.LootId
+import de.jackbeback.pocketquest.core.model.LootSpawn
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
@@ -36,14 +39,19 @@ class EncounterHandoffTest {
 
     private val map = BattleMapDef(
         id = MapId("room"), width = 3, height = 3,
-        spawns = listOf(SpawnZone(SpawnRole.Party, listOf(GridPos(0, 0), GridPos(1, 0)))),
+        spawns = listOf(
+            SpawnZone(SpawnRole.Party, listOf(GridPos(0, 0), GridPos(1, 0))),
+            SpawnZone(SpawnRole.LootCommon, listOf(GridPos(2, 2))),
+        ),
     )
 
-    private fun spec(goldMin: Int = 5, goldMax: Int = 5, loot: List<LootEntry> = emptyList()) = EncounterSpec(
-        id = EncounterId("e1"), name = "E1", mapId = map.id, goldMin = goldMin, goldMax = goldMax, loot = loot,
+    private val chest = LootDef(id = LootId("chest1"), table = listOf(LootEntry(ItemId("potion"), weight = 1.0)))
+
+    private fun spec(goldMin: Int = 5, goldMax: Int = 5, lootSpawns: List<LootSpawn> = emptyList()) = EncounterSpec(
+        id = EncounterId("e1"), name = "E1", mapId = map.id, goldMin = goldMin, goldMax = goldMax, lootSpawns = lootSpawns,
     )
 
-    private fun catalog() = Catalog(archetypes = mapOf(hero.id to hero), maps = mapOf(map.id to map))
+    private fun catalog() = Catalog(archetypes = mapOf(hero.id to hero), maps = mapOf(map.id to map), loot = mapOf(chest.id to chest))
 
     private fun run(hp: Int = 20, mana: Int = 5, condition: MemberCondition = MemberCondition.Healthy) = RunState(
         runId = RunId("run1"), seed = 1L, rng = RngState(seed = 1L), act = 1,
@@ -73,14 +81,16 @@ class EncounterHandoffTest {
     }
 
     @Test
-    fun winningWritesBackHpManaLootAndGold() {
+    fun winningWritesBackHpManaGoldAndRollsPendingLoot() {
         val cat = catalog()
-        val started = startEncounter(run(), spec(loot = listOf(LootEntry(ItemId("potion"), chance = 1.0))), cat)
+        val started = startEncounter(run(), spec(lootSpawns = listOf(LootSpawn(chest.id, SpawnRole.LootCommon))), cat)
         val handle = checkNotNull(started.encounter)
         val entityId = handle.memberToEntity.getValue(MemberId("m1"))
         val state = handle.resolver.state
         val damaged = state.entities.single { it.id == entityId }.copy(health = Health(current = 7))
-        val final = state.copy(entities = listOf(damaged))
+        // docs/37-lootable-containers.md: loot only rolls if the placement was actually opened.
+        val placement = state.lootPlacements.single()
+        val final = state.copy(entities = listOf(damaged), openedLoot = setOf(placement.at))
 
         val finished = finishEncounter(started, final, cat)
 
@@ -88,32 +98,32 @@ class EncounterHandoffTest {
         assertEquals(7, member.hp)
         assertEquals(5, member.mana)
         assertEquals(MemberCondition.Healthy, member.condition)
-        assertEquals(listOf(ItemId("potion")), finished.inventory.items)
+        // docs/38-loot-reveal-screen.md: rolled but NOT yet granted — finishEncounter no longer
+        // touches inventory for loot at all, that's revealLoot's job.
+        val pending = finished.pendingLootReveal.single()
+        assertEquals(placement.at, pending.at)
+        assertEquals(chest.id, pending.loot)
+        assertEquals(ItemId("potion"), pending.item)
+        assertEquals(false, pending.revealed)
+        assertEquals(emptyList(), finished.inventory.items)
         assertEquals(5, finished.gold)
         assertNull(finished.encounter)
         assertNull(finished.outcome)
     }
 
     @Test
-    fun lootThatWouldExceedCarryCapacityIsNotAdded() {
-        val lowStr = hero.copy(id = ArchetypeId("weakling"), abilities = AbilityScores(1, 10, 10, 10, 10, 10))
-        val cat = Catalog(archetypes = mapOf(lowStr.id to lowStr), maps = mapOf(map.id to map))
-        val runWithFullInventory = RunState(
-            runId = RunId("run1"), seed = 1L, rng = RngState(seed = 1L), act = 1,
-            graph = NodeGraph(mapOf(NodeId("n1") to GraphNode(NodeId("n1"), act = 1, type = NodeType.Combat)), start = NodeId("n1")),
-            position = NodeId("n1"),
-            party = listOf(PartyMember(MemberId("m1"), name = "Lyra", archetype = lowStr.id, hp = 20, mana = 5, controller = Controller.Human)),
-            inventory = Inventory(listOf(ItemId("already-carried"))), // capacity (STR 1) is already full
-        )
-        val started = startEncounter(runWithFullInventory, spec(loot = listOf(LootEntry(ItemId("sword"), chance = 1.0))), cat)
+    fun anUnopenedContainerNeverEntersPendingLootReveal() {
+        val cat = catalog()
+        val started = startEncounter(run(), spec(lootSpawns = listOf(LootSpawn(chest.id, SpawnRole.LootCommon))), cat)
         val handle = checkNotNull(started.encounter)
         val entityId = handle.memberToEntity.getValue(MemberId("m1"))
         val state = handle.resolver.state
+        // openedLoot stays empty — the chest was never walked onto.
         val final = state.copy(entities = listOf(state.entities.single { it.id == entityId }.copy(health = Health(current = 7))))
 
         val finished = finishEncounter(started, final, cat)
 
-        assertEquals(listOf(ItemId("already-carried")), finished.inventory.items, "the new sword shouldn't fit — capacity was already full")
+        assertEquals(emptyList(), finished.pendingLootReveal)
     }
 
     @Test
@@ -147,7 +157,7 @@ class EncounterHandoffTest {
     fun aFullPartyWipeSetsFailureAndSkipsWriteBack() {
         val cat = catalog()
         val originalRun = run()
-        val started = startEncounter(originalRun, spec(loot = listOf(LootEntry(ItemId("potion"), chance = 1.0))), cat)
+        val started = startEncounter(originalRun, spec(lootSpawns = listOf(LootSpawn(chest.id, SpawnRole.LootCommon))), cat)
         val handle = checkNotNull(started.encounter)
         val entityId = handle.memberToEntity.getValue(MemberId("m1"))
         val state = handle.resolver.state

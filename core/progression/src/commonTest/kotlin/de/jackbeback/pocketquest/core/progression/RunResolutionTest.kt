@@ -21,6 +21,7 @@ import de.jackbeback.pocketquest.core.run.RunState
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.ItemInstance
 import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.Inventory
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -33,12 +34,12 @@ class RunResolutionTest {
         id = ChampionId(id), name = id, archetype = ArchetypeId("hero"), status = status,
     )
 
-    private fun run(vararg memberIds: String, outcome: RunOutcome?, gold: Int = 0, equipment: Equipment = Equipment.EMPTY) = RunState(
+    private fun run(vararg memberIds: String, outcome: RunOutcome?, gold: Int = 0, equipment: Equipment = Equipment.EMPTY, inventory: Inventory = Inventory()) = RunState(
         runId = RunId("run1"), seed = 1L, rng = RngState(seed = 1L), act = 1,
         graph = NodeGraph(mapOf(NodeId("n1") to GraphNode(NodeId("n1"), act = 1, type = NodeType.Combat)), start = NodeId("n1")),
         position = NodeId("n1"),
         party = memberIds.map { PartyMember(MemberId(it), it, ArchetypeId("hero"), hp = 20, mana = 5, equipment = equipment, controller = Controller.Human) },
-        gold = gold, outcome = outcome,
+        gold = gold, outcome = outcome, inventory = inventory,
     )
 
     @Test
@@ -97,6 +98,21 @@ class RunResolutionTest {
         )
         val result = resolveRunOutcome(meta, run("m1", outcome = RunOutcome.Failure))
         assertTrue(Unlock.PartyMode in result.unlocks)
+    }
+
+    @Test
+    fun successBanksTheRunsUnequippedItemsIntoTheStash() {
+        // docs/47-inventory-screen.md: same "gains bank only on survival" rule gold already follows.
+        val meta = MetaState(roster = mapOf(ChampionId("m1") to record("m1")), stash = Inventory(listOf(ItemId("oldPotion"))))
+        val result = resolveRunOutcome(meta, run("m1", outcome = RunOutcome.Success, inventory = Inventory(listOf(ItemId("newPotion")))))
+        assertEquals(listOf(ItemId("oldPotion"), ItemId("newPotion")), result.stash.items)
+    }
+
+    @Test
+    fun failureForfeitsTheRunsUnequippedItems() {
+        val meta = MetaState(roster = mapOf(ChampionId("m1") to record("m1")))
+        val result = resolveRunOutcome(meta, run("m1", outcome = RunOutcome.Failure, inventory = Inventory(listOf(ItemId("lostPotion")))))
+        assertTrue(result.stash.items.isEmpty())
     }
 
     @Test

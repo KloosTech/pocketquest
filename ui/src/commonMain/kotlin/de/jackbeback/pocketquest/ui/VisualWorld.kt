@@ -3,8 +3,11 @@ package de.jackbeback.pocketquest.ui
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.VectorConverter
 import androidx.compose.runtime.Stable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
@@ -14,6 +17,7 @@ import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.RollBreakdown
+import kotlinx.coroutines.CompletableDeferred
 
 /** doc15/doc10: "Downed, not dead" — a 0-HP entity is still on the board, revivable, so it stays
  * visible at reduced contrast rather than fading to fully invisible (which today's engine would
@@ -83,6 +87,14 @@ class TelegraphVisual(startPos: Offset, val text: String, val color: Color) {
  * Advantage/Disadvantage die (null under Normal mode) — when present, [RollCard] shows both dice
  * side by side with [result] highlighted as the one that counted.
  */
+/**
+ * docs/36-map-triggers.md: a trigger's [Effect.ShowMessage] beat, held here until the player taps
+ * dismiss — [dismissed] is what `Beat.play`'s suspend function awaits, giving "blocking modal" for
+ * free from the choreography player's existing sequential-beat-draining behavior, no resolver
+ * pause/resume machinery involved.
+ */
+data class PendingMessage(val text: String, val dismissed: CompletableDeferred<Unit> = CompletableDeferred())
+
 data class DiceRollOverlay(
     val id: Long,
     val title: String,
@@ -91,6 +103,9 @@ data class DiceRollOverlay(
     val breakdown: RollBreakdown,
     val succeeded: Boolean,
     val otherResult: Int? = null,
+    /** Who this roll is "against whom" — an attacker/defender pair for an attack roll, a caster/defender pair for a save (source null when nothing forced it, e.g. a status's own tick). Purely for RollCard's header portraits, never read by resolution logic. */
+    val attackerId: EntityId? = null,
+    val defenderId: EntityId? = null,
 )
 
 private fun initialCameraFocus(state: GameState, tilePx: Float): Offset {
@@ -130,6 +145,10 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
     /** 1f = normal speed, 0f = every animateTo becomes a snapTo (doc07's "fast" setting and skip). */
     var speed: Float = 1f
 
+    /** docs/36-map-triggers.md: non-null while a trigger's text box is up — see [PendingMessage]. */
+    var pendingMessage by mutableStateOf<PendingMessage?>(null)
+        private set
+
     private var nextOverlayId = 0L
     private var nextMarkerId = 0L
     private var nextDiceRollId = 0L
@@ -165,9 +184,18 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
         markers.removeAll { it.id == id }
     }
 
-    fun addDiceRoll(title: String, result: Int, target: Int, breakdown: RollBreakdown, succeeded: Boolean, otherResult: Int? = null): Long {
+    fun addDiceRoll(
+        title: String,
+        result: Int,
+        target: Int,
+        breakdown: RollBreakdown,
+        succeeded: Boolean,
+        otherResult: Int? = null,
+        attackerId: EntityId? = null,
+        defenderId: EntityId? = null,
+    ): Long {
         val id = nextDiceRollId++
-        diceRolls += DiceRollOverlay(id, title, result, target, breakdown, succeeded, otherResult)
+        diceRolls += DiceRollOverlay(id, title, result, target, breakdown, succeeded, otherResult, attackerId, defenderId)
         return id
     }
 
@@ -193,5 +221,23 @@ class VisualWorld(initial: GameState, val tilePx: Float) {
 
     fun removeTelegraph(id: Long) {
         telegraphs.remove(id)
+    }
+
+    /**
+     * docs/36-map-triggers.md: sets [pendingMessage] (the `TextBoxOverlay` composable in App.kt
+     * renders it) and suspends until [dismissMessage] completes its deferred. Skipped at
+     * `speed <= 0f` (fast-forward) — same "every hold collapses to nothing" rule every other beat's
+     * `scaled()` already follows; a modal nobody can see yet still shouldn't block the skip.
+     */
+    suspend fun showMessage(text: String) {
+        if (speed <= 0f) return
+        val message = PendingMessage(text)
+        pendingMessage = message
+        message.dismissed.await()
+        pendingMessage = null
+    }
+
+    fun dismissMessage() {
+        pendingMessage?.dismissed?.complete(Unit)
     }
 }

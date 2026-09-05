@@ -61,6 +61,8 @@ import de.jackbeback.pocketquest.core.model.Side
 import de.jackbeback.pocketquest.core.model.SpawnRole
 import de.jackbeback.pocketquest.core.model.SpawnZone
 import de.jackbeback.pocketquest.core.model.TileType
+import de.jackbeback.pocketquest.core.model.TriggerId
+import de.jackbeback.pocketquest.core.model.TriggerPlacement
 import de.jackbeback.pocketquest.core.model.WallEdge
 import de.jackbeback.pocketquest.core.model.WallHatchOsrParams
 import de.jackbeback.pocketquest.core.model.WallStyle
@@ -85,7 +87,10 @@ import de.jackbeback.pocketquest.ui.ink.InkTextField
 import de.jackbeback.pocketquest.ui.ink.InkTooltip
 import de.jackbeback.pocketquest.ui.ink.PAPER
 import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
 
 private const val TILE_PX = 32f
 // docs/23-sprite-rendering.md: :ui's composeResources tree is the one location actually bundled
@@ -95,19 +100,32 @@ private const val PARTY_SPRITE_PATH = "ui/src/commonMain/composeResources/files/
 const val PROPS_DIR = "ui/src/commonMain/composeResources/files/normalized/"
 private const val CANVAS_PADDING = 48f
 
-/** What a click currently paints. [Wall] toggles the nearest tile edge rather than a cell; [Prop] places/erases a footprint-sized piece of furniture anchored at the clicked cell. */
+/**
+ * What a click currently paints. [Wall] toggles the nearest tile edge rather than a cell; [Prop]
+ * places/erases a footprint-sized piece of furniture anchored at the clicked cell. [Trigger]
+ * (docs/36-map-triggers.md) is handled specially in `MapEditorPanel`'s own click lambda, not
+ * [paintCell] — placing/selecting one needs to open its inline effect editor, which is UI state
+ * [paintCell]'s pure `BattleMapDef -> BattleMapDef` shape has no way to touch.
+ */
 private sealed interface PaintTool {
     data class Terrain(val tile: TileType) : PaintTool
     data class Spawn(val role: SpawnRole?) : PaintTool
     object Wall : PaintTool
     data class Prop(val asset: ManifestAsset?) : PaintTool
+    object Trigger : PaintTool
 }
 
 private fun paintCell(map: BattleMapDef, pos: GridPos, tool: PaintTool): BattleMapDef = when (tool) {
     is PaintTool.Terrain -> {
         val tiles = expandTerrainRuns(map.terrain).toMutableMap()
         if (tool.tile == TileType.Floor) tiles.remove(pos) else tiles[pos] = tool.tile
-        map.copy(terrain = compressTerrainToRuns(tiles, map.width, map.height))
+        // A cell on the map's outer boundary keeps that boundary sealed either way — a Wall tile is
+        // itself already solid there, so the border WallEdge on that side would only double the line
+        // (see `wallOutlineSegments`' matching fix); a non-Wall tile needs the WallEdge back so the
+        // border stays continuous once the Wall tile that used to seal that side is painted over.
+        val boundaryEdges = boundarySidesOf(pos, map.width, map.height).map { WallEdge(pos, it) }
+        val edges = if (tool.tile == TileType.Wall) map.wallEdges - boundaryEdges.toSet() else (map.wallEdges + boundaryEdges).distinct()
+        map.copy(terrain = compressTerrainToRuns(tiles, map.width, map.height), wallEdges = edges)
     }
     is PaintTool.Spawn -> {
         val bySpawn = map.spawns.flatMap { zone -> zone.tiles.map { it to zone.role } }.toMap().toMutableMap()
@@ -121,6 +139,16 @@ private fun paintCell(map: BattleMapDef, pos: GridPos, tool: PaintTool): BattleM
         map.copy(props = placed)
     }
     PaintTool.Wall -> map
+    // Handled in MapEditorPanel's own onPaintCell lambda instead — see PaintTool.Trigger's doc comment.
+    PaintTool.Trigger -> map
+}
+
+/** Which sides of [pos] face off the [width]x[height] map — empty for any interior cell. */
+private fun boundarySidesOf(pos: GridPos, width: Int, height: Int): List<Side> = buildList {
+    if (pos.row == 0) add(Side.North)
+    if (pos.row == height - 1) add(Side.South)
+    if (pos.col == 0) add(Side.West)
+    if (pos.col == width - 1) add(Side.East)
 }
 
 private fun sideDelta(side: Side): GridPos = when (side) {
@@ -216,6 +244,10 @@ private fun descriptionFor(role: SpawnRole?): String = when (role) {
     SpawnRole.Elite -> "Elite spawn — reserved for elite-tier enemy spawns."
     SpawnRole.Boss -> "Boss spawn — reserved for boss spawns."
     SpawnRole.Objective -> "Objective — reserved for a non-combatant objective tile. No engine-side rule is wired to this role yet beyond spawn-count matching."
+    SpawnRole.LootCommon -> "Loot spawn (Common) — docs/37: reserved for a common-tier lootable container."
+    SpawnRole.LootRare -> "Loot spawn (Rare) — docs/37: reserved for a rare-tier lootable container."
+    SpawnRole.LootEpic -> "Loot spawn (Epic) — docs/37: reserved for an epic-tier lootable container."
+    SpawnRole.LootLegendary -> "Loot spawn (Legendary) — docs/37: reserved for a legendary-tier lootable container."
 }
 
 private const val WALL_DESCRIPTION =
@@ -290,6 +322,22 @@ private fun wallSegment(edge: WallEdge): Pair<Offset, Offset> {
     }
 }
 
+/** A fresh map starts fully enclosed — a `WallEdge` running the whole way around the outside, so the
+ * hatch/background rendering has a boundary line to meet from the very first tile painted, instead of
+ * floor bleeding straight into the margin until the author remembers to wall it off by hand. */
+private fun borderWallEdges(width: Int, height: Int): List<WallEdge> {
+    val edges = mutableListOf<WallEdge>()
+    for (col in 0 until width) {
+        edges += WallEdge(GridPos(col, 0), Side.North)
+        edges += WallEdge(GridPos(col, height - 1), Side.South)
+    }
+    for (row in 0 until height) {
+        edges += WallEdge(GridPos(0, row), Side.West)
+        edges += WallEdge(GridPos(width - 1, row), Side.East)
+    }
+    return edges
+}
+
 private fun GridPos.neighbor(side: Side): GridPos = when (side) {
     Side.North -> copy(row = row - 1)
     Side.South -> copy(row = row + 1)
@@ -299,12 +347,15 @@ private fun GridPos.neighbor(side: Side): GridPos = when (side) {
 
 /**
  * Derived, not authored: every side of a whole-tile [TileType.Wall] cell that borders a non-Wall
- * cell (including off the map edge, since a missing [tiles] entry already defaults to Floor) gets a
- * solid outline — this is what makes a painted Wall mass in the reference screenshot read as one
- * solid building with a clean border, without the author separately placing a `WallEdge` (the
- * "Wall (edge)" tool's thin room-divider) around every hatch region by hand. Manually placed
- * `WallEdge`s (interior thin dividers between two Floor cells) are unrelated and still drawn
- * separately from `map.wallEdges` — this never reads or writes that list.
+ * cell *within the map* gets a solid outline — this is what makes a painted Wall mass in the
+ * reference screenshot read as one solid building with a clean border, without the author separately
+ * placing a `WallEdge` (the "Wall (edge)" tool's thin room-divider) around every hatch region by
+ * hand. Manually placed `WallEdge`s (interior thin dividers between two Floor cells) are unrelated
+ * and still drawn separately from `map.wallEdges` — this never reads or writes that list, except
+ * indirectly: a side facing off the map is never outlined here, since every new map is already
+ * seeded with a `WallEdge` border (see "+ Create" below) that draws that boundary line on its own —
+ * outlining it a second time here doubled the line and broke the seamless hatch-to-margin transition
+ * at the map's edge.
  */
 private fun wallOutlineSegments(tiles: Map<GridPos, TileType>, width: Int, height: Int): List<Pair<Offset, Offset>> {
     val segments = mutableListOf<Pair<Offset, Offset>>()
@@ -314,6 +365,7 @@ private fun wallOutlineSegments(tiles: Map<GridPos, TileType>, width: Int, heigh
             if ((tiles[pos] ?: TileType.Floor) != TileType.Wall) continue
             for (side in Side.entries) {
                 val neighbor = pos.neighbor(side)
+                if (neighbor.col !in 0 until width || neighbor.row !in 0 until height) continue
                 if ((tiles[neighbor] ?: TileType.Floor) != TileType.Wall) {
                     segments += wallSegment(WallEdge(pos, side))
                 }
@@ -367,7 +419,21 @@ private fun DrawScope.drawSpawnToken(role: SpawnRole, center: Offset, radius: Fl
             }
             drawPath(path, color = Color(0xFFF9A825), style = Stroke(2f))
         }
+        // docs/37-lootable-containers.md: a filled square, not a circle/diamond — a distinct shape
+        // per doc16's own "shape/pattern carries the meaning, colour is secondary" rule — color-coded
+        // by rarity only as a secondary cue.
+        SpawnRole.LootCommon -> drawLootSquare(center, radius, Color(0xFF9E9E9E))
+        SpawnRole.LootRare -> drawLootSquare(center, radius, Color(0xFF1976D2))
+        SpawnRole.LootEpic -> drawLootSquare(center, radius, Color(0xFF7B1FA2))
+        SpawnRole.LootLegendary -> drawLootSquare(center, radius, Color(0xFFFF8F00))
     }
+}
+
+private fun DrawScope.drawLootSquare(center: Offset, radius: Float, color: Color) {
+    val side = radius * 1.3f
+    val topLeft = Offset(center.x - side / 2f, center.y - side / 2f)
+    drawRect(color.copy(alpha = 0.25f), topLeft, Size(side, side))
+    drawRect(color, topLeft, Size(side, side), style = Stroke(2f))
 }
 
 /** doc16's Map editor: terrain, edge walls, spawn zones, floor texture, and prop placement. */
@@ -409,7 +475,7 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                     var n = catalog.maps.size + 1
                     while (MapId("map$n") in catalog.maps) n++
                     val id = MapId("map$n")
-                    onCatalogChange(catalog.copy(maps = catalog.maps + (id to BattleMapDef(id = id, name = "New Map $n", width = w, height = h))))
+                    onCatalogChange(catalog.copy(maps = catalog.maps + (id to BattleMapDef(id = id, name = "New Map $n", width = w, height = h, wallEdges = borderWallEdges(w, h)))))
                     selectedId = id
                 },
             )
@@ -425,136 +491,212 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
         fun updateMap(update: (BattleMapDef) -> BattleMapDef) {
             onCatalogChange(catalog.copy(maps = catalog.maps + (map.id to update(map))))
         }
+        // docs/36-map-triggers.md: which trigger's inline effect editor is open, if any — keyed on
+        // map.id so switching maps doesn't leave a stale popup pointing at another map's trigger.
+        var editingTriggerId by remember(map.id) { mutableStateOf<TriggerId?>(null) }
 
-        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                InkLabel("NAME", modifier = Modifier.padding(end = 8.dp))
-                InkTextField(map.name, onValueChange = { updateMap { m -> m.copy(name = it) } }, modifier = Modifier.width(220.dp))
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
-                InkLabel("FLOOR TEXTURE")
-                InkSelect(
-                    selected = map.floorTexture,
-                    options = listOf(null) + AssetManifest.floorTextures.map { it.id },
-                    label = { it ?: "Plain parchment" },
-                    onSelect = { id -> updateMap { it.copy(floorTexture = id) } },
-                    modifier = Modifier.padding(start = 8.dp),
-                )
-                InkButton(
-                    "Remove Map",
-                    modifier = Modifier.padding(start = 16.dp),
-                    onClick = {
-                        onCatalogChange(catalog.copy(maps = catalog.maps - map.id))
-                        selectedId = catalog.maps.keys.firstOrNull { it != map.id }
-                    },
-                )
-            }
-            Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
-                InkLabel("WALL TEXTURE")
-                // docs/32-wall-hatch-osr-style.md: Hatch draws live (drawWallHatch, shared with
-                // :ui) — no sprite/manifest id to pick. BattleMapDef.wallStyle defaults to Hatch,
-                // matching floorTexture's "auto-applied, overridable" precedent. Osr is different
-                // (docs/33): it renders pre-baked geometry, not a live computation — see the
-                // Regenerate button below.
-                InkSelect(
-                    selected = map.wallStyle,
-                    options = WallStyle.entries,
-                    label = {
-                        when (it) {
-                            WallStyle.Flat -> "Plain (flat fill)"
-                            WallStyle.Hatch -> "Hatched"
-                            WallStyle.Osr -> "Hatched (OSR)"
-                            WallStyle.Background -> "Background image"
+        Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            // docs: MapCanvas fills this whole pane (not just the space left over below the
+            // palette) so its click hit-box matches where it's actually drawn — Compose doesn't
+            // clip a Canvas's draw to its layout bounds, so a panned/zoomed map already bled
+            // upward past a smaller box into the palette rows' area; that area looked clickable
+            // but wasn't. Palette now overlays on top instead of pushing the canvas down.
+            MapCanvas(
+                map = map,
+                tool = tool,
+                onPaintCell = { pos ->
+                    if (tool == PaintTool.Trigger) {
+                        // docs/36-map-triggers.md: click an existing trigger cell to open its
+                        // editor; click an empty cell to place a fresh one (id generated once,
+                        // here — never author-typed) and open it immediately.
+                        val existing = map.triggers.firstOrNull { it.at == pos }
+                        if (existing != null) {
+                            editingTriggerId = existing.id
+                        } else {
+                            val fresh = TriggerPlacement(id = TriggerId(java.util.UUID.randomUUID().toString()), at = pos)
+                            updateMap { it.copy(triggers = it.triggers + fresh) }
+                            editingTriggerId = fresh.id
                         }
+                    } else {
+                        updateMap { paintCell(it, pos, tool) }
+                    }
+                },
+                onToggleWall = { pos, side -> updateMap { it.copy(wallEdges = toggleWallEdge(it.wallEdges, pos, side)) } },
+                editingTriggerId = editingTriggerId,
+            )
+            val editing = map.triggers.firstOrNull { it.id == editingTriggerId }
+            if (editing != null) {
+                TriggerEditorPanel(
+                    trigger = editing,
+                    catalog = catalog,
+                    onChange = { updated -> updateMap { m -> m.copy(triggers = m.triggers.map { if (it.id == updated.id) updated else it }) } },
+                    onDelete = {
+                        updateMap { m -> m.copy(triggers = m.triggers.filterNot { it.id == editing.id }) }
+                        editingTriggerId = null
                     },
-                    onSelect = { style -> updateMap { it.copy(wallStyle = style) } },
-                    modifier = Modifier.padding(start = 8.dp),
+                    onClose = { editingTriggerId = null },
+                    modifier = Modifier.align(Alignment.CenterEnd),
                 )
-                if (map.wallStyle == WallStyle.Osr) {
-                    // docs/33-wall-hatch-osr-packing.md: painting walls never auto-regenerates —
-                    // this button (or Save, for a map that has no bake yet at all) is the only
-                    // trigger. A fresh random seed each click is the whole point: "don't like this
-                    // roll, try another."
-                    InkButton(
-                        "Regenerate Hatch",
+            }
+
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    InkLabel("NAME", modifier = Modifier.padding(end = 8.dp))
+                    InkTextField(map.name, onValueChange = { updateMap { m -> m.copy(name = it) } }, modifier = Modifier.width(220.dp))
+                }
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 12.dp)) {
+                    InkLabel("FLOOR TEXTURE")
+                    InkSelect(
+                        selected = map.floorTexture,
+                        options = listOf(null) + AssetManifest.floorTextures.map { it.id },
+                        label = { it ?: "Plain parchment" },
+                        onSelect = { id -> updateMap { it.copy(floorTexture = id) } },
                         modifier = Modifier.padding(start = 8.dp),
+                    )
+                    InkButton(
+                        "Remove Map",
+                        modifier = Modifier.padding(start = 16.dp),
                         onClick = {
-                            val tiles = expandTerrainRuns(map.terrain)
-                            val seed = Random.nextLong()
-                            val lines = generateWallHatchOsr(
-                                isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
-                                cols = 0 until map.width,
-                                rows = 0 until map.height,
-                                seed = seed,
-                                params = map.wallHatchOsrParams,
-                            )
-                            updateMap { it.copy(wallHatchOsr = lines, wallHatchOsrSeed = seed) }
+                            onCatalogChange(catalog.copy(maps = catalog.maps - map.id))
+                            selectedId = catalog.maps.keys.firstOrNull { it != map.id }
                         },
                     )
                 }
-                if (map.wallStyle == WallStyle.Background) {
-                    // docs/35-wall-background-punch-through.md: how far past the map's own edge
-                    // the tiled background still extends before stopping — resolved: bounded to
-                    // the map + a margin, not the whole pannable viewport.
-                    InkLabel("margin (tiles)", modifier = Modifier.padding(start = 12.dp, end = 4.dp))
-                    InkStepper(map.backgroundMarginTiles, min = 0, onValueChange = { updateMap { m -> m.copy(backgroundMarginTiles = it) } })
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+                    InkLabel("WALL TEXTURE")
+                    // docs/32-wall-hatch-osr-style.md: Hatch draws live (drawWallHatch, shared with
+                    // :ui) — no sprite/manifest id to pick. BattleMapDef.wallStyle defaults to Hatch,
+                    // matching floorTexture's "auto-applied, overridable" precedent. Osr is different
+                    // (docs/33): it renders pre-baked geometry, not a live computation — see the
+                    // Regenerate button below.
+                    InkSelect(
+                        selected = map.wallStyle,
+                        options = WallStyle.entries,
+                        label = {
+                            when (it) {
+                                WallStyle.Flat -> "Plain (flat fill)"
+                                WallStyle.Hatch -> "Hatched"
+                                WallStyle.Osr -> "Hatched (OSR)"
+                                WallStyle.Background -> "Background image"
+                            }
+                        },
+                        onSelect = { style -> updateMap { it.copy(wallStyle = style) } },
+                        modifier = Modifier.padding(start = 8.dp),
+                    )
+                    if (map.wallStyle == WallStyle.Osr) {
+                        // docs/33-wall-hatch-osr-packing.md: painting walls never auto-regenerates —
+                        // this button (or Save, for a map that has no bake yet at all) is the only
+                        // trigger. A fresh random seed each click is the whole point: "don't like this
+                        // roll, try another."
+                        InkButton(
+                            "Regenerate Hatch",
+                            modifier = Modifier.padding(start = 8.dp),
+                            onClick = {
+                                val tiles = expandTerrainRuns(map.terrain)
+                                val seed = Random.nextLong()
+                                val lines = generateWallHatchOsr(
+                                    isWall = { (tiles[it] ?: TileType.Floor) == TileType.Wall },
+                                    cols = 0 until map.width,
+                                    rows = 0 until map.height,
+                                    seed = seed,
+                                    params = map.wallHatchOsrParams,
+                                )
+                                updateMap { it.copy(wallHatchOsr = lines, wallHatchOsrSeed = seed) }
+                            },
+                        )
+                    }
+                    if (map.wallStyle == WallStyle.Background) {
+                        // docs/35-wall-background-punch-through.md: how far past the map's own edge
+                        // the tiled background still extends before stopping — resolved: bounded to
+                        // the map + a margin, not the whole pannable viewport.
+                        InkLabel("margin (tiles)", modifier = Modifier.padding(start = 12.dp, end = 4.dp))
+                        InkStepper(map.backgroundMarginTiles, min = 0, onValueChange = { updateMap { m -> m.copy(backgroundMarginTiles = it) } })
+                    }
                 }
-            }
-            if (map.wallStyle == WallStyle.Osr) {
-                OsrHatchParamsEditor(
-                    params = map.wallHatchOsrParams,
-                    onChange = { params -> updateMap { it.copy(wallHatchOsrParams = params) } },
-                )
-            }
-            InkLabel("TERRAIN", modifier = Modifier.padding(top = 8.dp))
-            Row {
-                listOf(TileType.Floor, TileType.Wall, TileType.Difficult, TileType.Hazard).forEach { t ->
-                    TerrainToolSwatch(t, selected = (tool as? PaintTool.Terrain)?.tile == t, onClick = { tool = PaintTool.Terrain(t) })
+                if (map.wallStyle == WallStyle.Osr) {
+                    OsrHatchParamsEditor(
+                        params = map.wallHatchOsrParams,
+                        onChange = { params -> updateMap { it.copy(wallHatchOsrParams = params) } },
+                    )
                 }
-                WallToolSwatch(selected = tool == PaintTool.Wall, onClick = { tool = PaintTool.Wall })
-            }
-            InkLabel("SPAWN ZONE", modifier = Modifier.padding(top = 8.dp))
-            Row {
-                SpawnToolSwatch(null, selected = tool.let { it is PaintTool.Spawn && it.role == null }, onClick = { tool = PaintTool.Spawn(null) })
-                SpawnRole.entries.forEach { role ->
-                    SpawnToolSwatch(role, selected = (tool as? PaintTool.Spawn)?.role == role, onClick = { tool = PaintTool.Spawn(role) })
+                InkLabel("TERRAIN", modifier = Modifier.padding(top = 8.dp))
+                Row {
+                    listOf(TileType.Floor, TileType.Wall, TileType.Difficult, TileType.Hazard).forEach { t ->
+                        TerrainToolSwatch(t, selected = (tool as? PaintTool.Terrain)?.tile == t, onClick = { tool = PaintTool.Terrain(t) })
+                    }
+                    WallToolSwatch(selected = tool == PaintTool.Wall, onClick = { tool = PaintTool.Wall })
                 }
-            }
-            InkLabel("PROPS", modifier = Modifier.padding(top = 8.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                val currentAsset = (tool as? PaintTool.Prop)?.asset
-                InkSelect(
-                    selected = currentAsset,
-                    options = listOf<ManifestAsset?>(null) + AssetManifest.placeableProps,
-                    label = { it?.let { a -> "${a.id} (${a.tilesW}x${a.tilesH})" } ?: "Erase" },
-                    onSelect = { asset -> tool = PaintTool.Prop(asset) },
-                    modifier = Modifier.width(200.dp),
-                    itemContent = { asset ->
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
-                            if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
-                            BasicText(
-                                asset?.let { "${it.id} (${it.tilesW}x${it.tilesH})" } ?: "Erase",
-                                style = TextStyle(color = INK, fontSize = 13.sp),
-                            )
-                        }
-                    },
-                )
-                if (currentAsset != null) {
-                    val bmp = remember(currentAsset.file) { SpriteLoader.load(PROPS_DIR + currentAsset.file) }
-                    if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
+                InkLabel("SPAWN ZONE", modifier = Modifier.padding(top = 8.dp))
+                Row {
+                    SpawnToolSwatch(null, selected = tool.let { it is PaintTool.Spawn && it.role == null }, onClick = { tool = PaintTool.Spawn(null) })
+                    SpawnRole.entries.forEach { role ->
+                        SpawnToolSwatch(role, selected = (tool as? PaintTool.Spawn)?.role == role, onClick = { tool = PaintTool.Spawn(role) })
+                    }
                 }
-            }
-
-            Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(top = 12.dp)) {
-                MapCanvas(
-                    map = map,
-                    tool = tool,
-                    onPaintCell = { pos -> updateMap { paintCell(it, pos, tool) } },
-                    onToggleWall = { pos, side -> updateMap { it.copy(wallEdges = toggleWallEdge(it.wallEdges, pos, side)) } },
-                )
+                InkLabel("TRIGGERS", modifier = Modifier.padding(top = 8.dp))
+                Row {
+                    TriggerToolSwatch(selected = tool == PaintTool.Trigger, onClick = { tool = PaintTool.Trigger })
+                }
+                InkLabel("PROPS", modifier = Modifier.padding(top = 8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val currentAsset = (tool as? PaintTool.Prop)?.asset
+                    InkSelect(
+                        selected = currentAsset,
+                        options = listOf<ManifestAsset?>(null) + AssetManifest.placeableProps,
+                        label = { it?.let { a -> "${a.id} (${a.tilesW}x${a.tilesH})" } ?: "Erase" },
+                        onSelect = { asset -> tool = PaintTool.Prop(asset) },
+                        modifier = Modifier.width(200.dp),
+                        itemContent = { asset ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                                if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                                BasicText(
+                                    asset?.let { "${it.id} (${it.tilesW}x${it.tilesH})" } ?: "Erase",
+                                    style = TextStyle(color = INK, fontSize = 13.sp),
+                                )
+                            }
+                        },
+                    )
+                    if (currentAsset != null) {
+                        val bmp = remember(currentAsset.file) { SpriteLoader.load(PROPS_DIR + currentAsset.file) }
+                        if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
+                    }
+                }
             }
         }
+    }
+}
+
+/**
+ * docs/36-map-triggers.md: reuses [EffectTemplateListEditor] verbatim — the exact composable
+ * `ActionDef.effects`/`StatusDef.onTurnStart` already use, since a trigger's effect list is typed
+ * exactly `List<EffectTemplate>`, nothing trigger-specific about it. Anchored over the canvas rather
+ * than a separate side panel — the trigger cell it's editing is still visible (highlighted DANGER
+ * on the canvas) right behind it.
+ */
+@Composable
+private fun TriggerEditorPanel(
+    trigger: TriggerPlacement,
+    catalog: Catalog,
+    onChange: (TriggerPlacement) -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.widthIn(min = 280.dp, max = 340.dp).background(PAPER_SHEET).padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InkLabel("TRIGGER at (${trigger.at.col}, ${trigger.at.row})", modifier = Modifier.weight(1f))
+            InkButton("Delete", onClick = onDelete)
+            InkButton("Close", modifier = Modifier.padding(start = 4.dp), onClick = onClose)
+        }
+        EffectTemplateListEditor(
+            trigger.effects,
+            catalog,
+            onChange = { effects -> onChange(trigger.copy(effects = effects)) },
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 
@@ -620,6 +762,38 @@ private fun SpawnToolSwatch(role: SpawnRole?, selected: Boolean, onClick: () -> 
     }
 }
 
+/** docs/36-map-triggers.md: a small ink star glyph, distinct from a Spawn zone's colored token and a Prop's sprite. */
+private fun DrawScope.drawTriggerGlyph(center: Offset, radius: Float, color: Color = INK) {
+    val outer = 5
+    val path = Path()
+    for (i in 0 until outer * 2) {
+        val r = if (i % 2 == 0) radius else radius * 0.4f
+        val angle = (PI / outer * i - PI / 2).toFloat()
+        val point = Offset(center.x + r * cos(angle), center.y + r * sin(angle))
+        if (i == 0) path.moveTo(point.x, point.y) else path.lineTo(point.x, point.y)
+    }
+    path.close()
+    drawPath(path, color, style = Stroke(2f))
+}
+
+@Composable
+private fun TriggerToolSwatch(selected: Boolean, onClick: () -> Unit) {
+    InkTooltip("Trigger: fires a one-shot effect list when a player-controlled character enters this cell.") {
+        Box(
+            modifier = Modifier
+                .padding(end = 4.dp)
+                .size(28.dp)
+                .background(PAPER)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawTriggerGlyph(center = Offset(size.width / 2f, size.height / 2f), radius = size.minDimension * 0.4f)
+                drawRect(INK, Offset.Zero, size, style = Stroke(if (selected) 2.5f else 1f))
+            }
+        }
+    }
+}
+
 private const val MIN_ZOOM = 0.4f
 private const val MAX_ZOOM = 4f
 
@@ -640,6 +814,7 @@ private fun MapCanvas(
     tool: PaintTool,
     onPaintCell: (GridPos) -> Unit,
     onToggleWall: (GridPos, Side) -> Unit,
+    editingTriggerId: TriggerId? = null,
 ) {
     val tiles = remember(map.terrain) { expandTerrainRuns(map.terrain) }
     val spawns = remember(map.spawns) { map.spawns.flatMap { zone -> zone.tiles.map { it to zone.role } }.toMap() }
@@ -841,6 +1016,12 @@ private fun MapCanvas(
                         drawSpawnToken(role, center, TILE_PX * 0.32f * zoom, partySprite)
                     }
                 }
+            }
+            // docs/36-map-triggers.md: an author sees exactly what a player would walk into — same
+            // "author sees what the player sees" precedent every other wall/shadow style follows.
+            for (trigger in map.triggers) {
+                val center = toScreen(Offset(trigger.at.col * TILE_PX + TILE_PX / 2f, trigger.at.row * TILE_PX + TILE_PX / 2f))
+                drawTriggerGlyph(center, TILE_PX * 0.3f * zoom, if (trigger.id == editingTriggerId) DANGER else INK)
             }
             if (tool == PaintTool.Wall) {
                 hoverPos?.let { hp ->

@@ -55,7 +55,7 @@ private fun validate(catalog: Catalog): List<String> =
         e.problems
     }
 
-private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Events, Shops, Pools, Maps, Dice, Playtest }
+private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Loot, Events, Shops, Pools, Maps, Dice, Playtest }
 
 /**
  * docs/33-wall-hatch-osr-packing.md: ensures Save never ships a map switched to [WallStyle.Osr]
@@ -178,6 +178,7 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
                 DesignerTab.Features -> FeaturePanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.AiProfiles -> AiProfilePanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Encounters -> EncounterPanel(catalog, onCatalogChange = { catalog = it })
+                DesignerTab.Loot -> LootPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Events -> EventPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Shops -> ShopPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Pools -> PoolsPanel(catalog, onCatalogChange = { catalog = it })

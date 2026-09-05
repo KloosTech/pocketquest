@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.ItemDef
+import de.jackbeback.pocketquest.core.model.Inventory
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState

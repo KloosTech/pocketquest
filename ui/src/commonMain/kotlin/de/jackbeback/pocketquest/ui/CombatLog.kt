@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.Rejection
+import de.jackbeback.pocketquest.core.model.RollBreakdown
 import de.jackbeback.pocketquest.ui.ink.ACCENT
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.FATAL
@@ -30,6 +31,14 @@ fun LogCategory.color(): Color = when (this) {
 private fun GameState.nameOf(id: EntityId, cat: Catalog): String =
     byId[id]?.let { cat.archetype(it.archetype).name } ?: "someone"
 
+/** "d20:14 +3 Str +1 Weapon" — the raw die plus every labeled [RollBreakdown] term, so a log line shows what actually made up the total instead of just the total itself. */
+private fun rollFormula(d20: Int, breakdown: RollBreakdown): String {
+    val terms = breakdown.terms.filter { it.flat != 0 }.joinToString(" ") { term ->
+        "${if (term.flat > 0) "+" else ""}${term.flat} ${term.label}"
+    }
+    return if (terms.isEmpty()) "d20:$d20" else "d20:$d20 $terms"
+}
+
 /**
  * doc15's battle log: "rendered from the GameEvent list... include the dice." Full sentences, not a
  * raw event dump — every branch here is a deliberate phrasing choice, not a `toString()`. Returns
@@ -47,7 +56,7 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
                 event.hit -> "hit"
                 else -> "miss"
             }
-            LogEntry("${name(event.attacker)} attacks ${name(event.target)}: $verdict ($total vs AC ${event.ac})", LogCategory.Info)
+            LogEntry("${name(event.attacker)} attacks ${name(event.target)}: $verdict (${rollFormula(event.d20, event.breakdown)} = $total vs AC ${event.ac})", LogCategory.Info)
         }
         is GameEvent.DamageTaken -> LogEntry("${name(event.target)} takes ${event.amount} ${event.damageType.name.lowercase()} damage.", LogCategory.Damage)
         is GameEvent.DamageRolled -> {
@@ -67,7 +76,7 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
         is GameEvent.SaveRolled -> {
             val total = event.d20 + event.mod
             val verdict = if (event.success) "succeeds" else "fails"
-            LogEntry("${name(event.target)}'s ${event.ability} save $verdict ($total vs DC ${event.dc}).", LogCategory.Info)
+            LogEntry("${name(event.target)}'s ${event.ability} save $verdict (${rollFormula(event.d20, event.breakdown)} = $total vs DC ${event.dc}).", LogCategory.Info)
         }
         is GameEvent.ConcentrationCheckRolled -> {
             val total = event.roll + event.mod
@@ -89,6 +98,12 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
         is GameEvent.EntitySpawned -> LogEntry("${cat.archetype(event.archetype).name} arrives.", LogCategory.Info)
         is GameEvent.EntityDestroyed -> LogEntry("${name(event.target)} is destroyed.", LogCategory.Death)
         is GameEvent.Fizzled -> LogEntry("${event.effect} fizzles: ${describeRejection(event.reason)}", LogCategory.Blocked)
+        // docs/36-map-triggers.md: the text box itself is the primary UI (TextBoxOverlay) — this is
+        // just a log trail so it's still readable after being dismissed.
+        is GameEvent.MessageShown -> LogEntry(event.text, LogCategory.Info)
+        // docs/37-lootable-containers.md: exploration's own openLootIfAny call site logs directly
+        // (no resolver step to hook a formatEvent call off of) — this covers the combat call site.
+        is GameEvent.LootOpened -> LogEntry("Found ${cat.lootDef(event.loot).name.ifBlank { event.loot.raw }}.", LogCategory.Info)
     }
 }
 

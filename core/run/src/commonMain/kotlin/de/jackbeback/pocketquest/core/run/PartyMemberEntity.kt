@@ -31,6 +31,7 @@ fun PartyMember.toEntity(cat: Catalog, id: EntityId = EntityId(0)): Entity {
         actor = Actor(Faction.Player, controller),
         equipment = equipment,
         features = grantedFeatures,
+        abilityBonuses = abilityBonuses,
     )
 }
 

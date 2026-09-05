@@ -3,6 +3,7 @@ package de.jackbeback.pocketquest.core.run
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EventCheck
 import de.jackbeback.pocketquest.core.model.EventChoice
+import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.RollBreakdown
 import de.jackbeback.pocketquest.core.model.RollContext
@@ -28,6 +29,18 @@ fun applyRunEffect(run: RunState, effect: RunEffect, cat: Catalog): RunState = w
     is RunEffect.DamageParty -> applyToTargets(run, effect.target) { member -> damageMember(member, effect.amount) }
     is RunEffect.HealParty -> applyToTargets(run, effect.target) { member -> healMember(member, effect.amount, cat) }
     is RunEffect.ForceCombat -> startEncounter(run, cat.encounterSpec(effect.encounter), cat)
+}
+
+/**
+ * docs/47-inventory-screen.md: a consumable `ItemDef.useEffects` item, applied via the exact same
+ * [applyRunEffect] events already use — single-use, one copy removed regardless of how many
+ * effects it carries (an item with zero `useEffects` isn't consumable; callers gate the "Use"
+ * button on that, this function doesn't re-check it). Mid-run only — [RunEffect.HealParty]/
+ * `DamageParty` target `run.party`, which doesn't exist at the Hub (no active run there yet).
+ */
+fun useItemFromInventory(run: RunState, item: ItemId, cat: Catalog): RunState {
+    val withoutItem = run.copy(inventory = run.inventory.copy(items = run.inventory.items - item))
+    return cat.itemDef(item).useEffects.fold(withoutItem) { acc, effect -> applyRunEffect(acc, effect, cat) }
 }
 
 private fun damageMember(member: PartyMember, amount: Int): PartyMember {

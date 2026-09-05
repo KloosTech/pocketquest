@@ -114,7 +114,7 @@ fun choreograph(event: GameEvent, state: GameState, cat: Catalog): List<Beat> = 
     // previously this roll was completely silent (the log line was the only trace of it).
     is GameEvent.AttackRolled -> listOf(
         Beat(Timing.Blocking) { world ->
-            world.showDiceRoll("Attack Roll", event.d20, event.ac, event.breakdown, event.hit, event.otherD20)
+            world.showDiceRoll("Attack Roll", event.d20, event.ac, event.breakdown, event.hit, event.otherD20, attackerId = event.attacker, defenderId = event.target)
         },
         Beat(Timing.Blocking) { world -> world.pulse(event.attacker, 1.3f, ATTACK_PULSE_MS) },
         // docs/30-hit-telegraph-text.md: Parallel, not Blocking — it rides alongside whatever
@@ -176,10 +176,14 @@ fun choreograph(event: GameEvent, state: GameState, cat: Catalog): List<Beat> = 
     // Same first-ever visual as AttackRolled — a save previously had no beat at all, only its log line.
     is GameEvent.SaveRolled -> listOf(
         Beat(Timing.Blocking) { world ->
-            world.showDiceRoll("${event.ability.name} Save", event.d20, event.dc, event.breakdown, event.success, event.otherD20)
+            world.showDiceRoll("${event.ability.name} Save", event.d20, event.dc, event.breakdown, event.success, event.otherD20, attackerId = event.source, defenderId = event.target)
         },
         Beat(Timing.Parallel) { world -> world.showTelegraph(event.target, if (event.success) "SAVED" else "FAILED", if (event.success) TELEGRAPH_SAVED_COLOR else TELEGRAPH_FAILED_COLOR) },
     )
+    // docs/36-map-triggers.md: the resolver itself never waits on the player — this Blocking beat's
+    // suspend fun (VisualWorld.showMessage) is what actually pauses playback, by awaiting the
+    // dismiss tap, same as every other Blocking beat pauses on its own animation/hold finishing.
+    is GameEvent.MessageShown -> listOf(Beat(Timing.Blocking) { world -> world.showMessage(event.text) })
     else -> emptyList()
 }
 
@@ -220,8 +224,17 @@ private suspend fun VisualWorld.showRedirectArc(from: EntityId, to: EntityId) {
     removeMarker(id)
 }
 
-private suspend fun VisualWorld.showDiceRoll(title: String, result: Int, target: Int, breakdown: RollBreakdown, succeeded: Boolean, otherResult: Int? = null) {
-    val id = addDiceRoll(title, result, target, breakdown, succeeded, otherResult)
+private suspend fun VisualWorld.showDiceRoll(
+    title: String,
+    result: Int,
+    target: Int,
+    breakdown: RollBreakdown,
+    succeeded: Boolean,
+    otherResult: Int? = null,
+    attackerId: EntityId? = null,
+    defenderId: EntityId? = null,
+) {
+    val id = addDiceRoll(title, result, target, breakdown, succeeded, otherResult, attackerId, defenderId)
     // Tumble duration (Dice3D.kt's own animation) plus a short hold on the settled number before
     // it's removed — both go through the same scaled() factor as every other beat's timing.
     delay((scaled(TUMBLE_MS) + scaled(DICE_ROLL_HOLD_MS.toInt())).toLong())

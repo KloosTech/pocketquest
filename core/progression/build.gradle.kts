@@ -37,6 +37,10 @@ kotlin {
             implementation(projects.core.meta)
             implementation(projects.core.run)
             implementation(projects.core.content)
+            // docs/47-inventory-screen.md: equipFromStash/unequipToStash reuse :core:rules'
+            // equip()/canEquip()/unequip() the exact same way :core:run's own equipFromInventory/
+            // unequipToInventory do (:core:run already depended on :core:rules for this).
+            implementation(projects.core.rules)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

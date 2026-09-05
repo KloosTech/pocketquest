@@ -34,6 +34,7 @@ import de.jackbeback.pocketquest.ui.ink.INK_FAINT
 import de.jackbeback.pocketquest.ui.ink.InkButton
 import de.jackbeback.pocketquest.ui.ink.InkLabel
 import de.jackbeback.pocketquest.ui.ink.InkSelect
+import de.jackbeback.pocketquest.ui.ink.InkStepper
 import de.jackbeback.pocketquest.ui.ink.InkTextField
 import de.jackbeback.pocketquest.ui.ink.PAPER
 import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
@@ -108,13 +109,66 @@ private fun StatusEditor(status: StatusDef, catalog: Catalog, onChange: (StatusD
         }
         InkTextField(status.name, onValueChange = { onChange(status.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
 
-        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("STACK POLICY") }
+        // docs/40-status-icons.md: drawn in a row above any entity carrying this status.
+        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("ICON") }
+        StatusIconPicker(status.icon, onSelect = { onChange(status.copy(icon = it)) })
+
+        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("STACK POLICY (how a fresh application merges with an existing stack)") }
         InkSelect(status.stackPolicy, StackPolicy.entries, { it.name }, { onChange(status.copy(stackPolicy = it)) })
+
+        // docs/42-status-stack-scaling.md: a different axis from STACK POLICY above — this fires
+        // every turn regardless of reapplication, not just when the status is applied again.
+        Box(modifier = Modifier.padding(top = 12.dp)) { InkLabel("STACK DECAY (lost at the end of the bearer's own turn — 0 = never decays)") }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InkStepper(status.decayStacksPerTurn, min = 0, onValueChange = { onChange(status.copy(decayStacksPerTurn = it)) })
+            InkLabel(" per turn", modifier = Modifier.padding(start = 4.dp))
+        }
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("MODIFIERS") }
         ModifierListEditor(status.modifiers, onChange = { onChange(status.copy(modifiers = it)) })
 
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("ON TURN START") }
         EffectTemplateListEditor(status.onTurnStart, catalog, onChange = { onChange(status.copy(onTurnStart = it)) })
+    }
+}
+
+/** docs/40-status-icons.md: same shape as `LootPanel.kt`'s closed/open `SpritePicker`/`ItemPanel.kt`'s `ItemIconPicker`, pointed at `AssetManifest.statusSprites` (`kind = "status"`). */
+@Composable
+private fun StatusIconPicker(selectedId: String?, onSelect: (String?) -> Unit) {
+    val options = listOf<ManifestAsset?>(null) + AssetManifest.statusSprites
+    val current = options.find { it?.id == selectedId }
+    var justImported by remember { mutableStateOf(false) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        InkSelect(
+            selected = current,
+            options = options,
+            label = { it?.id ?: "(none)" },
+            onSelect = { onSelect(it?.id) },
+            modifier = Modifier.width(200.dp),
+            itemContent = { asset ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                    if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                    BasicText(asset?.id ?: "(none)", style = TextStyle(color = INK, fontSize = 13.sp))
+                }
+            },
+        )
+        if (current != null) {
+            val bmp = remember(current.file) { SpriteLoader.load(PROPS_DIR + current.file) }
+            if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
+        }
+        InkButton(
+            "Import…",
+            modifier = Modifier.padding(start = 8.dp),
+            onClick = {
+                val source = chooseImageFile() ?: return@InkButton
+                val imported = AssetManifest.importSprite(source, kind = "status") ?: return@InkButton
+                onSelect(imported.id)
+                justImported = true
+            },
+        )
+    }
+    if (justImported) {
+        InkLabel("Imported — restart :designer:run to see it in Playtest.", modifier = Modifier.padding(top = 4.dp))
     }
 }

@@ -24,7 +24,7 @@ sealed interface GameEvent {
     /** The individual damage-dice results behind a [DamageTaken]'s final `amount` — found live: two hits with the same weapon landed for different totals and there was no way to tell dice variance from a resistance/modifier swing without this. Emitted only for a real (`RngMode.Live`) roll; `RngMode.Expected`'s averaged preview/AI-scoring rolls have no discrete dice to show. */
     @Serializable @SerialName("damageRolled") data class DamageRolled(val attacker: EntityId, val target: EntityId, val rolls: List<Int>, val modifier: Int, val damageType: DamageType) : GameEvent
     /** [breakdown]/[otherD20] (docs/22) mirror [AttackRolled.breakdown]/[AttackRolled.otherD20]. */
-    @Serializable @SerialName("saveRolled") data class SaveRolled(val target: EntityId, val ability: Ability, val d20: Int, val mod: Int, val dc: Int, val success: Boolean, val breakdown: RollBreakdown = RollBreakdown(emptyList()), val otherD20: Int? = null) : GameEvent
+    @Serializable @SerialName("saveRolled") data class SaveRolled(val target: EntityId, val ability: Ability, val d20: Int, val mod: Int, val dc: Int, val success: Boolean, val breakdown: RollBreakdown = RollBreakdown(emptyList()), val otherD20: Int? = null, val source: EntityId? = null) : GameEvent
     @Serializable @SerialName("turnStarted") data class TurnStarted(val who: EntityId, val round: Int) : GameEvent
     @Serializable @SerialName("turnEnded") data class TurnEnded(val who: EntityId) : GameEvent
     @Serializable @SerialName("resourcesReset") data class ResourcesReset(val who: EntityId, val ap: Int, val mana: Int) : GameEvent
@@ -72,4 +72,10 @@ sealed interface GameEvent {
 
     /** doc17-engine-gaps.md 3.1: [Effect.DestroyEntity]'s event. */
     @Serializable @SerialName("entityDestroyed") data class EntityDestroyed(val target: EntityId) : GameEvent
+
+    /** docs/36-map-triggers.md: [Effect.ShowMessage]'s event — Director.kt turns this into a blocking text-box Beat. */
+    @Serializable @SerialName("messageShown") data class MessageShown(val text: String) : GameEvent
+
+    /** docs/37-lootable-containers.md: a lootable container opened — drives a log line and a sprite swap; the actual item grant is deferred to `finishEncounter`. */
+    @Serializable @SerialName("lootOpened") data class LootOpened(val at: GridPos, val loot: LootId) : GameEvent
 }

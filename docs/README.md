@@ -50,6 +50,17 @@ Game design and product layer:
 | [33-wall-hatch-osr-packing.md](33-wall-hatch-osr-packing.md) | Replaces the OSR hatch's scatter algorithm with a packed line-growth generator, baked into the map |
 | [34-wall-hatch-osr-configurable-params.md](34-wall-hatch-osr-configurable-params.md) | Every OSR hatch generator knob (group size, density, angle, etc.) exposed as an editable per-map parameter |
 | [35-wall-background-punch-through.md](35-wall-background-punch-through.md) | A fourth wall style: a shared tiled background image, with Wall cells left unpainted to reveal it |
+| [36-map-triggers.md](36-map-triggers.md) | Author-placed, one-shot per-cell triggers: generic effect list (message, damage, heal, spawn), fires for player-controlled movement in both exploration and combat |
+| [37-lootable-containers.md](37-lootable-containers.md) | Reusable LootDef containers placed at rarity-tier spawn tiles, opened by walking onto them, replacing the old auto-granted per-encounter loot list |
+| [38-loot-reveal-screen.md](38-loot-reveal-screen.md) | Post-battle screen: stacked opened chests, tap to spin a slot-machine reel down to the item rolled; single-weighted-pick loot tables, capacity checked per-reveal |
+| [39-corpse-movement.md](39-corpse-movement.md) | Fixes a dead entity permanently blocking its own tile — new `GameState.blockingOccupancy` respects `Entity.blocksMovement`, flipped off/on by `dealDamage`/`heal` |
+| [40-status-icons.md](40-status-icons.md) | `StatusDef.icon`, authored in the Status tab, drawn as a deduplicated row above any entity carrying that status |
+| [41-status-duration-and-ability-mods.md](41-status-duration-and-ability-mods.md) | `Expiry.Turns(n)` authoring shape, a new `RemoveStatus` effect template, and confirmation that attack/save ability modifiers already derive from the caster |
+| [42-status-stack-scaling.md](42-status-stack-scaling.md) | `DealDamage.perStack` (scales off the ticking status's own stack count via a new `STATUS_STACKS_SLOT`) and `StatusDef.decayStacksPerTurn` (loses stacks at end of turn, independent of StackPolicy) — Bleed |
+| [43-status-inspect-and-corner-badge.md](43-status-inspect-and-corner-badge.md) | Inspect panel shows the status icon, stack count, and auto-generated mechanical text (`describeStatus`); Board's status badge moves from centered-above to the token's top-right corner |
+| [44-end-turn-guard.md](44-end-turn-guard.md) | Fixes a stale/spammed "End Turn" click skipping an enemy's entire turn — `Effect.EndTurn`'s handler now no-ops if the ending entity isn't actually the active one |
+| [45-ai-move-budget-range-cap.md](45-ai-move-budget-range-cap.md) | Fixes the AI's `Approach`/`Retreat` move budget to respect the move action's own authored range (matching `legalTargets`), not just `speedTiles`/AP — root cause of enemies never acting |
+| [46-android-app-shell.md](46-android-app-shell.md) | First installable Android build: new `:androidApp` module, a minimal top-level nav stack (`Screen`/`NavController`/`PlatformBackHandler`), Splash + Settings screens, bundled-catalog loading for Android |
 
 Not yet written: 14 (UI shell).
 

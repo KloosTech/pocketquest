@@ -31,11 +31,10 @@ import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EncounterId
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EnemySpawn
-import de.jackbeback.pocketquest.core.model.ItemDef
-import de.jackbeback.pocketquest.core.model.LootEntry
+import de.jackbeback.pocketquest.core.model.LootDef
+import de.jackbeback.pocketquest.core.model.LootSpawn
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.SpawnRole
-import kotlin.math.roundToInt
 import de.jackbeback.pocketquest.ui.ink.DANGER
 import de.jackbeback.pocketquest.ui.ink.INK
 import de.jackbeback.pocketquest.ui.ink.INK_FAINT
@@ -174,52 +173,57 @@ private fun EncounterEditor(encounter: EncounterSpec, catalog: Catalog, onChange
             InkStepper(encounter.goldMax, min = encounter.goldMin, onValueChange = { onChange(encounter.copy(goldMax = it)) })
         }
 
+        // docs/37-lootable-containers.md: replaces the old auto-granted item+chance list — which
+        // LootDef containers fill which rarity-tier spawn tiles, mirroring ENEMIES above exactly.
         Box(modifier = Modifier.padding(top = 16.dp)) {
-            InkLabel("LOOT (docs/11: each entry rolled independently by its own chance)")
+            InkLabel("LOOT SPAWNS (rarity-tier containers — authored in the Loot tab)")
         }
-        val items = catalog.items.values.toList()
-        encounter.loot.forEachIndexed { index, entry ->
-            LootEntryRow(
-                entry = entry,
-                items = items,
-                onChange = { updated -> onChange(encounter.copy(loot = encounter.loot.toMutableList().also { it[index] = updated })) },
-                onRemove = { onChange(encounter.copy(loot = encounter.loot.filterIndexed { i, _ -> i != index })) },
+        val lootDefs = catalog.loot.values.toList()
+        encounter.lootSpawns.forEachIndexed { index, spawn ->
+            LootSpawnRow(
+                spawn = spawn,
+                lootDefs = lootDefs,
+                onChange = { updated -> onChange(encounter.copy(lootSpawns = encounter.lootSpawns.toMutableList().also { it[index] = updated })) },
+                onRemove = { onChange(encounter.copy(lootSpawns = encounter.lootSpawns.filterIndexed { i, _ -> i != index })) },
             )
         }
-        if (items.isEmpty()) {
-            BasicText("No items in the working catalog.", style = TextStyle(color = DANGER, fontSize = 12.sp), modifier = Modifier.padding(top = 4.dp))
+        if (lootDefs.isEmpty()) {
+            BasicText("No loot containers in the working catalog — add one in the Loot tab.", style = TextStyle(color = DANGER, fontSize = 12.sp), modifier = Modifier.padding(top = 4.dp))
         } else {
             InkButton(
-                "+ Add Loot Entry",
+                "+ Add Loot Spawn",
                 modifier = Modifier.padding(top = 4.dp),
-                onClick = { onChange(encounter.copy(loot = encounter.loot + LootEntry(items.first().id))) },
+                onClick = { onChange(encounter.copy(lootSpawns = encounter.lootSpawns + LootSpawn(lootDefs.first().id, SpawnRole.LootCommon))) },
             )
         }
     }
 }
 
+private val LOOT_ROLES = listOf(SpawnRole.LootCommon, SpawnRole.LootRare, SpawnRole.LootEpic, SpawnRole.LootLegendary)
+
 @Composable
-private fun LootEntryRow(entry: LootEntry, items: List<ItemDef>, onChange: (LootEntry) -> Unit, onRemove: () -> Unit) {
+private fun LootSpawnRow(spawn: LootSpawn, lootDefs: List<LootDef>, onChange: (LootSpawn) -> Unit, onRemove: () -> Unit) {
     Row(modifier = Modifier.padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        if (items.isEmpty()) {
-            BasicText(entry.item.raw, style = TextStyle(color = DANGER, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
+        if (lootDefs.isEmpty()) {
+            BasicText(spawn.loot.raw, style = TextStyle(color = DANGER, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
         } else {
             InkSelect(
-                selected = items.find { it.id == entry.item } ?: items.first(),
-                options = items,
-                label = { it.name },
-                onSelect = { onChange(entry.copy(item = it.id)) },
+                selected = lootDefs.find { it.id == spawn.loot } ?: lootDefs.first(),
+                options = lootDefs,
+                label = { it.name.ifBlank { it.id.raw } },
+                onSelect = { onChange(spawn.copy(loot = it.id)) },
                 modifier = Modifier.padding(end = 8.dp),
             )
         }
-        BasicText("Chance:", style = TextStyle(color = INK, fontSize = 12.sp), modifier = Modifier.padding(end = 8.dp))
-        InkStepper(
-            (entry.chance * 100).roundToInt(),
-            min = 0,
-            onValueChange = { onChange(entry.copy(chance = it.coerceIn(0, 100) / 100.0)) },
+        InkSelect(
+            selected = spawn.role,
+            options = LOOT_ROLES,
+            label = { it.name },
+            onSelect = { onChange(spawn.copy(role = it)) },
+            modifier = Modifier.padding(end = 8.dp),
         )
-        BasicText("%", style = TextStyle(color = INK_FAINT, fontSize = 12.sp), modifier = Modifier.padding(start = 4.dp, end = 8.dp))
-        InkButton("Remove", onClick = onRemove)
+        InkStepper(spawn.count, min = 1, onValueChange = { onChange(spawn.copy(count = it)) })
+        InkButton("Remove", modifier = Modifier.padding(start = 8.dp), onClick = onRemove)
     }
 }
 

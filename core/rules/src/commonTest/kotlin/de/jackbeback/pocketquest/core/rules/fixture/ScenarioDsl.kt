@@ -234,6 +234,7 @@ class ArchetypeBuilder(private val name: String) {
 
 class StatusDefBuilder(private val name: String) {
     var stackPolicy: StackPolicy = StackPolicy.Refresh
+    var decayStacksPerTurn: Int = 0
     private val mods = mutableListOf<Modifier>()
     private val onTurnStartTemplates = mutableListOf<EffectTemplate>()
     private val damageSteps = mutableListOf<DamageStep>()
@@ -255,7 +256,10 @@ class StatusDefBuilder(private val name: String) {
         healSteps += s
     }
 
-    fun build(): StatusDef = StatusDef(StatusId(name), name, stackPolicy, mods.toList(), onTurnStartTemplates.toList(), damageSteps.toList(), healSteps.toList())
+    fun build(): StatusDef = StatusDef(
+        StatusId(name), name, stackPolicy, mods.toList(), onTurnStartTemplates.toList(), damageSteps.toList(), healSteps.toList(),
+        decayStacksPerTurn = decayStacksPerTurn,
+    )
 }
 
 class ItemDefBuilder(private val name: String) {

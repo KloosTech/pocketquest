@@ -2093,6 +2093,51 @@
             "id": "background",
             "file": "sprites/background.png",
             "kind": "background"
+        },
+        {
+            "id": "gravestone",
+            "file": "sprites/gravestone_256.png",
+            "kind": "gravestone"
+        },
+        {
+            "id": "chest_close_256",
+            "file": "sprites/chest_close_256.png",
+            "kind": "character"
+        },
+        {
+            "id": "chest_open_256",
+            "file": "sprites/chest_open_256.png",
+            "kind": "character"
+        },
+        {
+            "id": "club",
+            "file": "sprites/club.png",
+            "kind": "item"
+        },
+        {
+            "id": "blood_256",
+            "file": "sprites/blood_256.png",
+            "kind": "status"
+        },
+        {
+            "id": "blood_256_2",
+            "file": "sprites/blood_256_2.png",
+            "kind": "status"
+        },
+        {
+            "id": "shield_256",
+            "file": "sprites/shield_256.png",
+            "kind": "status"
+        },
+        {
+            "id": "slice_256",
+            "file": "sprites/slice_256.png",
+            "kind": "projectile"
+        },
+        {
+            "id": "shield_256_2",
+            "file": "sprites/shield_256_2.png",
+            "kind": "projectile"
         }
     ],
     "overlays": [

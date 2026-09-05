@@ -84,7 +84,7 @@ fun EventNodeScreen(run: RunState, node: GraphNode, cat: Catalog, pools: List<Ev
                 result.checkOutcome?.let { outcome ->
                     val overlay = DiceRollOverlay(
                         id = rollTrigger,
-                        title = choice?.check?.let { it.skill?.name ?: it.ability.name } ?: "Check",
+                        title = choice?.check?.let { it.skill?.name ?: "${it.ability.name} Check" } ?: "Check",
                         result = outcome.d20,
                         target = outcome.dc,
                         breakdown = outcome.breakdown,
@@ -102,6 +102,12 @@ fun EventNodeScreen(run: RunState, node: GraphNode, cat: Catalog, pools: List<Ev
                 // Smart-cast doesn't flow choice.check's non-null-ness from the when condition into
                 // the lambdas below (forEach/onClick) — proven true by the condition, just made explicit.
                 val check = checkNotNull(choice.check)
+                // Player-reported gap: the DC screen showed a target number and modifier chips
+                // but never said WHAT was being rolled until after the fact, buried in the roll
+                // card's own title — surfaced up front here, on both the roller-pick and DC steps.
+                val checkLabel = check.skill?.name ?: "${check.ability.name} Check"
+                BasicText(checkLabel, style = TextStyle(color = INK, fontSize = 16.sp))
+                Spacer(modifier = Modifier.size(8.dp))
                 if (roller == null) {
                     BasicText("Who attempts this?", style = TextStyle(color = INK, fontSize = 14.sp))
                     Spacer(modifier = Modifier.size(8.dp))

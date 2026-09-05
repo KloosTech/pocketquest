@@ -6,6 +6,7 @@ import de.jackbeback.pocketquest.core.model.DamageType
 import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.Flag
 import de.jackbeback.pocketquest.core.model.Modifier
+import de.jackbeback.pocketquest.core.model.plus
 import de.jackbeback.pocketquest.core.model.Resistance
 import de.jackbeback.pocketquest.core.model.Slot
 import de.jackbeback.pocketquest.core.model.Stat
@@ -65,18 +66,22 @@ fun Entity.stats(cat: Catalog): Stats {
         addAll(scaled)
     }
 
+    // A champion's point-buy (abilityBonuses, zero for every non-champion entity) sits on top of
+    // the archetype baseline here, before the Add/Mul/Override modifier pipeline below runs — it's
+    // part of the entity's own baseline, not a modifier source.
+    val abilities = archetype.abilities + abilityBonuses
     val work = WorkingStats(
         maxHp = archetype.baseMaxHp,
         armorClass = archetype.baseAc,
         speedTiles = archetype.speedTiles,
         maxAp = archetype.baseMaxAp,
         maxMana = archetype.baseMaxMana,
-        str = archetype.abilities.str,
-        dex = archetype.abilities.dex,
-        con = archetype.abilities.con,
-        int = archetype.abilities.int,
-        wis = archetype.abilities.wis,
-        cha = archetype.abilities.cha,
+        str = abilities.str,
+        dex = abilities.dex,
+        con = abilities.con,
+        int = abilities.int,
+        wis = abilities.wis,
+        cha = abilities.cha,
     )
 
     for (om in ordered) (om.modifier as? Modifier.Add)?.let { work.add(it.stat, it.value) }

@@ -8,6 +8,7 @@ import de.jackbeback.pocketquest.core.model.GameEvent
 import de.jackbeback.pocketquest.core.model.Modifier
 import de.jackbeback.pocketquest.core.model.Ref
 import de.jackbeback.pocketquest.core.model.Stat
+import de.jackbeback.pocketquest.core.model.StackPolicy
 import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.rules.fixture.Scenario
 import de.jackbeback.pocketquest.core.rules.fixture.scenario
@@ -32,13 +33,13 @@ class TurnBoundaryTest {
     }
 
     /** DSL's status() can't reference an EntityId before the scenario is built, so attach targeted expiries after. */
-    private fun withStatus(s: Scenario, onWhom: String, status: String, expiry: Expiry, source: String? = null) =
+    private fun withStatus(s: Scenario, onWhom: String, status: String, expiry: Expiry, source: String? = null, stacks: Int = 1) =
         s.state.copy(
             entities = s.state.entities.map {
                 if (it.id == s.id(onWhom)) {
                     it.copy(statuses = it.statuses + de.jackbeback.pocketquest.core.model.ActiveStatus(
                         def = StatusId(status), sourceId = source?.let { n -> s.id(n) }, linkId = null,
-                        expiry = expiry, appliedAtVersion = 0,
+                        stacks = stacks, expiry = expiry, appliedAtVersion = 0,
                     ))
                 } else it
             },
@@ -154,6 +155,20 @@ class TurnBoundaryTest {
     }
 
     @Test
+    fun endTurnForAnEntityThatIsNotActiveIsANoOp() {
+        // docs/44-end-turn-guard.md: found live — `:ui`'s "End Turn" button can queue a stale
+        // second call for the entity a prior click already advanced PAST. Without this guard, that
+        // stale call silently advances turn.activeIndex a second time, skipping the real active
+        // entity's whole turn (no chance to act at all) before it ever ran.
+        val s = twoEntityScenario()
+        // hero -> goblin already happened; a stale EndTurn(hero) arriving now must change nothing.
+        val afterHero = applyEffect(s.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        val stale = applyEffect(afterHero.state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(afterHero.state, stale.state, "a stale EndTurn for a non-active entity must not advance the turn again")
+        assertTrue(stale.events.isEmpty(), "a no-op EndTurn must emit nothing — no TurnEnded/TurnStarted for a turn that never happened")
+    }
+
+    @Test
     fun onTurnStartTicksTheNewlyActiveEntitysStatusesUsingTheOriginalCaster() {
         val s = scenario {
             archetype("dummy") { hp = 20; ap = 2 }
@@ -176,6 +191,71 @@ class TurnBoundaryTest {
             ),
             out.spawn,
         )
+    }
+
+    // --- docs/42-status-stack-scaling.md: per-stack onTurnStart damage, and end-of-turn decay ---
+
+    @Test
+    fun onTurnStartDealDamageScalesWithTheCurrentStackCount() {
+        val s = scenario {
+            archetype("dummy") { hp = 20; ap = 2 }
+            entity("healer") { archetype("dummy"); at(0, 0); hp(20); ap(2) }
+            entity("hero") { archetype("dummy"); at(1, 0); hp(20); ap(2) }
+            initiative("healer", "hero")
+            statusDef("bleed") {
+                onTurnStart(EffectTemplate.DealDamage(Ref.EachTarget, amount = 0, damageType = DamageType.Piercing, perStack = 2))
+            }
+        }
+        val state = withStatus(s, "hero", "bleed", Expiry.Permanent, source = "healer", stacks = 3)
+        val out = applyEffect(state, Effect.EndTurn(s.id("healer")), emptyMap(), s.catalog)
+        assertEquals(listOf(Effect.DealDamage(s.id("hero"), 6, DamageType.Piercing)), out.spawn)
+    }
+
+    @Test
+    fun decayReducesStacksAtTheEndOfTheBearersOwnTurn() {
+        val s = scenario {
+            archetype("dummy") { hp = 20; ap = 2 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20); ap(2) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(20); ap(2) }
+            initiative("hero", "goblin")
+            statusDef("bleed") { decayStacksPerTurn = 1 }
+        }
+        val state = withStatus(s, "hero", "bleed", Expiry.Permanent, stacks = 3)
+        val out = applyEffect(state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        val bleed = out.state.byId.getValue(s.id("hero")).statuses.single { it.def == StatusId("bleed") }
+        assertEquals(2, bleed.stacks)
+        assertTrue(out.events.contains(GameEvent.StatusApplied(s.id("hero"), StatusId("bleed"), 2, Expiry.Permanent)))
+    }
+
+    @Test
+    fun decayRemovesTheStatusEntirelyOnceStacksReachZero() {
+        val s = scenario {
+            archetype("dummy") { hp = 20; ap = 2 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20); ap(2) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(20); ap(2) }
+            initiative("hero", "goblin")
+            statusDef("bleed") { decayStacksPerTurn = 1 }
+        }
+        val state = withStatus(s, "hero", "bleed", Expiry.Permanent, stacks = 1)
+        val out = applyEffect(state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        assertTrue(out.state.byId.getValue(s.id("hero")).statuses.none { it.def == StatusId("bleed") })
+        assertTrue(out.events.contains(GameEvent.StatusExpired(s.id("hero"), StatusId("bleed"))))
+    }
+
+    @Test
+    fun decayIsIndependentOfStackPolicyAndNeverFiresWhenZero() {
+        // decayStacksPerTurn defaults to 0 — a status with no decay configured must keep its stacks
+        // across a turn boundary regardless of its StackPolicy.
+        val s = scenario {
+            archetype("dummy") { hp = 20; ap = 2 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(20); ap(2) }
+            entity("goblin") { archetype("dummy"); at(1, 0); hp(20); ap(2) }
+            initiative("hero", "goblin")
+            statusDef("shield") { stackPolicy = StackPolicy.AddStacks }
+        }
+        val state = withStatus(s, "hero", "shield", Expiry.Permanent, stacks = 3)
+        val out = applyEffect(state, Effect.EndTurn(s.id("hero")), emptyMap(), s.catalog)
+        assertEquals(3, out.state.byId.getValue(s.id("hero")).statuses.single { it.def == StatusId("shield") }.stacks)
     }
 
     // --- KNOWN_ISSUES.md #7: dead entities getting turns, empty/all-dead order ---

@@ -16,14 +16,14 @@ import de.jackbeback.pocketquest.core.rules.targeting.pathCost
 import de.jackbeback.pocketquest.core.rules.targeting.rangeInTiles
 
 /**
- * One function, three consumers: UI button greying + tooltip, AI option
- * filtering, engine execution gating — see docs/05-actions-and-effects.md.
- * Only the checks buildable with what's implemented so far: no
- * ActionAlreadyUsed (no per-turn "main used" gate yet), no BlockedByStatus
- * (no action-blocking status data), no MissingEquipment (no equip()
- * validation yet).
+ * The resource/turn-state checks from [canPerform] that need no [ActionCtx] — no target has to be
+ * picked yet to know whether the caster is downed, whether it's even their turn, or whether they
+ * have enough mana/AP for anything but a Path-targeted move (that one's true AP cost depends on
+ * the actual resolved route to a destination that doesn't exist yet — see [canPerform]'s own
+ * comment). Split out for the combat UI to gray out an unaffordable action in the grid, before the
+ * player has picked a target at all (docs: "gray out actions... when not enough resources").
  */
-fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCtx, cat: Catalog): List<Rejection> {
+fun canAffordAction(state: GameState, caster: EntityId, def: ActionDef, cat: Catalog): List<Rejection> {
     val casterEntity = state.byId[caster] ?: return listOf(Rejection.NoLegalTarget)
     val rejections = mutableListOf<Rejection>()
 
@@ -54,19 +54,36 @@ fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCt
     if (movement == null) {
         val ap = resources?.ap ?: 0
         if (ap < def.cost.apCost) rejections += Rejection.NotEnoughAp(def.cost.apCost, ap)
-    }
-    if (movement != null && def.targeting.mode != TargetMode.Path) {
+    } else if (def.targeting.mode != TargetMode.Path) {
         val ap = resources?.ap ?: 0
         if (ap < movement.tiles) rejections += Rejection.NotEnoughAp(movement.tiles, ap)
-    } else if (movement != null) {
+    }
+
+    return rejections
+}
+
+/**
+ * One function, three consumers: UI button greying + tooltip, AI option
+ * filtering, engine execution gating — see docs/05-actions-and-effects.md.
+ * Only the checks buildable with what's implemented so far: no
+ * ActionAlreadyUsed (no per-turn "main used" gate yet), no BlockedByStatus
+ * (no action-blocking status data), no MissingEquipment (no equip()
+ * validation yet).
+ */
+fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCtx, cat: Catalog): List<Rejection> {
+    val casterEntity = state.byId[caster] ?: return listOf(Rejection.NoLegalTarget)
+    val rejections = canAffordAction(state, caster, def, cat).toMutableList()
+
+    val movement = def.cost.action as? ActionCost.Movement
+    if (movement != null && def.targeting.mode == TargetMode.Path) {
         val origin = casterEntity.pos
         val point = ctx.point
         if (origin != null && point != null) {
-            val path = findPath(origin, point, state.map, state.occupancy)
+            val path = findPath(origin, point, state.map, state.blockingOccupancy)
             if (path == null) {
                 rejections += Rejection.Blocked(point)
             } else {
-                val ap = resources?.ap ?: 0
+                val ap = casterEntity.resources?.ap ?: 0
                 val cost = path.pathCost(state.map)
                 if (ap < cost) rejections += Rejection.NotEnoughAp(cost, ap)
             }

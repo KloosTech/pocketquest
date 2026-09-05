@@ -57,6 +57,14 @@ data class BattleMapDef(
      * on, matching every map authored before this field existed.
      */
     val fogOfWar: Boolean = true,
+    /**
+     * docs/36-map-triggers.md: one-shot, player-controlled-only, per-cell triggers — a generic
+     * [EffectTemplate] list (message, damage, heal, spawn, ...) resolved the same way an action's
+     * own `effects` already are. IS a rules-engine consumer (unlike `floorTexture`/`wallStyle`
+     * above) — carried onto the runtime [BattleMap] and read by both the exploration hop loop and
+     * the combat `MoveAlong` handler, same category as [fogOfWar].
+     */
+    val triggers: List<TriggerPlacement> = emptyList(),
 )
 
 /**
@@ -149,5 +157,42 @@ data class WallHatchOsrParams(
 @Serializable
 data class SpawnZone(val role: SpawnRole, val tiles: List<GridPos>)
 
+/**
+ * docs/37-lootable-containers.md: [LootCommon]/[LootRare]/[LootEpic]/[LootLegendary] are placement
+ * tiles for a lootable container (see [LootDef]/[LootPlacement]) — pooled and filled exactly like
+ * [Enemy]/[Elite]/[Boss] already are, just consumed by `EncounterSpec.lootSpawns` instead of
+ * `EncounterSpec.enemies`.
+ */
 @Serializable
-enum class SpawnRole { Party, Enemy, Elite, Boss, Objective }
+enum class SpawnRole { Party, Enemy, Elite, Boss, Objective, LootCommon, LootRare, LootEpic, LootLegendary }
+
+/**
+ * docs/37-lootable-containers.md: a reusable lootable container definition, placed at rarity-tier
+ * [SpawnZone] tiles and referenced by `EncounterSpec.lootSpawns`. [closedSprite]/[openSprite] are
+ * manifest prop ids (docs/23), resolved through the same `AssetManifest.prop` lookup [PropPlacement]
+ * rendering already uses. [table] reuses [LootEntry] verbatim — the same independent-Bernoulli-roll
+ * shape the old per-encounter loot list used, now owned by the container instead of the encounter so
+ * the same container can be reused across many encounters.
+ */
+@Serializable
+data class LootDef(
+    val id: LootId,
+    val name: String = "",
+    val closedSprite: String? = null,
+    val openSprite: String? = null,
+    val table: List<LootEntry> = emptyList(),
+)
+
+/** docs/37-lootable-containers.md: one resolved container placement in a live encounter — see [GameState.lootPlacements]. */
+@Serializable
+data class LootPlacement(val at: GridPos, val loot: LootId)
+
+/**
+ * docs/36-map-triggers.md: [id] is generated once in `:designer` at placement time (a UUID string),
+ * never author-typed — it exists purely so [GameState.firedTriggers] has something stable to track,
+ * never shown to a player. [effects] is exactly the same authored vocabulary [ActionDef.effects]
+ * already uses — `Ref.Caster` resolves to whichever entity stepped on the trigger, `Ref.EachTarget`
+ * to the whole living player party (see `core/rules/Triggers.kt`).
+ */
+@Serializable
+data class TriggerPlacement(val id: TriggerId, val at: GridPos, val effects: List<EffectTemplate> = emptyList())

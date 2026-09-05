@@ -35,4 +35,6 @@ data class Entity(
     val blocksMovement: Boolean = true,
     /** One LinkId per entity at a time — starting a new one ends the previous, see docs/03-modifiers-and-status.md. */
     val concentrating: LinkId? = null,
+    /** A champion's 2-point ability-score point-buy, spent once at creation (see `ChampionRecord.abilityBonuses`). Zero for every non-champion entity. */
+    val abilityBonuses: AbilityScores = AbilityScores.ZERO,
 )

@@ -1,5 +1,10 @@
 package de.jackbeback.pocketquest.ui
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
@@ -8,13 +13,16 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculatePan
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -46,9 +54,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
@@ -58,6 +69,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.TextMeasurer
@@ -86,10 +98,14 @@ import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.LootId
+import de.jackbeback.pocketquest.core.model.LootPlacement
 import de.jackbeback.pocketquest.core.model.PreviewResult
 import de.jackbeback.pocketquest.core.model.PropLayer
+import de.jackbeback.pocketquest.core.model.Rejection
 import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.Side
+import de.jackbeback.pocketquest.core.model.StatusId
 import de.jackbeback.pocketquest.core.model.TargetMode
 import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.WallEdge
@@ -97,11 +113,15 @@ import de.jackbeback.pocketquest.core.model.WallStyle
 import de.jackbeback.pocketquest.ui.assets.GameAssetManifest
 import de.jackbeback.pocketquest.ui.assets.GameSpriteLoader
 import de.jackbeback.pocketquest.core.rules.action.allActions
+import de.jackbeback.pocketquest.core.rules.action.canAffordAction
 import de.jackbeback.pocketquest.core.rules.action.perform
 import de.jackbeback.pocketquest.core.rules.action.preview
 import de.jackbeback.pocketquest.core.rules.beginCombat
+import de.jackbeback.pocketquest.core.rules.CombatOutcome
 import de.jackbeback.pocketquest.core.rules.combatOutcome
+import de.jackbeback.pocketquest.core.rules.fireTriggerIfAny
 import de.jackbeback.pocketquest.core.rules.moveEntityTo
+import de.jackbeback.pocketquest.core.rules.openLootIfAny
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import de.jackbeback.pocketquest.core.rules.resolver.StepResult
 import de.jackbeback.pocketquest.core.rules.resolver.run as runResolver
@@ -127,7 +147,8 @@ private const val TILE_PX = 48f
 
 /** doc16: "integer scale factors" keep pixel art crisp — pan/zoom snaps to these steps, never a free/fractional value. */
 const val MIN_ZOOM = 1
-const val MAX_ZOOM = 4
+/** Mobile touchscreens get 2 extra zoom-in steps over desktop's mouse/trackpad precision — see actuals per platform. */
+expect val MAX_ZOOM: Int
 
 /** doc15's "comfortable inner rectangle" — the active entity may roam this middle fraction of the viewport before the camera nudges to keep it in view. */
 private const val CAMERA_DEAD_ZONE_MARGIN = 0.2f
@@ -175,6 +196,8 @@ private fun TurnOrderStrip(
     sprites: Map<EntityId, ImageBitmap>,
     onSelectEntity: (EntityId) -> Unit,
     onOpenLog: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenInventory: () -> Unit,
     threatOverlayOn: Boolean,
     onToggleThreat: () -> Unit,
     modifier: Modifier = Modifier,
@@ -247,7 +270,18 @@ private fun TurnOrderStrip(
                 }
             }
         }
-        InkButton("☰", onClick = onOpenLog)
+        // The log button now opens a small context menu (Battle Log / Settings) instead of
+        // jumping straight to the log — Settings is the only way to reach an in-run "End
+        // Campaign" action (restarting a campaign for testing otherwise means force-quitting).
+        var menuOpen by remember { mutableStateOf(false) }
+        Box {
+            InkButton("☰", onClick = { menuOpen = true })
+            DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
+                DropdownMenuItem(text = { BasicText("Battle Log", style = TextStyle(color = INK, fontSize = 14.sp)) }, onClick = { menuOpen = false; onOpenLog() })
+                DropdownMenuItem(text = { BasicText("Inventory", style = TextStyle(color = INK, fontSize = 14.sp)) }, onClick = { menuOpen = false; onOpenInventory() })
+                DropdownMenuItem(text = { BasicText("Settings", style = TextStyle(color = INK, fontSize = 14.sp)) }, onClick = { menuOpen = false; onOpenSettings() })
+            }
+        }
     }
 }
 
@@ -269,7 +303,15 @@ private const val PARTY_BAR_COMPACT_BAR_HEIGHT_DP = 14
  * way to reach Inspect, not a replacement for it.
  */
 @Composable
-private fun PartyBar(state: GameState, catalog: Catalog, onEntityClick: (EntityId) -> Unit, modifier: Modifier = Modifier) {
+private fun PartyBar(
+    state: GameState,
+    catalog: Catalog,
+    onEntityClick: (EntityId) -> Unit,
+    activeEntityId: EntityId?,
+    resourceBounce: ResourceBounce?,
+    onBounceConsumed: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val party = state.entities.filter { it.actor?.faction == Faction.Player }
     Row(
         modifier = modifier.fillMaxWidth().background(PAPER_SHEET).padding(horizontal = 12.dp, vertical = 6.dp),
@@ -277,6 +319,21 @@ private fun PartyBar(state: GameState, catalog: Catalog, onEntityClick: (EntityI
     ) {
         party.forEach { entity ->
             val s = entity.stats(catalog)
+            // Only the active entity's own column ever bounces — it's the only one with a tappable
+            // action grid right now, so it's the only one a "can't afford this" tap could be about.
+            val bounceHere = if (entity.id == activeEntityId) resourceBounce else null
+            val apScale = remember(entity.id) { Animatable(1f) }
+            val manaScale = remember(entity.id) { Animatable(1f) }
+            LaunchedEffect(bounceHere) {
+                val target = when (bounceHere) {
+                    ResourceBounce.Ap -> apScale
+                    ResourceBounce.Mana -> manaScale
+                    null -> return@LaunchedEffect
+                }
+                target.animateTo(1.3f, tween(120))
+                target.animateTo(1f, tween(120))
+                onBounceConsumed()
+            }
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -292,16 +349,19 @@ private fun PartyBar(state: GameState, catalog: Catalog, onEntityClick: (EntityI
                 entity.resources?.let { resources ->
                     Spacer(modifier = Modifier.size(2.dp))
                     StatBar(
-                        "Mp", resources.mana, s.maxMana, MP_BAR_COLOR, modifier = Modifier.fillMaxWidth(),
+                        "Mp", resources.mana, s.maxMana, MP_BAR_COLOR, modifier = Modifier.fillMaxWidth().scale(manaScale.value),
                         barHeight = PARTY_BAR_COMPACT_BAR_HEIGHT_DP.dp, valueTextSize = 9.sp,
                     )
                     Spacer(modifier = Modifier.size(2.dp))
-                    BasicText("AP ${resources.ap}/${s.maxAp}", style = TextStyle(color = INK_FAINT, fontSize = 10.sp))
+                    ActionPointsRow(resources.ap, s.maxAp, dotSize = 6.dp, modifier = Modifier.scale(apScale.value))
                 }
             }
         }
     }
 }
+
+/** Which resource an unaffordable-action tap couldn't cover — see [ActionGrid]'s disabled-tap path. */
+private enum class ResourceBounce { Ap, Mana }
 
 private const val AC_BADGE_SIZE_DP = 44
 private const val INSPECT_SPRITE_SIZE_DP = 110
@@ -360,6 +420,22 @@ private fun StatBar(
     }
 }
 
+/** "Actions" label + one dot per AP point — green for available, gray for already-spent — replacing the old plain "AP x/y" text (HP/mana already got the StatBar treatment, AP was the one holdout). */
+@Composable
+private fun ActionPointsRow(current: Int, max: Int, dotSize: Dp, modifier: Modifier = Modifier) {
+    Row(modifier = modifier, verticalAlignment = Alignment.CenterVertically) {
+        BasicText("Actions", style = TextStyle(color = INK_FAINT, fontSize = 10.sp), modifier = Modifier.padding(end = 4.dp))
+        repeat(max) { i ->
+            Box(
+                modifier = Modifier
+                    .padding(end = 2.dp)
+                    .size(dotSize)
+                    .background(if (i < current) Color(0xFF4CAF50) else Color(0xFF9E9E9E), CircleShape),
+            )
+        }
+    }
+}
+
 @Composable
 private fun AbilityGrid(abilities: AbilityScores, modifier: Modifier = Modifier) {
     Column(modifier = modifier) {
@@ -391,7 +467,7 @@ private fun AbilityRow(labelA: String, valueA: Int, labelB: String, valueB: Int)
  * stale printed-on-the-sheet number.
  */
 @Composable
-private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog, sprite: ImageBitmap?, onBack: () -> Unit) {
+private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog, sprite: ImageBitmap?, statusIcons: Map<StatusId, ImageBitmap>, onBack: () -> Unit) {
     val entity = state.byId[entityId]
     if (entity == null) {
         BasicText("(no longer on the board)", style = TextStyle(color = INK_FAINT, fontSize = 14.sp))
@@ -427,7 +503,7 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
             val resources = entity.resources
             if (resources != null) {
                 Spacer(modifier = Modifier.size(4.dp))
-                BasicText("AP ${resources.ap}/${s.maxAp}", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
+                ActionPointsRow(resources.ap, s.maxAp, dotSize = 10.dp)
             }
             Spacer(modifier = Modifier.size(12.dp))
             AbilityGrid(s.abilities)
@@ -436,7 +512,22 @@ private fun InspectPanel(entityId: EntityId, state: GameState, catalog: Catalog,
     if (entity.statuses.isNotEmpty()) {
         Spacer(modifier = Modifier.size(8.dp))
         entity.statuses.forEach { status ->
-            BasicText("${catalog.statusDef(status.def).name} ×${status.stacks} (${status.expiry})", style = TextStyle(color = INK_FAINT, fontSize = 12.sp))
+            val def = catalog.statusDef(status.def)
+            Row(modifier = Modifier.padding(top = 4.dp)) {
+                val icon = statusIcons[status.def]
+                if (icon != null) {
+                    Canvas(modifier = Modifier.size(22.dp).padding(end = 6.dp)) {
+                        drawImage(icon, dstOffset = IntOffset.Zero, dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt()))
+                    }
+                }
+                Column {
+                    BasicText("${def.name} ×${status.stacks}", style = TextStyle(color = INK, fontSize = 13.sp))
+                    val description = describeStatus(def, catalog)
+                    if (description.isNotBlank()) {
+                        BasicText(description, style = TextStyle(color = INK_FAINT, fontSize = 11.sp))
+                    }
+                }
+            }
         }
     }
     Spacer(modifier = Modifier.size(12.dp))
@@ -468,13 +559,16 @@ private fun ActionIcon(bitmap: ImageBitmap?, modifier: Modifier = Modifier) {
  * [Selection]; the drag is only ever interpreted at [onDragEnd], no partial-drag visual.
  */
 @Composable
-private fun ActionCard(name: String, icon: ImageBitmap?, modifier: Modifier = Modifier, onTap: () -> Unit, onSwipeLeft: () -> Unit) {
+private fun ActionCard(name: String, icon: ImageBitmap?, modifier: Modifier = Modifier, enabled: Boolean = true, onTap: () -> Unit, onSwipeLeft: () -> Unit) {
     Row(
         verticalAlignment = Alignment.CenterVertically,
         modifier = modifier
+            .alpha(if (enabled) 1f else 0.4f)
             .clip(RoundedCornerShape(8.dp))
             .border(1.dp, INK_FAINT, RoundedCornerShape(8.dp))
             .background(PAPER)
+            // Still clickable when disabled — onTap is ActionGrid's disabled-tap bounce trigger in
+            // that case, not real target-picking (see ActionGrid below).
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onTap)
             .pointerInput(Unit) {
                 var dragged = 0f
@@ -491,24 +585,34 @@ private fun ActionCard(name: String, icon: ImageBitmap?, modifier: Modifier = Mo
     }
 }
 
-/** docs/25: the action bar as a max-2-per-row card grid, replacing the old single scrolling [Row] of text buttons. */
+/**
+ * docs/25: the action bar as a max-2-per-row card grid, replacing the old single scrolling [Row] of
+ * text buttons. [disabledActionIds] (computed by the caller via `canAffordAction` — no target
+ * needed for a resource-only check) grays out an action the caster can't currently afford instead
+ * of only rejecting it after a full Confirm; tapping a disabled card fires [onDisabledTap] instead
+ * of [onTap], so it never enters target-picking.
+ */
 @Composable
 private fun ActionGrid(
     actionIds: List<ActionId>,
     icons: Map<ActionId, ImageBitmap>,
     catalog: Catalog,
+    disabledActionIds: Set<ActionId>,
     onTap: (ActionId) -> Unit,
+    onDisabledTap: (ActionId) -> Unit,
     onSwipeLeft: (ActionId) -> Unit,
 ) {
     Column {
         actionIds.chunked(2).forEach { row ->
             Row(modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp)) {
                 row.forEach { actionId ->
+                    val enabled = actionId !in disabledActionIds
                     ActionCard(
                         name = catalog.actionDef(actionId).name,
                         icon = icons[actionId],
                         modifier = Modifier.weight(1f).padding(end = 8.dp),
-                        onTap = { onTap(actionId) },
+                        enabled = enabled,
+                        onTap = { if (enabled) onTap(actionId) else onDisabledTap(actionId) },
                         onSwipeLeft = { onSwipeLeft(actionId) },
                     )
                 }
@@ -594,6 +698,9 @@ private data class TexSheet(val bitmap: ImageBitmap, val cols: Int)
 
 private data class PropSprite(val bitmap: ImageBitmap, val tilesW: Int, val tilesH: Int)
 
+/** docs/37-lootable-containers.md: either bitmap may be null if that sprite id is unconfigured/fails to load — [Board] just skips drawing that container in that case, same missing-asset-is-never-a-crash contract every other sprite lookup here uses. */
+private data class LootSprites(val closed: ImageBitmap?, val open: ImageBitmap?)
+
 /**
  * Every image [Board] needs for one [BattleMap] — a floor-texture sheet plus a sprite per distinct
  * prop id actually placed on this map (not the whole catalog of placeable props, no point decoding
@@ -602,14 +709,19 @@ private data class PropSprite(val bitmap: ImageBitmap, val tilesW: Int, val tile
  * flat-color rendering for those — same "missing asset just means no image" contract
  * `GameSpriteLoader` already establishes, never a crash.
  */
-private data class MapAssets(val floor: TexSheet?, val props: Map<String, PropSprite>, val background: ImageBitmap?)
+private data class MapAssets(val floor: TexSheet?, val props: Map<String, PropSprite>, val background: ImageBitmap?, val loot: Map<LootId, LootSprites>)
 
 /**
  * Loads once per distinct [map] (`produceState`'s key in [Board]'s caller) — `:designer`'s
  * `MapEditorPanel.kt` proved this exact shape already (`floorSwatch`/prop-thumbnail lookups), this
  * is the same idea via [GameSpriteLoader]'s suspend/Compose-Resources loading instead of raw files.
+ *
+ * docs/37-lootable-containers.md: [lootIds] (every distinct `LootId` this encounter's
+ * `GameState.lootPlacements` actually references) and [catalog] are needed to resolve each
+ * container's `closedSprite`/`openSprite` — [lootIds] is fixed for the life of one encounter (set
+ * once in `startEncounter`, same as [map] itself), so it doesn't need its own `produceState` key.
  */
-private suspend fun loadMapAssets(map: BattleMap): MapAssets {
+private suspend fun loadMapAssets(map: BattleMap, lootIds: Set<LootId>, catalog: Catalog): MapAssets {
     val manifest = GameAssetManifest.load()
     val floor = map.floorTexture?.let { id ->
         val meta = manifest.floorTexture(id) ?: return@let null
@@ -627,7 +739,13 @@ private suspend fun loadMapAssets(map: BattleMap): MapAssets {
     } else {
         null
     }
-    return MapAssets(floor, props, background)
+    val loot = lootIds.associateWith { id ->
+        val def = catalog.lootDef(id)
+        val closed = def.closedSprite?.let { manifest.prop(it) }?.let { GameSpriteLoader.load(it.file) }
+        val open = def.openSprite?.let { manifest.prop(it) }?.let { GameSpriteLoader.load(it.file) }
+        LootSprites(closed, open)
+    }
+    return MapAssets(floor, props, background, loot)
 }
 
 /**
@@ -664,6 +782,21 @@ private suspend fun loadActionIcons(actionIds: List<ActionId>, catalog: Catalog)
 }
 
 /**
+ * docs/40-status-icons.md: every [StatusDef.icon] in the whole catalog, loaded once — mirrors
+ * [loadActionIcons]'s "load every possible one up front" discipline rather than reloading as which
+ * statuses are actually active changes turn to turn.
+ */
+private suspend fun loadStatusIcons(catalog: Catalog): Map<StatusId, ImageBitmap> {
+    val manifest = GameAssetManifest.load()
+    return catalog.statuses.values.mapNotNull { status ->
+        val spriteId = status.icon ?: return@mapNotNull null
+        val meta = manifest.prop(spriteId) ?: return@mapNotNull null
+        val bitmap = GameSpriteLoader.load(meta.file) ?: return@mapNotNull null
+        status.id to bitmap
+    }.toMap()
+}
+
+/**
  * Picks a stable-but-varied sub-cell from a multi-cell texture sheet using the tile's own grid
  * position, so neighbouring cells don't all show the identical sub-image — the exact technique
  * `MapEditorPanel.kt`'s `floorSwatch`/`FloorPatch` already proved for the editor's own preview,
@@ -690,6 +823,9 @@ private fun DrawScope.drawTexturedCell(sheet: TexSheet, col: Int, row: Int, rect
 /** docs/35-wall-background-punch-through.md: the manifest id `background.png` was imported under — must match the entry `AssetManifest`/`GameAssetManifest` actually resolve. */
 const val BACKGROUND_ASSET_ID = "background"
 
+/** Drawn in place of an entity's normal sprite once it's dead (health &lt;= 0) — see [drawEntity]. Not archetype-specific: one gravestone for every dead entity, same "one shared asset, not authored per-archetype" shape [BACKGROUND_ASSET_ID] already uses. */
+const val GRAVESTONE_ASSET_ID = "gravestone"
+
 /**
  * doc07: "the grid is one Canvas, not 400 composables." Grid lines and
  * blocked tiles come from [BattleMap] (static for the battle); token
@@ -710,6 +846,8 @@ private fun Board(
     world: VisualWorld,
     colors: Map<EntityId, Color>,
     sprites: Map<EntityId, ImageBitmap>,
+    deadEntities: Set<EntityId>,
+    gravestoneSprite: ImageBitmap?,
     legalTiles: Set<GridPos>,
     threatTiles: Set<GridPos>,
     affectedTiles: Set<GridPos>,
@@ -718,6 +856,10 @@ private fun Board(
     canPan: Boolean,
     revealedTiles: Set<GridPos>,
     entityPositions: Map<EntityId, GridPos>,
+    lootPlacements: List<LootPlacement>,
+    openedLoot: Set<GridPos>,
+    entityStatuses: Map<EntityId, List<StatusId>>,
+    statusIcons: Map<StatusId, ImageBitmap>,
     onTileTap: (GridPos) -> Unit,
     onViewportSizeChanged: (Size) -> Unit,
     modifier: Modifier = Modifier,
@@ -737,25 +879,18 @@ private fun Board(
     // Canvas-local `size` the way the draw calls below do — the viewport size has to be captured
     // into ordinary Compose state via onSizeChanged instead.
     var viewportSize by remember { mutableStateOf(Size.Zero) }
+    // Breathing scale for drawActiveTurnGlow — Compose animation state (rememberInfiniteTransition)
+    // has to live in composition, not inside the Canvas draw lambda below, so it's read here and
+    // passed down as a plain Float; the draw lambda re-runs whenever this State's value changes,
+    // same mechanism every other animated value in this Canvas already relies on.
+    val glowPulse by rememberInfiniteTransition(label = "activeTurnGlow")
+        .animateFloat(0.85f, 1.15f, infiniteRepeatable(tween(700), repeatMode = RepeatMode.Reverse), label = "glowPulse")
     Canvas(
         modifier = modifier
+            .clipToBounds()
             .onSizeChanged {
                 viewportSize = it.toSize()
                 onViewportSizeChanged(viewportSize)
-            }
-            // Single-finger drag pans, two-finger pinch zooms — detectTransformGestures already
-            // gates both behind its own touch-slop, so a plain tap below that threshold never
-            // consumes the down/up pair and clickable (below) still sees and fires it normally.
-            // Zoom snaps to MIN_ZOOM..MAX_ZOOM integer steps every frame of the pinch rather than
-            // free-floating then settling — doc15's own acknowledged "feel stiffer" tradeoff for
-            // snapped steps, not a missing feature.
-            .pointerInput(canPan) {
-                if (!canPan) return@pointerInput
-                detectTransformGestures { _, pan, zoomChange, _ ->
-                    val steppedZoom = (world.zoom.targetValue * zoomChange).roundToInt().coerceIn(MIN_ZOOM, MAX_ZOOM)
-                    scope.launch { world.zoom.snapTo(steppedZoom.toFloat()) }
-                    scope.launch { world.camera.snapTo(world.camera.value - pan / world.zoom.targetValue) }
-                }
             }
             .pointerInput(Unit) {
                 awaitEachGesture {
@@ -773,22 +908,59 @@ private fun Board(
             .scrollWheelZoom(canPan) { direction ->
                 val next = (world.zoom.targetValue.roundToInt() + direction).coerceIn(MIN_ZOOM, MAX_ZOOM)
                 scope.launch { world.zoom.animateTo(next.toFloat()) }
+            }
+            // Single-finger drag pans, two-finger pinch zooms. Declared LAST (innermost) so it
+            // gets first crack at each pointer event during Compose's Main pass (bubbles
+            // innermost -> outermost) — before this, `clickable` above sat innermost and its
+            // single-pointer press tracking could steal a pinch's second finger.
+            //
+            // Hand-rolled instead of plain `detectTransformGestures`: that callback hands you
+            // `zoomChange`, the PER-FRAME ratio (~1.00-1.02 on a smooth real pinch, not a
+            // cumulative total) — has to be accumulated into a running float across the whole
+            // gesture (reset from the true current zoom at each new gesture's first down), not
+            // recomputed fresh from the already-updated value every frame.
+            //
+            // Pinch zoom is free-floating (no integer snap) per explicit request — doc16's
+            // "integer scale factors keep pixel art crisp" tradeoff no longer applies to this
+            // path; mouse-wheel zoom (scrollWheelZoom above) still steps by whole MIN_ZOOM..MAX_ZOOM
+            // increments since a wheel notch is inherently discrete anyway.
+            .pointerInput(canPan) {
+                if (!canPan) return@pointerInput
+                awaitEachGesture {
+                    awaitFirstDown(requireUnconsumed = false)
+                    var rawZoom = world.zoom.targetValue
+                    do {
+                        val event = awaitPointerEvent()
+                        val zoomChange = event.calculateZoom()
+                        val panChange = event.calculatePan()
+                        if (zoomChange != 1f || panChange != Offset.Zero) {
+                            rawZoom = (rawZoom * zoomChange).coerceIn(MIN_ZOOM.toFloat(), MAX_ZOOM.toFloat())
+                            scope.launch { world.zoom.snapTo(rawZoom) }
+                            scope.launch { world.camera.snapTo(world.camera.value - panChange / world.zoom.targetValue) }
+                            event.changes.forEach { if (it.positionChanged()) it.consume() }
+                        }
+                    } while (event.changes.any { it.pressed })
+                }
             },
     ) {
         val camera = world.camera.value
         val zoom = world.zoom.value
         drawGrid(map, mapAssets, camera, zoom)
         drawProps(map, mapAssets, PropLayer.Floor, camera, zoom)
+        // docs/37-lootable-containers.md: drawn with Floor-layer props — a container sits on the
+        // ground, same z-order a rug/floor prop would.
+        drawLoot(lootPlacements, openedLoot, mapAssets, camera, zoom)
         threatTiles.forEach { pos -> drawThreatHatch(pos, camera, zoom) }
         legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
         affectedTiles.forEach { pos -> drawAffectedTile(pos, camera, zoom) }
-        activeTurnTile?.let { pos -> drawActiveTurnTile(pos, camera, zoom) }
+        activeTurnTile?.let { pos -> drawActiveTurnGlow(pos, camera, zoom, glowPulse) }
         selectedTile?.let { pos -> drawSelectedTile(pos, camera, zoom) }
         drawProps(map, mapAssets, PropLayer.Object, camera, zoom)
         world.entities.forEach { (id, entity) ->
             val pos = entityPositions[id]
             if (map.fogOfWar && pos != null && pos !in revealedTiles) return@forEach
-            drawEntity(entity, colors[id] ?: Color.Gray, sprites[id], camera, zoom)
+            drawEntity(entity, colors[id] ?: Color.Gray, sprites[id], gravestoneSprite, id in deadEntities, camera, zoom)
+            drawStatusRow(entity, entityStatuses[id] ?: emptyList(), statusIcons, camera, zoom)
         }
         world.projectiles.values.forEach { projectile ->
             drawProjectile(projectile, camera, zoom)
@@ -804,6 +976,22 @@ private fun Board(
         }
         drawProps(map, mapAssets, PropLayer.Overhead, camera, zoom)
         drawFogOfWar(map, revealedTiles, camera, zoom)
+    }
+}
+
+/** docs/37-lootable-containers.md: [closedSprite][LootDef.closedSprite] until [openedLoot] contains a placement's position, then [openSprite][LootDef.openSprite] — a pure function of state, no animation. Skips a placement entirely if its sprite failed to load/isn't configured, same missing-asset contract [drawProps] already follows. */
+private fun DrawScope.drawLoot(placements: List<LootPlacement>, openedLoot: Set<GridPos>, mapAssets: MapAssets?, camera: Offset, zoom: Float) {
+    val assets = mapAssets ?: return
+    val screenTile = TILE_PX * zoom
+    placements.forEach { placement ->
+        val sprites = assets.loot[placement.loot] ?: return@forEach
+        val bitmap = (if (placement.at in openedLoot) sprites.open else sprites.closed) ?: return@forEach
+        val topLeft = worldToScreen(Offset(placement.at.col * TILE_PX, placement.at.row * TILE_PX), camera, zoom, size)
+        drawImage(
+            bitmap,
+            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
+            dstSize = IntSize(screenTile.roundToInt(), screenTile.roundToInt()),
+        )
     }
 }
 
@@ -974,9 +1162,14 @@ private fun GridPos.neighbor(side: Side): GridPos = when (side) {
 
 /**
  * Derived, not authored — same as `:designer`'s `MapEditorPanel.kt`'s `wallOutlineSegments`: every
- * side of a whole-tile [TileType.Wall] cell bordering a non-Wall cell gets a solid outline, so a
- * painted Wall mass reads as one solid building with a clean border instead of needing a `WallEdge`
- * hand-placed around every hatch region. Culled to the visible [cols]/[rows] like `drawWallHatch`.
+ * side of a whole-tile [TileType.Wall] cell bordering a non-Wall cell *within the map* gets a solid
+ * outline, so a painted Wall mass reads as one solid building with a clean border instead of needing
+ * a `WallEdge` hand-placed around every hatch region. A side facing off the map is never outlined
+ * here — every new map is seeded with a `WallEdge` border (see `MapEditorPanel`'s "+ Create") that
+ * already draws that boundary line, and `map.tileAt` treating an out-of-bounds neighbor as Floor
+ * used to double it with a second, redundant outline right on top, breaking the seamless hatch
+ * transition into the margin background beyond the map's edge. Culled to the visible [cols]/[rows]
+ * like `drawWallHatch`.
  */
 private fun wallOutlineSegments(map: BattleMap, cols: IntRange, rows: IntRange): List<Pair<Offset, Offset>> {
     val segments = mutableListOf<Pair<Offset, Offset>>()
@@ -985,7 +1178,9 @@ private fun wallOutlineSegments(map: BattleMap, cols: IntRange, rows: IntRange):
             val pos = GridPos(col, row)
             if (map.tileAt(pos) != TileType.Wall) continue
             for (side in Side.entries) {
-                if (map.tileAt(pos.neighbor(side)) != TileType.Wall) segments += wallSegment(WallEdge(pos, side))
+                val neighbor = pos.neighbor(side)
+                if (!map.inBounds(neighbor)) continue
+                if (map.tileAt(neighbor) != TileType.Wall) segments += wallSegment(WallEdge(pos, side))
             }
         }
     }
@@ -1015,16 +1210,21 @@ private fun DrawScope.drawAffectedTile(pos: GridPos, camera: Offset, zoom: Float
 }
 
 /**
- * The tile the active player-controlled entity stands on — same green as [TurnOrderStrip]'s
- * active-token ring, border only (no fill), so it never gets confused with
- * [drawSelectedTile]'s solid fill+border "confirmed target" meaning if both happen to land on the
- * same tile. Only ever passed for a player's own turn — an active enemy gets no board highlight
- * (matches [TurnOrderStrip], which also only greens a player token).
+ * A pulsing gold glow centered behind whoever's turn it is — player or enemy (the old version was a
+ * thin green tile outline, easy to miss, and player-only; "hard to notice whose turn it is" applies
+ * just as much to an enemy's turn). Drawn BEFORE the entity sprite loop in [Board]'s `Canvas` so it
+ * sits behind the sprite, not on top of it. [pulse] is a `[0.85, 1.15]`-ish breathing scale factor
+ * driven by a `rememberInfiniteTransition` in [Board] — Compose animation state has to live in
+ * composition, not inside this `DrawScope` lambda, so it's threaded in as a plain `Float`.
  */
-private fun DrawScope.drawActiveTurnTile(pos: GridPos, camera: Offset, zoom: Float) {
-    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
-    val tileSize = Size(TILE_PX * zoom, TILE_PX * zoom)
-    drawRect(color = Color(0xFF2E7D32), topLeft = topLeft, size = tileSize, style = Stroke(width = 3f))
+private fun DrawScope.drawActiveTurnGlow(pos: GridPos, camera: Offset, zoom: Float, pulse: Float) {
+    val center = worldToScreen(Offset((pos.col + 0.5f) * TILE_PX, (pos.row + 0.5f) * TILE_PX), camera, zoom, size)
+    val radius = TILE_PX * zoom * 0.75f * pulse
+    drawCircle(
+        brush = Brush.radialGradient(colors = listOf(Color(0xFFFFD54F).copy(alpha = 0.55f), Color.Transparent), center = center, radius = radius),
+        radius = radius,
+        center = center,
+    )
 }
 
 /** The tile picked in Selection.TargetPicked, before Confirm — a solid green tint+border, deliberately not the dashed ink "Reachable" style so a confirmed-looking pick reads differently from "you could tap here." */
@@ -1079,24 +1279,60 @@ private fun DrawScope.drawFogOfWar(map: BattleMap, revealedTiles: Set<GridPos>, 
  * `TILE_PX`, so this deliberately doesn't chase doc16's "integer physical scale only" rule for these
  * assets — drawn at a fixed fraction of the tile with normal bitmap filtering instead.
  */
-private fun DrawScope.drawEntity(entity: VisualEntity, color: Color, sprite: ImageBitmap?, camera: Offset, zoom: Float) {
+/**
+ * A dead entity swaps its normal sprite for [gravestoneSprite] and draws at full opacity — the
+ * fade to [DOWNED_ALPHA] (`Director.kt`'s `GameEvent.Downed` beat) used to be the ONLY visual a
+ * corpse got ("Died carries no visual of its own"), leaving it a dim copy of its living self; a
+ * gravestone is a deliberate marker, not a fading one, so it ignores `entity.alpha` entirely.
+ * Falls back to the normal fade-y sprite/circle path when [isDead] is true but no gravestone
+ * asset loaded (e.g. still loading), same missing-asset-is-never-a-crash contract as elsewhere.
+ */
+private fun DrawScope.drawEntity(entity: VisualEntity, color: Color, sprite: ImageBitmap?, gravestoneSprite: ImageBitmap?, isDead: Boolean, camera: Offset, zoom: Float) {
     val center = worldToScreen(entity.pos.value, camera, zoom, size)
-    if (sprite != null) {
+    val useGravestone = isDead && gravestoneSprite != null
+    val drawSprite = if (useGravestone) gravestoneSprite else sprite
+    val alpha = if (useGravestone) 1f else entity.alpha.value
+    if (drawSprite != null) {
         val footprint = TILE_PX * zoom * 0.9f * entity.scale.value
         val topLeft = center - Offset(footprint / 2f, footprint / 2f)
         drawImage(
-            image = sprite,
+            image = drawSprite,
             dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
             dstSize = IntSize(footprint.roundToInt(), footprint.roundToInt()),
-            alpha = entity.alpha.value,
+            alpha = alpha,
         )
     } else {
         drawCircle(
             color = color,
             radius = TILE_PX * zoom * 0.35f * entity.scale.value,
             center = center,
-            alpha = entity.alpha.value,
+            alpha = alpha,
         )
+    }
+}
+
+/**
+ * docs/43-status-inspect-and-corner-badge.md: one icon per distinct [StatusId] currently on
+ * [entity] (deduplicated — two stacks/sources of the same status still draw one icon, not two),
+ * pinned to the top-right corner of its own cell — the first (and usually only) icon sits flush
+ * with the corner, additional ones extend leftward so the cluster still reads as "pinned to that
+ * corner" regardless of how many statuses are active. Positioned in world-space math off [entity]'s
+ * own position, same "stays correct under pan/zoom with no separate tracking" convention every
+ * other Board overlay already follows.
+ */
+private fun DrawScope.drawStatusRow(entity: VisualEntity, statuses: List<StatusId>, statusIcons: Map<StatusId, ImageBitmap>, camera: Offset, zoom: Float) {
+    val icons = statuses.distinct().mapNotNull { statusIcons[it] }
+    if (icons.isEmpty()) return
+    val center = worldToScreen(entity.pos.value, camera, zoom, size)
+    val halfTile = TILE_PX * zoom / 2f
+    val iconSize = TILE_PX * zoom * 0.32f
+    val spacing = iconSize * 0.1f
+    var right = center.x + halfTile
+    val y = center.y - halfTile
+    icons.forEach { icon ->
+        val left = right - iconSize
+        drawImage(icon, dstOffset = IntOffset(left.roundToInt(), y.roundToInt()), dstSize = IntSize(iconSize.roundToInt(), iconSize.roundToInt()))
+        right = left - spacing
     }
 }
 
@@ -1162,9 +1398,18 @@ private fun DrawScope.drawMarker(marker: Marker, camera: Offset, zoom: Float) {
  * (StepResult.AwaitingInput) is still deferred, nothing in the demo catalog ever triggers it.
  */
 @Composable
-fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -> Unit = {}) {
+fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -> Unit = {}, onOpenSettings: () -> Unit = {}, onOpenInventory: () -> Unit = {}) {
     var state by remember { mutableStateOf(initialState) }
     var ended by remember { mutableStateOf(false) }
+    // docs: a win no longer tears the encounter down immediately — the player can keep exploring
+    // the (now-safe) map to collect chests first, same free-roam movement pre-combat exploration
+    // already uses (nothing about exploreMoveTo/openLootIfAny is combat-specific). A defeat still
+    // ends immediately below; there's nothing left to explore for after a wipe.
+    var victoryPending by remember { mutableStateOf(false) }
+    // Guards runAiTurns() against running twice concurrently — belt-and-suspenders for the
+    // explicit mount-time kickoff added below, which can otherwise race the existing
+    // LaunchedEffect(state.inCombat, isHumanTurn) on the very first composition.
+    var aiTurnBusy by remember { mutableStateOf(false) }
     val world = remember { VisualWorld(initialState, TILE_PX) }
     val player = remember { AnimationPlayer(world) }
     val colors = remember(initialState) { initialState.entities.associate { it.id to colorFor(it.actor?.faction) } }
@@ -1178,11 +1423,20 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     val sprites = remember(spritesByArchetype, initialState) {
         initialState.entities.mapNotNull { e -> spritesByArchetype[e.archetype]?.let { e.id to it } }.toMap()
     }
+    // Shared across every archetype (not per-entity like spritesByArchetype above) — one asset,
+    // loaded once per encounter, same as the other one-off manifest lookups here (actionIcons/statusIcons).
+    val gravestoneSprite by produceState<ImageBitmap?>(initialValue = null) {
+        value = GameAssetManifest.load().prop(GRAVESTONE_ASSET_ID)?.let { GameSpriteLoader.load(it.file) }
+    }
     // docs/25-action-selection-ui.md: every action's icon, loaded once per catalog (the whole
     // catalog is fixed for the encounter, same reasoning as spritesByArchetype above) — not just
     // the active entity's own action set, since Details can be swiped open for any of them.
     val actionIcons by produceState<Map<ActionId, ImageBitmap>>(initialValue = emptyMap(), catalog) {
         value = loadActionIcons(catalog.actions.keys.toList(), catalog)
+    }
+    // docs/40-status-icons.md
+    val statusIcons by produceState<Map<StatusId, ImageBitmap>>(initialValue = emptyMap(), catalog) {
+        value = loadStatusIcons(catalog)
     }
     val log = remember { mutableStateListOf<LogEntry>() }
     var logOpen by remember { mutableStateOf(false) }
@@ -1196,10 +1450,15 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     var exploringSelectedId by remember { mutableStateOf<EntityId?>(null) }
     var viewportSize by remember { mutableStateOf(Size.Zero) }
     var threatOverlayOn by remember { mutableStateOf(false) }
+    // Set by a disabled ActionCard's tap (ActionGrid below); PartyBar bounces the matching AP/mana
+    // display on the active entity's own column, then clears this back to null.
+    var resourceBounce by remember { mutableStateOf<ResourceBounce?>(null) }
     val scope = rememberCoroutineScope()
     // Reloads only when the map itself changes (a new encounter), not on every state update within
     // one — floorTexture/wallHatch/props are static for the battle, same as BattleMap's terrain.
-    val mapAssets by produceState<MapAssets?>(initialValue = null, state.map) { value = loadMapAssets(state.map) }
+    val mapAssets by produceState<MapAssets?>(initialValue = null, state.map) {
+        value = loadMapAssets(state.map, state.lootPlacements.map { it.loot }.toSet(), catalog)
+    }
 
     // doc15: "a toggle that hatches every tile an enemy could reach and attack next turn" —
     // recomputed only when the toggle flips or the game state actually changes, not on every
@@ -1261,32 +1520,6 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
         world.camera.animateTo(focus)
     }
 
-    /**
-     * Exploration-mode movement (before [GameState.inCombat]) — no AP, no turn order, no
-     * resolver/perform() pipeline: [entityId] just walks the full path to [destination] one hop at
-     * a time, checking after every single hop whether an enemy just became revealed. The walk stops
-     * dead the instant that happens — the player reacts to a mid-walk ambush, not to something that
-     * already fully happened by the time they see it. `world.entities[entityId]?.pos?.animateTo`
-     * mirrors Director.kt's own `walk()` beat (private to that file, so reimplemented inline here
-     * rather than reused) — each hop's animation finishing is what paces the loop, no extra delay().
-     */
-    suspend fun exploreMoveTo(entityId: EntityId, destination: GridPos) {
-        val origin = state.byId[entityId]?.pos ?: return
-        val path = findPath(origin, destination, state.map, state.occupancy) ?: return
-        for (hop in path) {
-            world.entities[entityId]?.pos?.animateTo(hop.toOffset(TILE_PX), tween(world.scaled(180)))
-            val moved = updateEngagedEnemies(updateRevealedTiles(moveEntityTo(state, entityId, hop)))
-            state = moved
-            if (canPan) followIfNeeded(hop.toOffset(TILE_PX))
-            if (moved.inCombat) {
-                state = beginCombat(moved, catalog)
-                log.add(0, LogEntry("An enemy spots you!", LogCategory.Info))
-                exploringSelectedId = null
-                return
-            }
-        }
-    }
-
     suspend fun applyStep(result: StepResult): Boolean = when (result) {
         is StepResult.Completed -> {
             // Formatted against the PRE-update `state` — fine for entity-name resolution (archetype
@@ -1306,10 +1539,14 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             // docs/11-run-state.md's encounter handoff needs a real "combat is over" signal to call
             // finishEncounter from — nothing previously stopped the turn loop once one side was
             // wiped, so a boss kill (or a party wipe) just kept dealing out empty enemy turns forever.
-            if (!ended) {
-                state.combatOutcome()?.let {
-                    ended = true
-                    onEncounterEnd(state)
+            // Victory defers the actual handoff to the player tapping "End Stage" (bottom sheet,
+            // below) instead of firing it here — a defeat has nothing left to explore for, so it
+            // still ends immediately.
+            if (!ended && !victoryPending) {
+                when (state.combatOutcome()) {
+                    CombatOutcome.PlayerDefeat -> { ended = true; onEncounterEnd(state) }
+                    CombatOutcome.PlayerVictory -> victoryPending = true
+                    null -> Unit
                 }
             }
             true
@@ -1327,6 +1564,55 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
         }
     }
 
+    /**
+     * Exploration-mode movement (before [GameState.inCombat]) — no AP, no turn order, no
+     * resolver/perform() pipeline: [entityId] just walks the full path to [destination] one hop at
+     * a time, checking after every single hop whether an enemy just became revealed. The walk stops
+     * dead the instant that happens — the player reacts to a mid-walk ambush, not to something that
+     * already fully happened by the time they see it. `world.entities[entityId]?.pos?.animateTo`
+     * mirrors Director.kt's own `walk()` beat (private to that file, so reimplemented inline here
+     * rather than reused) — each hop's animation finishing is what paces the loop, no extra delay().
+     *
+     * docs/36-map-triggers.md: after each hop also checks [fireTriggerIfAny] — unlike the enemy-
+     * spotted check, a fired trigger doesn't stop the walk by itself; its own effects (spawning an
+     * enemy, etc.) are what can put the party into combat, checked right after via the same
+     * `moved.inCombat` early-return the enemy-spotted case already uses.
+     *
+     * docs/37-lootable-containers.md: also checks [openLootIfAny] — a pure state flip (no effects to
+     * run), so it's applied directly rather than through [applyStep]/the resolver.
+     */
+    suspend fun exploreMoveTo(entityId: EntityId, destination: GridPos) {
+        val origin = state.byId[entityId]?.pos ?: return
+        val path = findPath(origin, destination, state.map, state.blockingOccupancy) ?: return
+        for (hop in path) {
+            world.entities[entityId]?.pos?.animateTo(hop.toOffset(TILE_PX), tween(world.scaled(180)))
+            var moved = updateEngagedEnemies(updateRevealedTiles(moveEntityTo(state, entityId, hop)))
+            state = moved
+            if (canPan) followIfNeeded(hop.toOffset(TILE_PX))
+
+            val triggerFire = fireTriggerIfAny(moved, entityId, hop, catalog)
+            if (triggerFire != null) {
+                applyStep(runResolver(Resolver(triggerFire.first, stack = triggerFire.second), catalog))
+                moved = state
+            }
+
+            val lootOpen = openLootIfAny(moved, entityId, hop)
+            if (lootOpen != null) {
+                moved = lootOpen.first
+                state = moved
+                val name = catalog.lootDef(lootOpen.second.loot).name.ifBlank { lootOpen.second.loot.raw }
+                log.add(0, LogEntry("Found $name.", LogCategory.Info))
+            }
+
+            if (moved.inCombat) {
+                state = beginCombat(moved, catalog)
+                log.add(0, LogEntry("An enemy spots you!", LogCategory.Info))
+                exploringSelectedId = null
+                return
+            }
+        }
+    }
+
     suspend fun endTurn(who: EntityId) {
         if (state.combatOutcome() != null) return
         applyStep(runResolver(Resolver(state, stack = listOf(Effect.EndTurn(who))), catalog))
@@ -1334,25 +1620,31 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
 
     /** Runs every consecutive AI-controlled turn to completion, handing control back once the active entity is human (or nothing is left to do). */
     suspend fun runAiTurns() {
-        while (true) {
-            if (state.combatOutcome() != null) return
-            val activeId = state.turn.order.getOrNull(state.turn.activeIndex) ?: return
-            val active = state.byId[activeId] ?: return
-            if (active.actor?.controller is Controller.Human) return
-            if ((active.health?.current ?: 1) > 0) {
-                val decision = chooseAction(state, activeId, catalog)
-                if (decision != null) {
-                    val actorPos = active.pos
-                    val targetPos = decision.ctx.targets.firstOrNull()?.let { state.byId[it]?.pos } ?: decision.ctx.point
-                    if (actorPos != null && targetPos != null) frameActorAndTarget(actorPos, targetPos)
-                    applyStep(perform(state, activeId, decision.actionId, decision.ctx, catalog))
-                } else if (active.pos != null && active.pos !in state.revealedTiles && state.map.fogOfWar) {
-                    // Mirrors ChooseAction.kt's own fog gate exactly, so this only fires when that's
-                    // actually why nothing happened, not for a generic "no legal move" pass.
-                    log.add(0, LogEntry("${catalog.archetype(active.archetype).name} remains hidden.", LogCategory.Info))
+        if (aiTurnBusy) return
+        aiTurnBusy = true
+        try {
+            while (true) {
+                if (state.combatOutcome() != null) return
+                val activeId = state.turn.order.getOrNull(state.turn.activeIndex) ?: return
+                val active = state.byId[activeId] ?: return
+                if (active.actor?.controller is Controller.Human) return
+                if ((active.health?.current ?: 1) > 0) {
+                    val decision = chooseAction(state, activeId, catalog)
+                    if (decision != null) {
+                        val actorPos = active.pos
+                        val targetPos = decision.ctx.targets.firstOrNull()?.let { state.byId[it]?.pos } ?: decision.ctx.point
+                        if (actorPos != null && targetPos != null) frameActorAndTarget(actorPos, targetPos)
+                        applyStep(perform(state, activeId, decision.actionId, decision.ctx, catalog))
+                    } else if (active.pos != null && active.pos !in state.revealedTiles && state.map.fogOfWar) {
+                        // Mirrors ChooseAction.kt's own fog gate exactly, so this only fires when that's
+                        // actually why nothing happened, not for a generic "no legal move" pass.
+                        log.add(0, LogEntry("${catalog.archetype(active.archetype).name} remains hidden.", LogCategory.Info))
+                    }
                 }
+                endTurn(activeId)
             }
-            endTurn(activeId)
+        } finally {
+            aiTurnBusy = false
         }
     }
 
@@ -1369,10 +1661,31 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
     // Every prior demo/test fixture happened to start on a human's turn, so runAiTurns() only ever
     // needed a reactive trigger from the human's own "End Turn" button. A real startEncounter's
     // initiative roll has no such bias — when it rolls an AI-controlled entity first, nothing had
-    // ever kicked off its turn, and the board just sat on "Enemy turn..." forever. Reacting to
-    // activeId directly (which also fires on first composition) covers that turn-1 case for free,
-    // so the explicit call after the button's own endTurn() is now redundant and removed below.
-    LaunchedEffect(state.turn.round, activeId, state.inCombat) {
+    // ever kicked off its turn, and the board just sat on "Enemy turn..." forever.
+    //
+    // Player-reported regression: the LaunchedEffect below is supposed to cover this turn-1 case
+    // "for free" (any LaunchedEffect fires once on first composition, regardless of its keys) —
+    // but it was observed NOT firing reliably when the very first turn is an enemy's, while the
+    // player-goes-first case always worked. Rather than chase that race blind, this Unit-keyed
+    // effect is a second, independent guarantee: LaunchedEffect(Unit) is unconditionally launched
+    // exactly once, the first time this composable enters composition, with no key-recomposition
+    // subtlety for anything to race. runAiTurns()'s own aiTurnBusy guard (above) makes it safe if
+    // this and the effect below both decide to call it around the same time.
+    LaunchedEffect(Unit) {
+        if (state.inCombat && !isHumanTurn) runAiTurns()
+    }
+    //
+    // Keyed on isHumanTurn (a derived boolean), NOT activeId/round directly — found live: keying on
+    // activeId/round meant EVERY enemy-to-enemy turn handoff inside runAiTurns()'s own while loop
+    // (which calls endTurn(), advancing activeIndex/round) changed this effect's own restart keys,
+    // so Compose cancelled and relaunched the coroutine mid-loop on every single AI turn transition.
+    // If that cancellation landed inside applyStep's player.awaitDrained() before `state` had been
+    // reassigned, the in-flight enemy action was silently dropped entirely — "the enemy does
+    // nothing," non-deterministically, depending on exactly where the race landed (worse on a cold
+    // JIT/dispatcher, which is why it read as "sometimes fixes itself once warmed up"). isHumanTurn
+    // only actually flips at a genuine human<->AI control handoff — never between two consecutive
+    // AI turns — so runAiTurns()'s own while loop now runs to completion uninterrupted.
+    LaunchedEffect(state.inCombat, isHumanTurn) {
         // Before combat starts, turn order/AP don't apply at all (exploration mode instead) —
         // enemies stay put rather than getting a cold-start runAiTurns() pass through initiative
         // order the moment the encounter loads.
@@ -1413,6 +1726,8 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 world = world,
                 colors = colors,
                 sprites = sprites,
+                deadEntities = state.entities.filter { (it.health?.current ?: 1) <= 0 }.map { it.id }.toSet(),
+                gravestoneSprite = gravestoneSprite,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
                 threatTiles = threatTiles,
                 // docs/27: every tile a multi-target action's shape would hit, given the confirmed
@@ -1426,13 +1741,18 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                     val casterPos = state.byId[targetPicked.ctx.caster]?.pos ?: return@run emptySet()
                     tilesInShape(casterPos, point, shape, state.map)
                 },
-                // Same "player faction, not just any active entity" criterion TurnOrderStrip's
-                // own green ring already uses, so the board and the strip always agree.
-                activeTurnTile = if (state.inCombat && active?.actor?.faction == Faction.Player) active.pos else null,
+                // Any active entity, player or enemy — "hard to notice whose turn it is" applies
+                // just as much to an enemy's turn. TurnOrderStrip's own green ring stays
+                // player-only (a different, already-fine, always-visible indicator).
+                activeTurnTile = if (state.inCombat) active?.pos else null,
                 selectedTile = (selection as? Selection.TargetPicked)?.ctx?.point,
                 canPan = canPan,
                 revealedTiles = state.revealedTiles,
                 entityPositions = state.entities.mapNotNull { e -> e.pos?.let { e.id to it } }.toMap(),
+                lootPlacements = state.lootPlacements,
+                openedLoot = state.openedLoot,
+                entityStatuses = state.entities.associate { it.id to it.statuses.map { s -> s.def } },
+                statusIcons = statusIcons,
                 modifier = Modifier.size(maxWidth, maxHeight),
                 onViewportSizeChanged = { viewportSize = it },
                 // doc15's targeting state machine: ActionPicked -> tap a legal tile -> TargetPicked;
@@ -1500,6 +1820,8 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                     scope.launch { world.camera.animateTo(pos.toOffset(TILE_PX)) }
                 },
                 onOpenLog = { logOpen = true },
+                onOpenSettings = onOpenSettings,
+                onOpenInventory = onOpenInventory,
                 threatOverlayOn = threatOverlayOn,
                 onToggleThreat = { threatOverlayOn = !threatOverlayOn },
                 modifier = Modifier.align(Alignment.TopStart),
@@ -1508,7 +1830,11 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             // read, unlike an entity token's small on-board footprint. At most one at a time in
             // practice (AttackRolled/SaveRolled beats are Timing.Blocking, so they never overlap).
             world.diceRolls.lastOrNull()?.let { roll ->
-                RollCard(overlay = roll, world = world, modifier = Modifier.align(Alignment.Center))
+                RollCard(overlay = roll, world = world, modifier = Modifier.align(Alignment.Center), sprites = sprites, colors = colors)
+            }
+            // docs/36-map-triggers.md: a trigger's ShowMessage beat, held here until dismissed.
+            world.pendingMessage?.let { message ->
+                TextBoxOverlay(message, onDismiss = { world.dismissMessage() }, modifier = Modifier.align(Alignment.Center))
             }
         }
         PartyBar(
@@ -1521,6 +1847,9 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                     inspected = if (inspected == id) null else id
                 }
             },
+            activeEntityId = activeId,
+            resourceBounce = resourceBounce,
+            onBounceConsumed = { resourceBounce = null },
         )
 
         // Bottom sheet — Peek/Inspect states (doc15). Flush against the party bar directly above
@@ -1547,11 +1876,22 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
             if (inspectedId != null) {
                 // Inspect deliberately looks different from Peek (doc15: "they must not look
                 // alike") — no action bar, just read-only details plus Back.
-                InspectPanel(inspectedId, state, catalog, sprites[inspectedId], onBack = { inspected = null })
+                InspectPanel(inspectedId, state, catalog, sprites[inspectedId], statusIcons, onBack = { inspected = null })
             } else if (detailsId != null) {
                 // docs/25: independent of Selection/targeting entirely — swiped open from the
                 // action grid below, backs out to that same grid, never touches the board.
                 ActionDetailsPanel(detailsId, actionIcons[detailsId], catalog, onBack = { detailsActionId = null })
+            } else if (victoryPending) {
+                // The fight's won — free-roam (exploreMoveTo, unchanged, no combatOutcome guard of
+                // its own) is already active via inCombat having dropped false on the same state
+                // update that set this, so chests are collectible right now. This button is the
+                // only thing standing between here and finishEncounter (RunScreen wires
+                // onEncounterEnd to it) — nothing else calls onEncounterEnd for a victory anymore.
+                Column {
+                    BasicText("Victory! Explore the map, then end the stage.", style = TextStyle(color = INK, fontSize = 14.sp))
+                    Spacer(modifier = Modifier.size(8.dp))
+                    InkButton("End Stage", modifier = Modifier.fillMaxWidth(), emphasized = true, onClick = { ended = true; onEncounterEnd(state) })
+                }
             } else if (!state.inCombat) {
                 // No AP/turn order to show an action bar for — just enough feedback for the tap
                 // flow in onTileTap above (select a unit, then a destination).
@@ -1572,11 +1912,23 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                             Spacer(modifier = Modifier.size(8.dp))
                             // Move no longer gets its own card here — tapping the active entity's
                             // own tile on the board does the same thing (see onTileTap above).
+                            val visibleActionIds = active.allActions(catalog).filter { it != moveActionId }
                             ActionGrid(
-                                actionIds = active.allActions(catalog).filter { it != moveActionId },
+                                actionIds = visibleActionIds,
                                 icons = actionIcons,
                                 catalog = catalog,
+                                disabledActionIds = visibleActionIds.filterTo(mutableSetOf()) {
+                                    canAffordAction(state, activeId, catalog.actionDef(it), catalog).isNotEmpty()
+                                },
                                 onSwipeLeft = { actionId -> detailsActionId = actionId },
+                                onDisabledTap = { actionId ->
+                                    val rejections = canAffordAction(state, activeId, catalog.actionDef(actionId), catalog)
+                                    resourceBounce = when {
+                                        rejections.any { it is Rejection.NotEnoughAp } -> ResourceBounce.Ap
+                                        rejections.any { it is Rejection.NotEnoughMana } -> ResourceBounce.Mana
+                                        else -> null
+                                    }
+                                },
                                 onTap = { actionId ->
                                     inspected = null
                                     val def = catalog.actionDef(actionId)

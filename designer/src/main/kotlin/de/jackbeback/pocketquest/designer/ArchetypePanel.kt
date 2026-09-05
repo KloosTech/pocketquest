@@ -124,6 +124,12 @@ private fun ArchetypeEditor(archetype: Archetype, catalog: Catalog, onChange: (A
         }
         InkTextField(archetype.name, onValueChange = { onChange(archetype.copy(name = it)) }, modifier = Modifier.fillMaxWidth())
 
+        // Purely a character-creation filter (ui/run/RunApp.kt's CharacterCreationScreen) — an
+        // archetype can still be spawned as a monster in an EncounterSpec regardless of this.
+        Box(modifier = Modifier.padding(top = 12.dp)) {
+            ActionToggle(label = "Player Character", has = archetype.isPlayerCharacter, onToggle = { onChange(archetype.copy(isPlayerCharacter = !archetype.isPlayerCharacter)) })
+        }
+
         Box(modifier = Modifier.padding(top = 16.dp)) { InkLabel("DESCRIPTION") }
         // docs/26-character-detail-card.md: flavor/lore text shown as the Inspect card's top banner.
         InkTextField(

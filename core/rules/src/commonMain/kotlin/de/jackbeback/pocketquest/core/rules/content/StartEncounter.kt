@@ -11,6 +11,7 @@ import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Health
+import de.jackbeback.pocketquest.core.model.LootPlacement
 import de.jackbeback.pocketquest.core.model.Resources
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.SpawnRole
@@ -86,7 +87,15 @@ private fun buildEncounterState(
     partyEntities.forEachIndexed { i, member ->
         val pos = partyTiles.getOrNull(i) ?: return@forEachIndexed
         val id = EntityId(nextId++)
-        entities += member.copy(id = id, pos = pos)
+        val spawned = member.copy(id = id, pos = pos)
+        // PartyMember.toEntity hardcodes ap = 0 (relies on this loop, mirroring the enemy loop's
+        // own explicit stats.maxAp seed below, rather than the per-turn EndTurn->TurnStarted reset
+        // — that only fires once a turn actually cycles to an entity, so whoever wins initiative
+        // and goes first would otherwise start combat stuck at 0 AP). Only ap resets — hp/mana stay
+        // exactly as carried on the PartyMember (persisted HP, per-encounter-refilled mana already
+        // correct), unlike the enemy loop which has no persisted state to preserve.
+        val resources = spawned.resources
+        entities += if (resources != null) spawned.copy(resources = resources.copy(ap = spawned.stats(catalog).maxAp)) else spawned
         partySpawnIds[i] = id
         rollInitiative(id)
     }
@@ -107,6 +116,17 @@ private fun buildEncounterState(
         }
     }
 
+    // docs/37-lootable-containers.md: same pop-count-off-pooled-tiles loop as the enemies loop
+    // above, producing a LootPlacement instead of an Entity — a container has no HP/turn/faction.
+    val lootPlacements = mutableListOf<LootPlacement>()
+    for (lootSpawn in encounter.lootSpawns) {
+        val tiles = tilesByRole[lootSpawn.role] ?: mutableListOf()
+        repeat(lootSpawn.count) {
+            val pos = tiles.removeFirstOrNull() ?: return@repeat
+            lootPlacements += LootPlacement(pos, lootSpawn.loot)
+        }
+    }
+
     val order = entities.map { it.id }.sortedByDescending { initiative.getValue(it) }
     val state = GameState(
         entities = entities,
@@ -114,6 +134,7 @@ private fun buildEncounterState(
         turn = TurnState(round = 1, order = order, activeIndex = 0, phase = TurnPhase.Start),
         rng = rng,
         nextEntityId = nextId,
+        lootPlacements = lootPlacements,
     )
     // Without this, a fogOfWar map starts fully dark and every enemy — even one standing right next
     // to the party's own spawn tiles — would skip its very first turn, since nothing has been

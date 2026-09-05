@@ -10,7 +10,15 @@ data class AbilityScores(
     val int: Int,
     val wis: Int,
     val cha: Int,
-)
+) {
+    companion object {
+        /** "No bonus" — a champion's default `abilityBonuses` before any point-buy is spent. */
+        val ZERO = AbilityScores(0, 0, 0, 0, 0, 0)
+    }
+}
+
+operator fun AbilityScores.plus(other: AbilityScores): AbilityScores =
+    AbilityScores(str + other.str, dex + other.dex, con + other.con, int + other.int, wis + other.wis, cha + other.cha)
 
 /** Picks the field matching [ability] — shared by `:core:rules`' RollSave handler and `:core:run`'s event ability checks, so both roll the same way. */
 fun AbilityScores.forAbility(ability: Ability): Int = when (ability) {

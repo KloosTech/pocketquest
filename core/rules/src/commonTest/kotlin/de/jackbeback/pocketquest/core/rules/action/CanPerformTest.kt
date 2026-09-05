@@ -101,6 +101,24 @@ class CanPerformTest {
     }
 
     @Test
+    fun canAffordActionMatchesCanPerformsResourceRejectionsWithNoCtxNeeded() {
+        // docs: the combat UI grays out an unaffordable action before a target is even picked —
+        // canAffordAction must agree with canPerform's own resource checks without an ActionCtx.
+        val s = scenario {
+            archetype("dummy") { hp = 10; mana = 3 }
+            entity("hero") { archetype("dummy"); at(0, 0); hp(10); mana(3) }
+            initiative("hero")
+            actionDef("spell") { cost(ActionCost.Main, mana = 5) }
+        }
+        val def = s.catalog.actionDef(actionId("spell"))
+        assertEquals(listOf(Rejection.NotEnoughMana(5, 3)), canAffordAction(s.state, s.id("hero"), def, s.catalog))
+        assertEquals(
+            canAffordAction(s.state, s.id("hero"), def, s.catalog),
+            canPerform(s.state, s.id("hero"), def, ActionCtx(s.id("hero"), emptyList()), s.catalog),
+        )
+    }
+
+    @Test
     fun notEnoughApForAMovementCost() {
         val s = scenario {
             archetype("dummy") { hp = 10; ap = 2 }

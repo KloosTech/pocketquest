@@ -32,8 +32,17 @@ data class Cost(val action: ActionCost, val mana: Int = 0, val charges: ItemId? 
  */
 @Serializable
 sealed interface EffectTemplate {
+    /**
+     * docs/42-status-stack-scaling.md: [perStack] is a per-stack multiplier resolved at instantiate
+     * time against `ActionCtx.slots[STATUS_STACKS_SLOT]` — the ticking status's own current stack
+     * count, threaded in only by `endTurn`'s `onTurnStart` tick (`Handlers.kt`). Zero everywhere else
+     * (a regular action's `DealDamage` has no such slot), so [perStack] is a pure no-op outside a
+     * status's own onTurnStart list — the same "meaningless outside its one real context" shape
+     * [Push.onWallHit] already has. [amount] stays a flat additive base on top (0 for a pure
+     * per-stack tick, non-zero for "X plus Y per stack").
+     */
     @Serializable @SerialName("dealDamage")
-    data class DealDamage(val target: Ref, val amount: Int, val damageType: DamageType, val tags: Set<DamageTag> = emptySet()) : EffectTemplate
+    data class DealDamage(val target: Ref, val amount: Int, val damageType: DamageType, val tags: Set<DamageTag> = emptySet(), val perStack: Int = 0) : EffectTemplate
 
     /**
      * [caster] threads through to [Effect.ApplyStatus.sourceId] — found missing while authoring
@@ -105,6 +114,14 @@ sealed interface EffectTemplate {
      */
     @Serializable @SerialName("heal")
     data class Heal(val target: Ref, val amount: Int, val source: Ref? = null) : EffectTemplate
+
+    /** docs/36-map-triggers.md: [Effect.ShowMessage]'s template — no [Ref], static authored text has nothing to resolve per-target. */
+    @Serializable @SerialName("showMessage")
+    data class ShowMessage(val text: String) : EffectTemplate
+
+    /** docs/41-status-duration-and-ability-mods.md: [Effect.RemoveStatus]'s template — [Effect.RemoveStatus] itself existed since the resolver's earliest pass, but had no content-authoring template until now, the same "primitive without the authoring layer" gap [Heal] had above. Lets a healer/cleanse action actually be authored. */
+    @Serializable @SerialName("removeStatus")
+    data class RemoveStatus(val target: Ref, val status: StatusId) : EffectTemplate
 }
 
 /** A pure declaration — no logic. Performing it pushes SpendCost then its instantiated effects onto the resolver stack. */

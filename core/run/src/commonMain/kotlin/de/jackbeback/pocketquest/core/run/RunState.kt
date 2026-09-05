@@ -1,5 +1,6 @@
 package de.jackbeback.pocketquest.core.run
 
+import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.EncounterSpec
@@ -8,6 +9,9 @@ import de.jackbeback.pocketquest.core.model.Equipment
 import de.jackbeback.pocketquest.core.model.ItemId
 import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
+import de.jackbeback.pocketquest.core.model.GridPos
+import de.jackbeback.pocketquest.core.model.Inventory
+import de.jackbeback.pocketquest.core.model.LootId
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import kotlinx.serialization.Serializable
 import kotlin.jvm.JvmInline
@@ -50,7 +54,24 @@ data class RunState(
     val encounter: EncounterHandle? = null,
     val outcome: RunOutcome? = null,
     val schemaVersion: Int = CURRENT_RUN_SCHEMA,
+    /**
+     * docs/38-loot-reveal-screen.md: set by `finishEncounter` — one [PendingLoot] per opened
+     * container, already rolled but not yet granted. Non-empty gates `:ui`'s `RunScreen` into the
+     * loot-reveal screen ahead of the node picker; cleared back to empty once every entry is
+     * `revealed` and the player continues.
+     */
+    val pendingLootReveal: List<PendingLoot> = emptyList(),
 )
+
+/**
+ * docs/38-loot-reveal-screen.md: one opened container's outcome, mid-reveal. [at] (the placement's
+ * `GridPos`, already unique per encounter) is the stable key `:ui` taps against — not an index, so
+ * partial/out-of-order reveals never point at the wrong row. [item] is fixed the moment
+ * `finishEncounter` rolls it; [revealed]/[lost] are the only fields a later `revealLoot` call
+ * changes.
+ */
+@Serializable
+data class PendingLoot(val at: GridPos, val loot: LootId, val item: ItemId?, val revealed: Boolean = false, val lost: Boolean = false)
 
 /**
  * The run-layer's authority on a character between encounters — `Entity.health`/`resources` is
@@ -67,6 +88,8 @@ data class PartyMember(
     /** Refilled to max by `finishEncounter` — mana is a per-encounter pool (docs/10-game-loop.md), stored here only so a mid-encounter save round-trips cleanly. */
     val mana: Int,
     val equipment: Equipment = Equipment.EMPTY,
+    /** The champion's 2-point ability-score point-buy, spent once at creation — see `ChampionRecord.abilityBonuses`. */
+    val abilityBonuses: AbilityScores = AbilityScores.ZERO,
     val controller: Controller,
     val condition: MemberCondition = MemberCondition.Healthy,
 )
@@ -109,6 +132,3 @@ data class GraphNode(
     val next: List<NodeId> = emptyList(),
 )
 
-/** One shared pool per run, not per-member (docs/13-encounters-and-events.md). Capacity (STR-bound, exact formula still open) is enforced at the call site that adds an item, not modeled as a stored field here. */
-@Serializable
-data class Inventory(val items: List<ItemId> = emptyList())
