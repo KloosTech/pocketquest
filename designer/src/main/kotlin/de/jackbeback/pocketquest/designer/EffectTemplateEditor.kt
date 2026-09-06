@@ -24,14 +24,17 @@ import de.jackbeback.pocketquest.core.model.DiceSpec
 import de.jackbeback.pocketquest.core.model.EffectTemplate
 import de.jackbeback.pocketquest.core.model.Expiry
 import de.jackbeback.pocketquest.core.model.Faction
+import de.jackbeback.pocketquest.core.model.GateId
+import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Ref
 import de.jackbeback.pocketquest.core.model.StatusId
+import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.ui.ink.InkButton
 import de.jackbeback.pocketquest.ui.ink.InkLabel
 import de.jackbeback.pocketquest.ui.ink.InkSelect
 import de.jackbeback.pocketquest.ui.ink.InkTextField
 
-private enum class EffectKind { DealDamage, ApplyStatus, RemoveStatus, RollAttack, RollSave, Push, Teleport, SpawnEntity, DestroyEntity, Heal, ShowMessage }
+private enum class EffectKind { DealDamage, ApplyStatus, RemoveStatus, RollAttack, RollSave, Push, Teleport, SpawnEntity, DestroyEntity, Heal, ShowMessage, OpenGate, SetTerrain }
 
 private fun EffectTemplate.kind(): EffectKind = when (this) {
     is EffectTemplate.DealDamage -> EffectKind.DealDamage
@@ -45,9 +48,11 @@ private fun EffectTemplate.kind(): EffectKind = when (this) {
     is EffectTemplate.DestroyEntity -> EffectKind.DestroyEntity
     is EffectTemplate.Heal -> EffectKind.Heal
     is EffectTemplate.ShowMessage -> EffectKind.ShowMessage
+    is EffectTemplate.OpenGate -> EffectKind.OpenGate
+    is EffectTemplate.SetTerrain -> EffectKind.SetTerrain
 }
 
-private fun defaultFor(kind: EffectKind, catalog: Catalog): EffectTemplate = when (kind) {
+private fun defaultFor(kind: EffectKind, catalog: Catalog, gateIds: List<GateId> = emptyList()): EffectTemplate = when (kind) {
     EffectKind.DealDamage -> EffectTemplate.DealDamage(Ref.EachTarget, 0, DamageType.Bludgeoning)
     EffectKind.ApplyStatus -> EffectTemplate.ApplyStatus(Ref.EachTarget, catalog.statuses.keys.firstOrNull() ?: StatusId(""), 1, Expiry.Permanent)
     EffectKind.RemoveStatus -> EffectTemplate.RemoveStatus(Ref.EachTarget, catalog.statuses.keys.firstOrNull() ?: StatusId(""))
@@ -59,6 +64,8 @@ private fun defaultFor(kind: EffectKind, catalog: Catalog): EffectTemplate = whe
     EffectKind.DestroyEntity -> EffectTemplate.DestroyEntity(Ref.EachTarget)
     EffectKind.Heal -> EffectTemplate.Heal(Ref.EachTarget, 0)
     EffectKind.ShowMessage -> EffectTemplate.ShowMessage("")
+    EffectKind.OpenGate -> EffectTemplate.OpenGate(gateIds.firstOrNull() ?: GateId(""))
+    EffectKind.SetTerrain -> EffectTemplate.SetTerrain(GridPos(0, 0), TileType.Floor)
 }
 
 /**
@@ -72,13 +79,19 @@ private fun defaultFor(kind: EffectKind, catalog: Catalog): EffectTemplate = whe
  * "expires after N rounds" the `applyStatus` handler resolves into a concrete `EndOfRound` using
  * whatever round it's actually applied on, not something authored here as an absolute number.
  */
+/**
+ * [gateIds] (docs/48-gates-and-wander-ai.md): the current map's gates, for the `OpenGate` row's
+ * picker — empty for every non-map authoring surface (`ActionPanel`/`StatusPanel`, where "which
+ * map's gates" isn't a meaningful question), which falls back to a raw-id text field there instead.
+ */
 @Composable
-fun EffectTemplateListEditor(effects: List<EffectTemplate>, catalog: Catalog, onChange: (List<EffectTemplate>) -> Unit, modifier: Modifier = Modifier) {
+fun EffectTemplateListEditor(effects: List<EffectTemplate>, catalog: Catalog, onChange: (List<EffectTemplate>) -> Unit, modifier: Modifier = Modifier, gateIds: List<GateId> = emptyList()) {
     Column(modifier = modifier) {
         effects.forEachIndexed { index, effect ->
             EffectRow(
                 value = effect,
                 catalog = catalog,
+                gateIds = gateIds,
                 onChange = { updated -> onChange(effects.toMutableList().also { it[index] = updated }) },
                 onRemove = { onChange(effects.filterIndexed { i, _ -> i != index }) },
             )
@@ -88,14 +101,14 @@ fun EffectTemplateListEditor(effects: List<EffectTemplate>, catalog: Catalog, on
 }
 
 @Composable
-private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (EffectTemplate) -> Unit, onRemove: () -> Unit) {
+private fun EffectRow(value: EffectTemplate, catalog: Catalog, gateIds: List<GateId>, onChange: (EffectTemplate) -> Unit, onRemove: () -> Unit) {
     Column(modifier = Modifier.padding(vertical = 4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             InkSelect(
                 selected = value.kind(),
                 options = EffectKind.entries,
                 label = { it.name },
-                onSelect = { onChange(defaultFor(it, catalog)) },
+                onSelect = { onChange(defaultFor(it, catalog, gateIds)) },
                 modifier = Modifier.padding(end = 8.dp),
             )
             InkButton("Remove", onClick = onRemove)
@@ -154,14 +167,37 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
                 }
                 // docs/36-map-triggers.md: no Ref — static authored text, nothing to resolve per-target.
                 is EffectTemplate.ShowMessage -> InkTextField(value.text, onValueChange = { onChange(value.copy(text = it)) }, modifier = Modifier.width(280.dp))
+                // docs/48-gates-and-wander-ai.md: a picker over the current map's gates when known,
+                // else (ActionPanel/StatusPanel, no map in scope) a raw-id text field fallback.
+                is EffectTemplate.OpenGate -> {
+                    if (gateIds.isEmpty()) {
+                        InkTextField(value.gate.raw, onValueChange = { onChange(value.copy(gate = GateId(it))) }, modifier = Modifier.width(120.dp))
+                    } else {
+                        InkSelect(
+                            selected = value.gate,
+                            options = gateIds,
+                            label = { id -> "Gate ${gateIds.indexOf(id) + 1}" },
+                            onSelect = { onChange(value.copy(gate = it)) },
+                        )
+                    }
+                }
+                // docs/50-terrain-mutation.md: a literal position + the same named TileType presets
+                // the Map editor's own terrain tool uses (Floor/Wall/Difficult/Hazard/Chasm).
+                is EffectTemplate.SetTerrain -> {
+                    InkLabel("col", modifier = Modifier.padding(end = 4.dp))
+                    IntField(value.at.col) { onChange(value.copy(at = value.at.copy(col = it))) }
+                    InkLabel("row", modifier = Modifier.padding(start = 8.dp, end = 4.dp))
+                    IntField(value.at.row) { onChange(value.copy(at = value.at.copy(row = it))) }
+                    TerrainKindSelect(value.tile, modifier = Modifier.padding(start = 8.dp)) { onChange(value.copy(tile = it)) }
+                }
             }
         }
         if (value is EffectTemplate.RollSave) {
             Column(modifier = Modifier.padding(start = 24.dp, top = 4.dp)) {
                 InkLabel("ON SUCCESS")
-                EffectTemplateListEditor(value.onSuccess, catalog, onChange = { onChange(value.copy(onSuccess = it)) })
+                EffectTemplateListEditor(value.onSuccess, catalog, onChange = { onChange(value.copy(onSuccess = it)) }, gateIds = gateIds)
                 InkLabel("ON FAIL", modifier = Modifier.padding(top = 4.dp))
-                EffectTemplateListEditor(value.onFail, catalog, onChange = { onChange(value.copy(onFail = it)) })
+                EffectTemplateListEditor(value.onFail, catalog, onChange = { onChange(value.copy(onFail = it)) }, gateIds = gateIds)
             }
         }
         if (value is EffectTemplate.Push) {
@@ -170,10 +206,37 @@ private fun EffectRow(value: EffectTemplate, catalog: Catalog, onChange: (Effect
             // EffectTemplateInstantiate.kt's per-target ctx scoping for Push.onWallHit).
             Column(modifier = Modifier.padding(start = 24.dp, top = 4.dp)) {
                 InkLabel("ON WALL HIT")
-                EffectTemplateListEditor(value.onWallHit, catalog, onChange = { onChange(value.copy(onWallHit = it)) })
+                EffectTemplateListEditor(value.onWallHit, catalog, onChange = { onChange(value.copy(onWallHit = it)) }, gateIds = gateIds)
             }
         }
     }
+}
+
+private enum class TerrainKind { Floor, Wall, Difficult, Hazard, Chasm, InvisibleWall }
+
+private fun TileType.terrainKind(): TerrainKind = when (this) {
+    TileType.Floor -> TerrainKind.Floor
+    TileType.Wall -> TerrainKind.Wall
+    TileType.Difficult -> TerrainKind.Difficult
+    TileType.Hazard -> TerrainKind.Hazard
+    TileType.Chasm -> TerrainKind.Chasm
+    TileType.InvisibleWall -> TerrainKind.InvisibleWall
+    else -> TerrainKind.Floor
+}
+
+private fun TerrainKind.tile(): TileType = when (this) {
+    TerrainKind.Floor -> TileType.Floor
+    TerrainKind.Wall -> TileType.Wall
+    TerrainKind.Difficult -> TileType.Difficult
+    TerrainKind.Hazard -> TileType.Hazard
+    TerrainKind.Chasm -> TileType.Chasm
+    TerrainKind.InvisibleWall -> TileType.InvisibleWall
+}
+
+/** Same named presets the Map editor's own terrain-paint tool offers — see `descriptionFor(TileType)` there for the mechanically-exact copy this doesn't duplicate, just the label set. */
+@Composable
+private fun TerrainKindSelect(selected: TileType, modifier: Modifier = Modifier, onSelect: (TileType) -> Unit) {
+    InkSelect(selected.terrainKind(), TerrainKind.entries, { it.name }, { onSelect(it.tile()) }, modifier = modifier)
 }
 
 @Composable

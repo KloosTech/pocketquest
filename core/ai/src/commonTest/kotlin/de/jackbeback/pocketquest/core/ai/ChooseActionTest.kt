@@ -398,6 +398,66 @@ class ChooseActionTest {
     }
 
     @Test
+    fun wanderMovesSomewhereWhenApproachHasNoRouteAtAllToTheNearestEnemy() {
+        // docs/48-gates-and-wander-ai.md: a full wall (no gap anywhere) between col 4 and col 5,
+        // every row — Approach's own approachDestination finds no route to any tile adjacent to the
+        // enemy at all, so its tier's goal resolves null and falls through to the trailing Wander
+        // tier, matching the beast-behind-a-closed-gate scenario the doc specs.
+        val wallEdges = (0..9).map { row -> WallEdge(GridPos(4, row), Side.East) }.toSet()
+        val map = BattleMap(10, 10, wallEdges = wallEdges)
+        val cat = Catalog(
+            archetypes = mapOf(ArchetypeId("beast") to archetype("beast", listOf("move", "strike")).copy(aiProfile = AiProfileId("caged"))),
+            actions = mapOf(ActionId("move") to moveAction(), ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("caged") to AiProfileDef(
+                    AiProfileId("caged"), "Caged",
+                    tiers = listOf(AiTier(AiCondition.Always, AiGoal.Approach), AiTier(AiCondition.Always, AiGoal.Wander)),
+                ),
+            ),
+        )
+        val beast = entity(EntityId(3), GridPos(0, 0), 10, Faction.Enemy, "beast")
+        val player = entity(heroId, GridPos(9, 9), 10, Faction.Player, "beast") // unreachable, fully walled off
+        val s = GameState(
+            entities = listOf(beast, player),
+            map = map,
+            turn = TurnState(round = 1, order = listOf(beast.id, player.id), activeIndex = 0, phase = TurnPhase.Main),
+            rng = RngState(seed = 1, calls = 0),
+        )
+
+        val decision = chooseAction(s, beast.id, cat)
+        assertEquals(ActionId("move"), decision?.actionId, "Approach must fail (no route) and fall through to Wander, not pass the turn")
+        val destination = decision?.ctx?.point
+        requireNotNull(destination)
+        assertTrue(destination != GridPos(0, 0), "must actually move, not stand still")
+        assertTrue(destination.col <= 4, "must stay on its own side of the full wall — Wander only ever picks a reachable tile")
+    }
+
+    @Test
+    fun wanderIsDeterministicForTheSameStateVersion() {
+        val wallEdges = (0..9).map { row -> WallEdge(GridPos(4, row), Side.East) }.toSet()
+        val map = BattleMap(10, 10, wallEdges = wallEdges)
+        val cat = Catalog(
+            archetypes = mapOf(ArchetypeId("beast") to archetype("beast", listOf("move", "strike")).copy(aiProfile = AiProfileId("caged"))),
+            actions = mapOf(ActionId("move") to moveAction(), ActionId("strike") to strikeAction("strike", targeting = meleeHitsPlayers)),
+            aiProfiles = mapOf(
+                AiProfileId("caged") to AiProfileDef(AiProfileId("caged"), "Caged", tiers = listOf(AiTier(AiCondition.Always, AiGoal.Wander))),
+            ),
+        )
+        val beast = entity(EntityId(3), GridPos(0, 0), 10, Faction.Enemy, "beast")
+        val player = entity(heroId, GridPos(9, 9), 10, Faction.Player, "beast")
+        val s = GameState(
+            entities = listOf(beast, player),
+            map = map,
+            turn = TurnState(round = 1, order = listOf(beast.id, player.id), activeIndex = 0, phase = TurnPhase.Main),
+            rng = RngState(seed = 1, calls = 0),
+        )
+
+        val first = chooseAction(s, beast.id, cat)
+        val second = chooseAction(s, beast.id, cat)
+        assertEquals(first?.ctx?.point, second?.ctx?.point, "same GameState.version + entityId must pick the exact same destination — no hidden mutable RNG involved")
+    }
+
+    @Test
     fun anArchetypeWithNoAuthoredProfileBehavesExactlyLikeTheOriginalScorer() {
         // "medic" archetype here never sets aiProfile — stays at the zero-config default, and
         // catalog.aiProfiles is empty entirely. Must fall straight to defaultScoredChoice, proving

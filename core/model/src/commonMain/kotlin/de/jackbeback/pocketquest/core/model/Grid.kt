@@ -36,6 +36,20 @@ data class TileType(
         val Wall = TileType(walkable = false, blocksLoS = true)
         val Difficult = TileType(moveCost = 2)
         val Hazard = TileType(hazard = true)
+        /** docs/50-terrain-mutation.md: unwalkable but NOT LoS-blocking — a pit/chasm you can see across but not stand in, expressible with zero new [TileType] axes. A labeled preset, same category as [Wall]/[Difficult]/[Hazard], not a fifth boolean. */
+        val Chasm = TileType(walkable = false, hazard = true)
+        /**
+         * docs/54: mechanically identical to [Chasm] (unwalkable, never blocks LoS) — a distinct
+         * named preset purely for authoring INTENT, not a new axis: "hand-place collision for an
+         * off-grid `DecorationPlacement` too big/oddly-shaped for the underlying `PropDef`'s own
+         * rectangular footprint to cover well" vs. `Chasm`'s "a real environmental pit." `:ui`'s
+         * Board never renders hazard/difficult/chasm terrain with any special hatch at all (found
+         * while building this — that styling is `:designer`-authoring-only), so this is already
+         * exactly as invisible to a player as [Chasm] is; `:designer` gives it its own distinct
+         * marker instead of `Chasm`'s hazard hatch, so an author can tell the two apart while
+         * placing them.
+         */
+        val InvisibleWall = TileType(walkable = false)
     }
 }
 
@@ -67,6 +81,27 @@ private fun Side.step(): GridPos = when (this) {
  */
 @Serializable
 data class WallEdge(val pos: GridPos, val side: Side)
+
+/**
+ * docs/48-gates-and-wander-ai.md: a movement-only cousin of [WallEdge] — [edges] (one or more,
+ * contiguous, same [Side], for a portcullis wider than one tile) block [BattleMap.canCross] while
+ * this gate's id is absent from [GameState][de.jackbeback.pocketquest.core.model.GameState.openGates],
+ * but are NEVER added to [BattleMap.wallEdges] and never checked by `hasLineOfSight` — bars, not a
+ * solid door, on purpose (see the doc's "why a gate can't just be a WallEdge" section). A
+ * `closedSprite` left null renders as plain matching wall texture instead of visible bars — the
+ * doc's secret-door amendment, not a separate concept. [requiredTriggers] (the doc's multi-trigger
+ * unlock amendment) is a second, independent way to open this same gate: once every id in that set
+ * is present in `GameState.firedTriggers`, `Triggers.kt` synthesizes an `OpenGate` effect for it —
+ * empty means "only an authored `OpenGate` effect opens this gate," unchanged from the base design.
+ */
+@Serializable
+data class GatePlacement(
+    val id: GateId,
+    val edges: List<WallEdge>,
+    val closedSprite: String? = null,
+    val openSprite: String? = null,
+    val requiredTriggers: Set<TriggerId> = emptySet(),
+)
 
 /**
  * Minimal battle map: just enough for invariant checking (bounds + walkable) plus terrain
@@ -101,6 +136,10 @@ data class BattleMap(
     val backgroundMarginTiles: Int = 4,
     /** docs/36-map-triggers.md: carried straight from [BattleMapDef] — read by the exploration hop loop and the combat `MoveAlong` handler, not just rendered. */
     val triggers: List<TriggerPlacement> = emptyList(),
+    /** docs/48-gates-and-wander-ai.md: carried straight from [BattleMapDef] — read by [canCross] (and, transitively, `findPath`/`reachableTiles`), never by `hasLineOfSight`. */
+    val gates: List<GatePlacement> = emptyList(),
+    /** docs/52-organic-decoration-placement.md: carried straight from [BattleMapDef] — purely rendering data, `:ui`'s Board only ever draws it, never a rules-engine consumer. */
+    val decorations: List<DecorationPlacement> = emptyList(),
 ) {
     fun inBounds(pos: GridPos): Boolean =
         pos.col in 0 until width && pos.row in 0 until height
@@ -129,25 +168,44 @@ data class BattleMap(
      * that corner from *any* of them blocks it (checking only the two edges touching [from] misses
      * a cell walled on every side but approached diagonally, since none of its walls touch [from]).
      */
-    fun canCross(from: GridPos, to: GridPos): Boolean {
+    /**
+     * [openGates] defaults to empty (every gate treated as closed) — every existing call site/test
+     * that never authored a [GatePlacement] sees identical behavior to before this parameter
+     * existed, since [edgeOpen] falls back to the plain [hasWallEdge] check whenever no gate covers
+     * an edge at all. A real caller with a live [GameState] passes `state.openGates`.
+     */
+    fun canCross(from: GridPos, to: GridPos, openGates: Set<GateId> = emptySet()): Boolean {
         val dc = to.col - from.col
         val dr = to.row - from.row
         return when {
-            dc == 0 && dr == -1 -> !hasWallEdge(from, Side.North)
-            dc == 0 && dr == 1 -> !hasWallEdge(from, Side.South)
-            dc == 1 && dr == 0 -> !hasWallEdge(from, Side.East)
-            dc == -1 && dr == 0 -> !hasWallEdge(from, Side.West)
-            dc == 1 && dr == -1 -> noCornerWall(from, Side.North, Side.East, to, Side.South, Side.West)
-            dc == 1 && dr == 1 -> noCornerWall(from, Side.South, Side.East, to, Side.North, Side.West)
-            dc == -1 && dr == -1 -> noCornerWall(from, Side.North, Side.West, to, Side.South, Side.East)
-            dc == -1 && dr == 1 -> noCornerWall(from, Side.South, Side.West, to, Side.North, Side.East)
+            dc == 0 && dr == -1 -> edgeOpen(from, Side.North, openGates)
+            dc == 0 && dr == 1 -> edgeOpen(from, Side.South, openGates)
+            dc == 1 && dr == 0 -> edgeOpen(from, Side.East, openGates)
+            dc == -1 && dr == 0 -> edgeOpen(from, Side.West, openGates)
+            dc == 1 && dr == -1 -> noCornerWall(from, Side.North, Side.East, to, Side.South, Side.West, openGates)
+            dc == 1 && dr == 1 -> noCornerWall(from, Side.South, Side.East, to, Side.North, Side.West, openGates)
+            dc == -1 && dr == -1 -> noCornerWall(from, Side.North, Side.West, to, Side.South, Side.East, openGates)
+            dc == -1 && dr == 1 -> noCornerWall(from, Side.South, Side.West, to, Side.North, Side.East, openGates)
             else -> true
         }
     }
 
-    private fun noCornerWall(from: GridPos, fromSideA: Side, fromSideB: Side, to: GridPos, toSideA: Side, toSideB: Side): Boolean =
-        !hasWallEdge(from, fromSideA) && !hasWallEdge(from, fromSideB) &&
-            !hasWallEdge(to, toSideA) && !hasWallEdge(to, toSideB)
+    private fun noCornerWall(from: GridPos, fromSideA: Side, fromSideB: Side, to: GridPos, toSideA: Side, toSideB: Side, openGates: Set<GateId>): Boolean =
+        edgeOpen(from, fromSideA, openGates) && edgeOpen(from, fromSideB, openGates) &&
+            edgeOpen(to, toSideA, openGates) && edgeOpen(to, toSideB, openGates)
+
+    /** The [GatePlacement] (if any) whose [GatePlacement.edges] contains the edge on [side] of [pos], checked from either canonical direction — mirrors [hasWallEdge]'s own both-directions check. */
+    private fun gateAt(pos: GridPos, side: Side): GatePlacement? {
+        val direct = WallEdge(pos, side)
+        val mirrored = WallEdge(pos + side.step(), side.opposite())
+        return gates.firstOrNull { direct in it.edges || mirrored in it.edges }
+    }
+
+    /** Whether the edge on [side] of [pos] can be crossed — a gate's own open/closed state if one covers this edge (a gate edge is never also in [wallEdges], so the two checks never both apply), otherwise the plain [hasWallEdge] check. */
+    private fun edgeOpen(pos: GridPos, side: Side, openGates: Set<GateId>): Boolean {
+        val gate = gateAt(pos, side)
+        return if (gate != null) gate.id in openGates else !hasWallEdge(pos, side)
+    }
 }
 
 private operator fun GridPos.plus(delta: GridPos): GridPos = GridPos(col + delta.col, row + delta.row)

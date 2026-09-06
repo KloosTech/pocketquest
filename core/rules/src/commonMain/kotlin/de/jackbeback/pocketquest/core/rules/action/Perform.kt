@@ -30,7 +30,7 @@ private fun initialStack(state: GameState, caster: EntityId, actionId: ActionId,
     val path = if (movement != null && def.targeting.mode == TargetMode.Path) {
         val origin = state.byId[caster]?.pos
         val point = ctx.point
-        if (origin != null && point != null) findPath(origin, point, state.map, state.blockingOccupancy) else null
+        if (origin != null && point != null) findPath(origin, point, state.map, state.blockingOccupancy, openGates = state.openGates) else null
     } else {
         null
     }

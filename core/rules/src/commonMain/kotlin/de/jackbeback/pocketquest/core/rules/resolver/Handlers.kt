@@ -87,6 +87,14 @@ internal fun applyEffect(state: GameState, effect: Effect, answers: Map<Decision
         is Effect.SpawnEntity -> spawnEntity(state, effect, cat)
         is Effect.DestroyEntity -> destroyEntity(state, effect)
         is Effect.ShowMessage -> HandlerOutcome(state, listOf(GameEvent.MessageShown(effect.text)))
+        is Effect.OpenGate -> HandlerOutcome(
+            state.copy(openGates = state.openGates + effect.gate),
+            listOf(GameEvent.GateOpened(effect.gate)),
+        )
+        is Effect.SetTerrain -> HandlerOutcome(
+            state.copy(map = state.map.copy(terrain = state.map.terrain + (effect.at to effect.tile))),
+            listOf(GameEvent.TerrainChanged(effect.at, effect.tile)),
+        )
     }
 
 /**

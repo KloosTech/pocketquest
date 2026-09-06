@@ -61,6 +61,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
@@ -68,6 +69,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChanged
 import androidx.compose.ui.layout.ContentScale
@@ -97,6 +99,7 @@ import de.jackbeback.pocketquest.core.model.Entity
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Faction
 import de.jackbeback.pocketquest.core.model.GameState
+import de.jackbeback.pocketquest.core.model.GateId
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.LootId
 import de.jackbeback.pocketquest.core.model.LootPlacement
@@ -727,7 +730,10 @@ private suspend fun loadMapAssets(map: BattleMap, lootIds: Set<LootId>, catalog:
         val meta = manifest.floorTexture(id) ?: return@let null
         GameSpriteLoader.load(meta.file)?.let { TexSheet(it, meta.tilesW ?: 1) }
     }
-    val props = map.props.map { it.prop.raw }.distinct().mapNotNull { id ->
+    // docs/48-gates-and-wander-ai.md: a gate's closed/open sprites are ordinary manifest prop ids —
+    // folded into the same id set/lookup map as PropPlacement's, no separate gate-sprite collection.
+    val propIds = (map.props.map { it.prop.raw } + map.gates.flatMap { listOfNotNull(it.closedSprite, it.openSprite) } + map.decorations.map { it.prop.raw }).distinct()
+    val props = propIds.mapNotNull { id ->
         val meta = manifest.prop(id) ?: return@mapNotNull null
         val bitmap = GameSpriteLoader.load(meta.file) ?: return@mapNotNull null
         id to PropSprite(bitmap, meta.tilesW ?: 1, meta.tilesH ?: 1)
@@ -849,6 +855,7 @@ private fun Board(
     deadEntities: Set<EntityId>,
     gravestoneSprite: ImageBitmap?,
     legalTiles: Set<GridPos>,
+    legalTilesAreMove: Boolean,
     threatTiles: Set<GridPos>,
     affectedTiles: Set<GridPos>,
     activeTurnTile: GridPos?,
@@ -858,6 +865,7 @@ private fun Board(
     entityPositions: Map<EntityId, GridPos>,
     lootPlacements: List<LootPlacement>,
     openedLoot: Set<GridPos>,
+    openGates: Set<GateId>,
     entityStatuses: Map<EntityId, List<StatusId>>,
     statusIcons: Map<StatusId, ImageBitmap>,
     onTileTap: (GridPos) -> Unit,
@@ -947,15 +955,18 @@ private fun Board(
         val zoom = world.zoom.value
         drawGrid(map, mapAssets, camera, zoom)
         drawProps(map, mapAssets, PropLayer.Floor, camera, zoom)
+        drawDecorations(map, mapAssets, PropLayer.Floor, camera, zoom)
         // docs/37-lootable-containers.md: drawn with Floor-layer props — a container sits on the
         // ground, same z-order a rug/floor prop would.
         drawLoot(lootPlacements, openedLoot, mapAssets, camera, zoom)
         threatTiles.forEach { pos -> drawThreatHatch(pos, camera, zoom) }
-        legalTiles.forEach { pos -> drawHighlight(pos, camera, zoom) }
+        legalTiles.forEach { pos -> if (legalTilesAreMove) drawMoveHighlight(pos, camera, zoom) else drawHighlight(pos, camera, zoom) }
         affectedTiles.forEach { pos -> drawAffectedTile(pos, camera, zoom) }
         activeTurnTile?.let { pos -> drawActiveTurnGlow(pos, camera, zoom, glowPulse) }
         selectedTile?.let { pos -> drawSelectedTile(pos, camera, zoom) }
         drawProps(map, mapAssets, PropLayer.Object, camera, zoom)
+        drawDecorations(map, mapAssets, PropLayer.Object, camera, zoom)
+        drawGates(map, mapAssets, openGates, camera, zoom)
         world.entities.forEach { (id, entity) ->
             val pos = entityPositions[id]
             if (map.fogOfWar && pos != null && pos !in revealedTiles) return@forEach
@@ -975,6 +986,7 @@ private fun Board(
             drawMarker(marker.marker, camera, zoom)
         }
         drawProps(map, mapAssets, PropLayer.Overhead, camera, zoom)
+        drawDecorations(map, mapAssets, PropLayer.Overhead, camera, zoom)
         drawFogOfWar(map, revealedTiles, camera, zoom)
     }
 }
@@ -995,7 +1007,19 @@ private fun DrawScope.drawLoot(placements: List<LootPlacement>, openedLoot: Set<
     }
 }
 
-/** [layer]-filtered pass over [BattleMap.props] — called three times from [Board] (Floor before highlights, Object before entities, Overhead after everything) so a single prop list drives every z-order slice without three separate stored lists. */
+/**
+ * [layer]-filtered pass over [BattleMap.props] — called three times from [Board] (Floor before
+ * highlights, Object before entities, Overhead after everything) so a single prop list drives
+ * every z-order slice without three separate stored lists.
+ *
+ * docs/51-props-catalog-and-placement.md: [PropPlacement.rotationQuarters]/`flipX`/`tint` existed
+ * on the model since long before this pass but were never actually read here — every prop rendered
+ * at rotation 0, unflipped, untinted. [flipX] is applied in the sprite's own unrotated orientation
+ * (the inner `scale`, closer to the actual `drawImage` call) and THEN [rotationQuarters] rotates
+ * that already-flipped result (the outer `rotate`) — flip-then-rotate, the same order any 2D scene
+ * graph composes the two in, not rotate-then-flip (which would flip along a rotated axis instead of
+ * the sprite's own left-right).
+ */
 private fun DrawScope.drawProps(map: BattleMap, mapAssets: MapAssets?, layer: PropLayer, camera: Offset, zoom: Float) {
     val assets = mapAssets ?: return
     val screenTile = TILE_PX * zoom
@@ -1003,12 +1027,80 @@ private fun DrawScope.drawProps(map: BattleMap, mapAssets: MapAssets?, layer: Pr
         if (placement.layer != layer) return@forEach
         val sprite = assets.props[placement.prop.raw] ?: return@forEach
         val topLeft = worldToScreen(Offset(placement.at.col * TILE_PX, placement.at.row * TILE_PX), camera, zoom, size)
-        drawImage(
-            sprite.bitmap,
-            dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()),
-            dstSize = IntSize((sprite.tilesW * screenTile).roundToInt(), (sprite.tilesH * screenTile).roundToInt()),
-        )
+        val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
+        val dstSize = IntSize((sprite.tilesW * screenTile).roundToInt(), (sprite.tilesH * screenTile).roundToInt())
+        val center = Offset(dstOffset.x + dstSize.width / 2f, dstOffset.y + dstSize.height / 2f)
+        val colorFilter = placement.tint?.let { ColorFilter.tint(Color(it)) }
+        rotate(degrees = 90f * placement.rotationQuarters, pivot = center) {
+            scale(scaleX = if (placement.flipX) -1f else 1f, scaleY = 1f, pivot = center) {
+                drawImage(sprite.bitmap, dstOffset = dstOffset, dstSize = dstSize, colorFilter = colorFilter)
+            }
+        }
     }
+}
+
+/**
+ * docs/52-organic-decoration-placement.md: [DecorationPlacement.x]/[DecorationPlacement.y] are
+ * continuous tile-unit coordinates, not a [GridPos] — no grid snapping, no footprint. Anchored at
+ * its own center (unlike [drawProps]' top-left anchor — there's no "footprint of cells" to anchor
+ * from for a single free-floating object). Free [DecorationPlacement.rotationDegrees] instead of
+ * [PropPlacement]'s quarter-turns; [DecorationPlacement.scale] scales the sprite's own authored
+ * tile size. Same flip-then-rotate composition order [drawProps] already established.
+ */
+private fun DrawScope.drawDecorations(map: BattleMap, mapAssets: MapAssets?, layer: PropLayer, camera: Offset, zoom: Float) {
+    val assets = mapAssets ?: return
+    val screenTile = TILE_PX * zoom
+    map.decorations.forEach { placement ->
+        if (placement.layer != layer) return@forEach
+        val sprite = assets.props[placement.prop.raw] ?: return@forEach
+        val center = worldToScreen(Offset(placement.x * TILE_PX, placement.y * TILE_PX), camera, zoom, size)
+        val dstSize = IntSize((sprite.tilesW * screenTile * placement.scale).roundToInt(), (sprite.tilesH * screenTile * placement.scale).roundToInt())
+        val dstOffset = IntOffset((center.x - dstSize.width / 2f).roundToInt(), (center.y - dstSize.height / 2f).roundToInt())
+        val colorFilter = placement.tint?.let { ColorFilter.tint(Color(it)) }
+        rotate(degrees = placement.rotationDegrees, pivot = center) {
+            scale(scaleX = if (placement.flipX) -1f else 1f, scaleY = 1f, pivot = center) {
+                drawImage(sprite.bitmap, dstOffset = dstOffset, dstSize = dstSize, colorFilter = colorFilter)
+            }
+        }
+    }
+}
+
+/**
+ * docs/48-gates-and-wander-ai.md: one closed/open sprite band per edge, banded on the wall boundary
+ * itself (like [wallSegment]'s line, but as an image, not a stroke) — never blocks LoS ([map.gates]
+ * is never consulted by any LoS/fog code, only movement). A closed gate authored with no
+ * [de.jackbeback.pocketquest.core.model.GatePlacement.closedSprite] (the secret-door amendment)
+ * draws exactly like an ordinary [WallEdge] instead — indistinguishable from a plain wall, on
+ * purpose. An open gate with no [de.jackbeback.pocketquest.core.model.GatePlacement.openSprite]
+ * draws nothing at all — fully passable and invisible, same as the doorway it now is.
+ */
+private fun DrawScope.drawGates(map: BattleMap, mapAssets: MapAssets?, openGates: Set<GateId>, camera: Offset, zoom: Float) {
+    for (gate in map.gates) {
+        val isOpen = gate.id in openGates
+        val spriteId = if (isOpen) gate.openSprite else gate.closedSprite
+        val sprite = spriteId?.let { mapAssets?.props?.get(it) }
+        for (edge in gate.edges) {
+            if (sprite != null) {
+                drawGateSprite(sprite.bitmap, edge, camera, zoom)
+            } else if (!isOpen) {
+                val (a, b) = wallSegment(edge)
+                drawLine(INK, worldToScreen(a, camera, zoom, size), worldToScreen(b, camera, zoom, size), strokeWidth = 4f * zoom)
+            }
+        }
+    }
+}
+
+private fun DrawScope.drawGateSprite(bitmap: ImageBitmap, edge: WallEdge, camera: Offset, zoom: Float) {
+    val (a, b) = wallSegment(edge)
+    val screenA = worldToScreen(a, camera, zoom, size)
+    val screenB = worldToScreen(b, camera, zoom, size)
+    val length = (screenB - screenA).getDistance()
+    val thickness = TILE_PX * zoom * 0.3f
+    val center = (screenA + screenB) / 2f
+    val horizontal = edge.side == Side.North || edge.side == Side.South
+    val dstSize = if (horizontal) IntSize(length.roundToInt(), thickness.roundToInt()) else IntSize(thickness.roundToInt(), length.roundToInt())
+    val dstOffset = IntOffset((center.x - dstSize.width / 2f).roundToInt(), (center.y - dstSize.height / 2f).roundToInt())
+    drawImage(bitmap, dstOffset = dstOffset, dstSize = dstSize)
 }
 
 /** doc15: "cull to the viewport — draw only visible tiles plus one row of margin." */
@@ -1198,6 +1290,20 @@ private fun DrawScope.drawHighlight(pos: GridPos, camera: Offset, zoom: Float) {
         size = tileSize,
         style = Stroke(width = 2f, pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 4f))),
     )
+}
+
+/**
+ * A stronger version of [drawHighlight] used only for the Move action's own legal tiles — found
+ * live: the shared 8%-tint/dashed-outline highlight reads clearly enough for a handful of attack
+ * targets, but a whole movement range covering a dozen-plus tiles washed out to near-invisible on
+ * the parchment background. Solid (not dashed) border and roughly 3x the fill alpha; every other
+ * action's legal-target highlight is untouched, still drawing via [drawHighlight].
+ */
+private fun DrawScope.drawMoveHighlight(pos: GridPos, camera: Offset, zoom: Float) {
+    val topLeft = worldToScreen(Offset(pos.col * TILE_PX, pos.row * TILE_PX), camera, zoom, size)
+    val tileSize = Size(TILE_PX * zoom, TILE_PX * zoom)
+    drawRect(color = INK.copy(alpha = 0.22f), topLeft = topLeft, size = tileSize)
+    drawRect(color = INK, topLeft = topLeft, size = tileSize, style = Stroke(width = 3f))
 }
 
 /** docs/27: every tile a multi-target action's shape would actually hit, given the confirmed point — red fill+border, same red the ripple flash/threat hatch already use, drawn under [drawSelectedTile]'s green so the confirmed point itself still reads green on top. */
@@ -1583,7 +1689,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
      */
     suspend fun exploreMoveTo(entityId: EntityId, destination: GridPos) {
         val origin = state.byId[entityId]?.pos ?: return
-        val path = findPath(origin, destination, state.map, state.blockingOccupancy) ?: return
+        val path = findPath(origin, destination, state.map, state.blockingOccupancy, openGates = state.openGates) ?: return
         for (hop in path) {
             world.entities[entityId]?.pos?.animateTo(hop.toOffset(TILE_PX), tween(world.scaled(180)))
             var moved = updateEngagedEnemies(updateRevealedTiles(moveEntityTo(state, entityId, hop)))
@@ -1729,6 +1835,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 deadEntities = state.entities.filter { (it.health?.current ?: 1) <= 0 }.map { it.id }.toSet(),
                 gravestoneSprite = gravestoneSprite,
                 legalTiles = (selection as? Selection.ActionPicked)?.legal ?: emptySet(),
+                legalTilesAreMove = (selection as? Selection.ActionPicked)?.actionId == moveActionId,
                 threatTiles = threatTiles,
                 // docs/27: every tile a multi-target action's shape would hit, given the confirmed
                 // point — Shape.Single is excluded (its "affected" tile is just the point itself,
@@ -1751,6 +1858,7 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                 entityPositions = state.entities.mapNotNull { e -> e.pos?.let { e.id to it } }.toMap(),
                 lootPlacements = state.lootPlacements,
                 openedLoot = state.openedLoot,
+                openGates = state.openGates,
                 entityStatuses = state.entities.associate { it.id to it.statuses.map { s -> s.def } },
                 statusIcons = statusIcons,
                 modifier = Modifier.size(maxWidth, maxHeight),
@@ -1801,7 +1909,15 @@ fun App(initialState: GameState, catalog: Catalog, onEncounterEnd: (GameState) -
                             // same as pressing a "Move" button, without needing one in the action bar.
                             if (isHumanTurn && moveActionId != null && pos == active.pos) {
                                 val legal = legalTargets(state, activeId, catalog.actionDef(moveActionId), catalog)
-                                selection = Selection.ActionPicked(moveActionId, legal)
+                                if (legal.isEmpty()) {
+                                    // No AP left to move anywhere — same feedback a disabled
+                                    // ActionCard tap already gives (PartyBar's AP pip bounce),
+                                    // instead of silently entering an ActionPicked state with
+                                    // nothing to actually pick.
+                                    resourceBounce = ResourceBounce.Ap
+                                } else {
+                                    selection = Selection.ActionPicked(moveActionId, legal)
+                                }
                             } else if (!state.map.fogOfWar || pos in state.revealedTiles) {
                                 inspected = state.occupancy[pos]
                             } else {

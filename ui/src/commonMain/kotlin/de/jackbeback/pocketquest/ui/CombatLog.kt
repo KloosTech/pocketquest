@@ -104,6 +104,10 @@ fun formatEvent(event: GameEvent, state: GameState, cat: Catalog): LogEntry? {
         // docs/37-lootable-containers.md: exploration's own openLootIfAny call site logs directly
         // (no resolver step to hook a formatEvent call off of) — this covers the combat call site.
         is GameEvent.LootOpened -> LogEntry("Found ${cat.lootDef(event.loot).name.ifBlank { event.loot.raw }}.", LogCategory.Info)
+        // docs/48-gates-and-wander-ai.md: the sprite swap itself is the primary feedback — a log line just confirms it for anyone scrolled up.
+        is GameEvent.GateOpened -> LogEntry("A gate grinds open.", LogCategory.Info)
+        // docs/50-terrain-mutation.md: no name to show ("the floor" isn't a named thing) — noted but not worth a log line every time.
+        is GameEvent.TerrainChanged -> null
     }
 }
 

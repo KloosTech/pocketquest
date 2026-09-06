@@ -20,3 +20,9 @@ import kotlin.jvm.JvmInline
 @JvmInline @Serializable value class ShopId(val raw: String)
 @JvmInline @Serializable value class TriggerId(val raw: String)
 @JvmInline @Serializable value class LootId(val raw: String)
+@JvmInline @Serializable value class GateId(val raw: String)
+@JvmInline @Serializable value class CampaignId(val raw: String)
+/** docs/52-organic-decoration-placement.md: generated once in `:designer` at placement time, never author-typed — same "stable authoring handle, never shown to the player" contract every other placement id already has. */
+@JvmInline @Serializable value class DecorationId(val raw: String)
+/** docs/49-campaign-authoring.md: moved here from `:core:run` (was defined alongside `GraphNode`/`NodeGraph` there) so `Catalog.campaigns` can reference it — same "Catalog is :core:model, :core:run depends on it, never the reverse" reasoning [NodeType] itself already documents in Pools.kt. */
+@JvmInline @Serializable value class NodeId(val raw: String)

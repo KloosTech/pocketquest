@@ -10,9 +10,11 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 
 /** One entry of assets.json's `props`/`overlays` list — `tilesW`/`tilesH` are null for non-footprint kinds (decal, compass, number). */
@@ -77,15 +79,19 @@ object AssetManifest {
 
     /**
      * docs/28-sprite-import.md: copies [source] into the sprites folder next to assets.json,
-     * appends one `props` entry (`kind`, no `tilesW`/`tilesH` — neither "character" nor
-     * "projectile" uses a footprint), and writes the manifest back. The rewrite goes through raw
+     * appends one `props` entry, and writes the manifest back. The rewrite goes through raw
      * [JsonObject] surgery on just the `props` array, not `AssetManifestFile`'s own serializer —
      * the on-disk file carries a `characters` top-level array [AssetManifestFile] doesn't model
      * (unused by any Kotlin code, confirmed by grep, but still real content) that a round-trip
      * through the typed model would silently drop. Returns null if no manifest file was found or
      * the source can't be read — the caller shows that as a failure, not a crash.
+     *
+     * [tilesW]/[tilesH] default null (docs/28's original shape — neither "character" nor
+     * "projectile" uses a footprint). docs/53: a freshly-imported `kind = "prop"` sprite MUST pass
+     * real values here — [placeableProps] filters on both being non-null, so a prop imported
+     * without them would silently never show up in any prop/decoration picker at all.
      */
-    fun importSprite(source: File, kind: String): ManifestAsset? {
+    fun importSprite(source: File, kind: String, tilesW: Int? = null, tilesH: Int? = null): ManifestAsset? {
         val manifestFile = resolvedManifestFile ?: return null
         if (!source.exists()) return null
         val spritesDir = File(manifestFile.parentFile, "sprites").apply { mkdirs() }
@@ -93,7 +99,7 @@ object AssetManifest {
         val extension = source.extension.ifBlank { "png" }
         val destFile = File(spritesDir, "$id.$extension")
         source.copyTo(destFile, overwrite = false)
-        val asset = ManifestAsset(id = id, file = "sprites/${destFile.name}", kind = kind)
+        val asset = ManifestAsset(id = id, file = "sprites/${destFile.name}", tilesW = tilesW, tilesH = tilesH, kind = kind)
 
         val root = manifestJson.parseToJsonElement(manifestFile.readText()).jsonObject
         val updatedProps = JsonArray(root["props"]?.jsonArray.orEmpty() + assetToJson(asset))
@@ -102,6 +108,38 @@ object AssetManifest {
 
         file = load()
         return asset
+    }
+
+    /**
+     * docs/53: corrects an already-imported prop's declared render size — needed because
+     * `importSprite`'s caller can get [tilesW]/[tilesH] wrong at import time (found live: a prop
+     * imported before the aspect-ratio-inference fix existed got hardcoded 1x1, squishing any
+     * non-square image into a square every time it's drawn — [ManifestAsset.tilesW]/[tilesH], not
+     * `PropDef`'s own footprint, is what actually sizes the rendered sprite). Same raw
+     * [JsonObject]-surgery approach [importSprite] uses, on the matching existing entry instead of
+     * appending a new one. No-op (returns false) if [id] isn't a known prop.
+     */
+    fun updateFootprint(id: String, tilesW: Int, tilesH: Int): Boolean {
+        val manifestFile = resolvedManifestFile ?: return false
+        if (file.props.none { it.id == id }) return false
+
+        val root = manifestJson.parseToJsonElement(manifestFile.readText()).jsonObject
+        val props = root["props"]?.jsonArray ?: return false
+        val updatedProps = JsonArray(
+            props.map { element ->
+                val obj = element.jsonObject
+                if (obj["id"]?.jsonPrimitive?.content == id) {
+                    JsonObject(obj.toMutableMap().apply { put("tilesW", JsonPrimitive(tilesW)); put("tilesH", JsonPrimitive(tilesH)) })
+                } else {
+                    element
+                }
+            },
+        )
+        val updatedRoot = JsonObject(root.toMutableMap().apply { put("props", updatedProps) })
+        manifestFile.writeText(prettyManifestJson.encodeToString(JsonObject.serializer(), updatedRoot))
+
+        file = load()
+        return true
     }
 
     private fun uniqueId(base: String): String {
@@ -115,6 +153,8 @@ object AssetManifest {
     private fun assetToJson(asset: ManifestAsset): JsonObject = buildJsonObject {
         put("id", asset.id)
         put("file", asset.file)
+        asset.tilesW?.let { put("tilesW", it) }
+        asset.tilesH?.let { put("tilesH", it) }
         put("kind", asset.kind)
     }
 }

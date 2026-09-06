@@ -79,7 +79,7 @@ fun canPerform(state: GameState, caster: EntityId, def: ActionDef, ctx: ActionCt
         val origin = casterEntity.pos
         val point = ctx.point
         if (origin != null && point != null) {
-            val path = findPath(origin, point, state.map, state.blockingOccupancy)
+            val path = findPath(origin, point, state.map, state.blockingOccupancy, openGates = state.openGates)
             if (path == null) {
                 rejections += Rejection.Blocked(point)
             } else {

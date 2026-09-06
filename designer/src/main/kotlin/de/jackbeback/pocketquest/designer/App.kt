@@ -55,7 +55,7 @@ private fun validate(catalog: Catalog): List<String> =
         e.problems
     }
 
-private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Loot, Events, Shops, Pools, Maps, Dice, Playtest }
+private enum class DesignerTab { Archetypes, Actions, Items, Statuses, Features, AiProfiles, Encounters, Loot, Props, Events, Shops, Pools, Maps, Campaigns, Dice, Playtest }
 
 /**
  * docs/33-wall-hatch-osr-packing.md: ensures Save never ships a map switched to [WallStyle.Osr]
@@ -89,7 +89,8 @@ private fun bakeMissingOsrHatch(catalog: Catalog): Catalog {
  */
 private fun startingCatalog(): Pair<Catalog, String?> {
     val file = DesignerFileIo.defaultCatalogFile()
-    return if (file.exists()) DesignerFileIo.load(file).ensureMoveAction() to file.absolutePath else freshCatalog() to null
+    val (catalog, path) = if (file.exists()) DesignerFileIo.load(file).ensureMoveAction() to file.absolutePath else freshCatalog() to null
+    return catalog.ensurePropDefs() to path
 }
 
 @Composable
@@ -179,10 +180,12 @@ fun DesignerApp(onPlaytest: (GameState, Catalog) -> Unit) {
                 DesignerTab.AiProfiles -> AiProfilePanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Encounters -> EncounterPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Loot -> LootPanel(catalog, onCatalogChange = { catalog = it })
+                DesignerTab.Props -> PropPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Events -> EventPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Shops -> ShopPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Pools -> PoolsPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Maps -> MapEditorPanel(catalog, onCatalogChange = { catalog = it })
+                DesignerTab.Campaigns -> CampaignPanel(catalog, onCatalogChange = { catalog = it })
                 DesignerTab.Dice -> DicePanel()
                 DesignerTab.Playtest -> PlaytestPanel(catalog, onPlaytest = onPlaytest)
             }

@@ -15,6 +15,7 @@ enum class ReactionTriggerKind {
     ResourcesSpent, Fizzled, TurnStarted, TurnEnded, ConcentrationStarted, ConcentrationBroken, ConcentrationCheckRolled,
     ResourcesReset, ReactionTriggered, ActionStarted, Healed, ManaRefilled, Downed, Revived, DamageRedirected, Teleported,
     EntitySpawned, EntityDestroyed, DamageRolled, MessageShown, LootOpened,
+    GateOpened, TerrainChanged,
 }
 
 @Serializable

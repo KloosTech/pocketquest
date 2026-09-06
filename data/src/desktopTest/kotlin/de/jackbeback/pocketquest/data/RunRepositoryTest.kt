@@ -6,10 +6,10 @@ import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.ArchetypeId
 import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
-import de.jackbeback.pocketquest.core.run.GraphNode
+import de.jackbeback.pocketquest.core.model.GraphNode
 import de.jackbeback.pocketquest.core.run.MemberId
-import de.jackbeback.pocketquest.core.run.NodeGraph
-import de.jackbeback.pocketquest.core.run.NodeId
+import de.jackbeback.pocketquest.core.model.NodeGraph
+import de.jackbeback.pocketquest.core.model.NodeId
 import de.jackbeback.pocketquest.core.run.PartyMember
 import de.jackbeback.pocketquest.core.run.RunId
 import de.jackbeback.pocketquest.core.run.RunState

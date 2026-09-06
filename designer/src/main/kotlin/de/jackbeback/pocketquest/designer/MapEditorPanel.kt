@@ -27,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,12 +35,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.graphics.drawscope.rotate
+import androidx.compose.ui.graphics.drawscope.scale
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
@@ -52,8 +55,11 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import de.jackbeback.pocketquest.core.model.BattleMapDef
 import de.jackbeback.pocketquest.core.model.Catalog
+import de.jackbeback.pocketquest.core.model.GateId
+import de.jackbeback.pocketquest.core.model.GatePlacement
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.MapId
+import de.jackbeback.pocketquest.core.model.PropDef
 import de.jackbeback.pocketquest.core.model.PropId
 import de.jackbeback.pocketquest.core.model.PropLayer
 import de.jackbeback.pocketquest.core.model.PropPlacement
@@ -62,6 +68,8 @@ import de.jackbeback.pocketquest.core.model.SpawnRole
 import de.jackbeback.pocketquest.core.model.SpawnZone
 import de.jackbeback.pocketquest.core.model.TileType
 import de.jackbeback.pocketquest.core.model.TriggerId
+import de.jackbeback.pocketquest.core.model.DecorationId
+import de.jackbeback.pocketquest.core.model.DecorationPlacement
 import de.jackbeback.pocketquest.core.model.TriggerPlacement
 import de.jackbeback.pocketquest.core.model.WallEdge
 import de.jackbeback.pocketquest.core.model.WallHatchOsrParams
@@ -88,11 +96,13 @@ import de.jackbeback.pocketquest.ui.ink.InkTooltip
 import de.jackbeback.pocketquest.ui.ink.PAPER
 import de.jackbeback.pocketquest.ui.ink.PAPER_SHEET
 import kotlin.math.PI
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.roundToInt
 import kotlin.math.sin
 
 private const val TILE_PX = 32f
+private val GATE_DASH = androidx.compose.ui.graphics.PathEffect.dashPathEffect(floatArrayOf(8f, 5f))
 // docs/23-sprite-rendering.md: :ui's composeResources tree is the one location actually bundled
 // cross-platform, not a repo-root duplicate — :designer reads that same tree directly.
 private const val PARTY_SPRITE_PATH = "ui/src/commonMain/composeResources/files/normalized/characters/hero_a_idle.png"
@@ -111,8 +121,13 @@ private sealed interface PaintTool {
     data class Terrain(val tile: TileType) : PaintTool
     data class Spawn(val role: SpawnRole?) : PaintTool
     object Wall : PaintTool
-    data class Prop(val asset: ManifestAsset?) : PaintTool
+    /** docs/51-props-catalog-and-placement.md: picks from `Catalog.props` (real content) rather than a raw manifest asset — `propDef == null` means Erase. Placing/editing is handled specially in `MapEditorPanel`'s own click lambda, not [paintCell] — see [Gate]'s own doc comment for why (click-existing-to-edit needs UI state [paintCell]'s pure shape can't touch). */
+    data class Prop(val propDef: PropDef?) : PaintTool
     object Trigger : PaintTool
+    /** docs/48-gates-and-wander-ai.md: an edge tool like [Wall], handled specially in `MapEditorPanel`'s own `onToggleWall` lambda — same "needs UI state [paintCell] can't touch" reasoning as [Trigger]. */
+    object Gate : PaintTool
+    /** docs/52-organic-decoration-placement.md: entirely self-contained inside `MapCanvas`'s own dedicated pointer-gesture block (tap-to-place, tap-existing-to-select, drag-to-move, drag-the-rotate-handle) — never touches [paintCell] at all, unlike every other tool. */
+    data class Decoration(val propDef: PropDef?) : PaintTool
 }
 
 private fun paintCell(map: BattleMapDef, pos: GridPos, tool: PaintTool): BattleMapDef = when (tool) {
@@ -133,14 +148,15 @@ private fun paintCell(map: BattleMapDef, pos: GridPos, tool: PaintTool): BattleM
         val zones = bySpawn.entries.groupBy({ it.value }, { it.key }).map { (role, tiles) -> SpawnZone(role, tiles) }
         map.copy(spawns = zones)
     }
-    is PaintTool.Prop -> {
-        val withoutHere = map.props.filterNot { it.at == pos }
-        val placed = tool.asset?.let { withoutHere + PropPlacement(PropId(it.id), pos, PropLayer.Object) } ?: withoutHere
-        map.copy(props = placed)
-    }
+    // Handled in MapEditorPanel's own onPaintCell lambda instead — see PaintTool.Prop's doc comment.
+    is PaintTool.Prop -> map
     PaintTool.Wall -> map
     // Handled in MapEditorPanel's own onPaintCell lambda instead — see PaintTool.Trigger's doc comment.
     PaintTool.Trigger -> map
+    // Handled in MapEditorPanel's own onToggleWall lambda instead — see PaintTool.Gate's doc comment.
+    PaintTool.Gate -> map
+    // Handled entirely inside MapCanvas's own pointer-gesture block instead — see PaintTool.Decoration's doc comment.
+    is PaintTool.Decoration -> map
 }
 
 /** Which sides of [pos] face off the [width]x[height] map — empty for any interior cell. */
@@ -166,6 +182,57 @@ private fun toggleWallEdge(edges: List<WallEdge>, pos: GridPos, side: Side): Lis
     val mirrored = WallEdge(GridPos(pos.col + d.col, pos.row + d.row), side.opposite())
     if (mirrored in edges) return edges - mirrored
     return edges + direct
+}
+
+/**
+ * docs/51-props-catalog-and-placement.md: the [PropPlacement] (if any) whose footprint covers
+ * [pos] — [PropDef.footprintTilesW]/[PropDef.footprintTilesH] swapped on a 90°/270°
+ * `rotationQuarters`, same rule `toBattleMap()`'s obstruction fold uses. A placement whose id has
+ * no matching [PropDef] yet falls back to a 1x1 footprint (its anchor cell only).
+ */
+private fun propAt(props: List<PropPlacement>, catalog: Catalog, pos: GridPos): PropPlacement? =
+    props.firstOrNull { placement ->
+        val def = catalog.props[placement.prop]
+        val rotated = placement.rotationQuarters % 2 != 0
+        val w = if (rotated) (def?.footprintTilesH ?: 1) else (def?.footprintTilesW ?: 1)
+        val h = if (rotated) (def?.footprintTilesW ?: 1) else (def?.footprintTilesH ?: 1)
+        pos.col in placement.at.col until placement.at.col + w && pos.row in placement.at.row until placement.at.row + h
+    }
+
+/** Mirrors [toggleWallEdge]'s own both-directions check — the edge on [side] of [pos], or its mirror from the neighbouring cell's perspective. */
+private fun mirroredGateEdge(pos: GridPos, side: Side): WallEdge {
+    val d = sideDelta(side)
+    return WallEdge(GridPos(pos.col + d.col, pos.row + d.row), side.opposite())
+}
+
+/** The [GatePlacement] (if any) already covering the edge on [side] of [pos] — checked from either canonical direction. */
+private fun gateAt(gates: List<GatePlacement>, pos: GridPos, side: Side): GatePlacement? {
+    val direct = WallEdge(pos, side)
+    val mirrored = mirroredGateEdge(pos, side)
+    return gates.firstOrNull { direct in it.edges || mirrored in it.edges }
+}
+
+/** Two edges on the same [side] are "adjacent" (join into one gate) when they sit on neighbouring cells along the wall's own run direction — a North/South edge runs east-west, an East/West edge runs north-south. */
+private fun isAdjacentAlongSide(a: GridPos, b: GridPos, side: Side): Boolean = when (side) {
+    Side.North, Side.South -> a.row == b.row && kotlin.math.abs(a.col - b.col) == 1
+    Side.East, Side.West -> a.col == b.col && kotlin.math.abs(a.row - b.row) == 1
+}
+
+/**
+ * docs/48-gates-and-wander-ai.md: clicking an edge with no gate yet either extends an existing
+ * adjacent gate (same [Side], neighbouring cell — [isAdjacentAlongSide]) or starts a fresh
+ * single-edge [GatePlacement] with a new id. Clicking an edge that already belongs to a gate opens
+ * that gate's inline editor instead (`MapEditorPanel`'s own `onToggleWall` lambda) — this function
+ * is only ever called for an edge [gateAt] already confirmed has no owner yet.
+ */
+private fun addGateEdge(gates: List<GatePlacement>, pos: GridPos, side: Side): List<GatePlacement> {
+    val edge = WallEdge(pos, side)
+    val adjacent = gates.firstOrNull { g -> g.edges.any { e -> e.side == side && isAdjacentAlongSide(e.pos, pos, side) } }
+    return if (adjacent != null) {
+        gates.map { if (it.id == adjacent.id) it.copy(edges = it.edges + edge) else it }
+    } else {
+        gates + GatePlacement(id = GateId(java.util.UUID.randomUUID().toString()), edges = listOf(edge))
+    }
 }
 
 /**
@@ -229,6 +296,7 @@ private fun nearestSide(relX: Float, relY: Float): Side = when {
 private fun descriptionFor(tile: TileType): String = when (tile) {
     TileType.Wall -> "Wall (whole tile) — blocks movement and line of sight entirely, consumes the whole cell. For a thin room-divider that keeps floor on both sides, use the Wall tool instead."
     TileType.Difficult -> "Difficult terrain — walkable, costs 2 move points to enter instead of 1."
+    TileType.InvisibleWall -> "Invisible wall — blocks movement only, never blocks line of sight, renders as plain floor to the player. For hand-placing collision under an off-grid decoration too big/oddly-shaped for a PropDef's own footprint to cover well. Shown here with a faint cross-hatch marker so you can find it again — that marker is authoring-only, never shown in :ui."
     else -> if (tile.hazard) {
         "Hazard — marked as dangerous ground. No on-enter effect is wired up in the engine yet; this only marks the tile for future content."
     } else {
@@ -275,6 +343,14 @@ private fun DrawScope.drawTerrainCell(tile: TileType, rect: Rect, floorPatch: Fl
             drawFloor(rect, floorPatch)
             drawHatch(rect, angleDegrees = 135f, spacing = rect.width / 4f, color = INK_FAINT)
         }
+        // docs/54: an author-only marker — a faint cross-hatch (both diagonals, distinct from
+        // Difficult's single 135° and Hazard/Chasm's single 45° danger-coloured one) — :ui never
+        // renders this at all, it draws plain floor for every non-Wall tile regardless of type.
+        tile == TileType.InvisibleWall -> {
+            drawFloor(rect, floorPatch)
+            drawHatch(rect, angleDegrees = 45f, spacing = rect.width / 3f, color = INK_FAINT)
+            drawHatch(rect, angleDegrees = 135f, spacing = rect.width / 3f, color = INK_FAINT)
+        }
         tile.hazard -> {
             drawFloor(rect, floorPatch)
             drawHatch(rect, angleDegrees = 45f, spacing = rect.width / 4f, color = DANGER)
@@ -320,6 +396,17 @@ private fun wallSegment(edge: WallEdge): Pair<Offset, Offset> {
         Side.East -> Offset(x0 + TILE_PX, y0) to Offset(x0 + TILE_PX, y0 + TILE_PX)
         Side.West -> Offset(x0, y0) to Offset(x0, y0 + TILE_PX)
     }
+}
+
+/** Same band-on-the-edge technique `:ui`'s `drawGateSprite` uses — a screen-space line segment stretched into an image band, oriented by the edge's own [side]. */
+private fun DrawScope.drawGateEdgeSprite(bitmap: ImageBitmap, screenA: Offset, screenB: Offset, side: Side, zoom: Float) {
+    val length = (screenB - screenA).getDistance()
+    val thickness = TILE_PX * zoom * 0.3f
+    val center = (screenA + screenB) / 2f
+    val horizontal = side == Side.North || side == Side.South
+    val dstSize = if (horizontal) IntSize(length.roundToInt(), thickness.roundToInt()) else IntSize(thickness.roundToInt(), length.roundToInt())
+    val dstOffset = IntOffset((center.x - dstSize.width / 2f).roundToInt(), (center.y - dstSize.height / 2f).roundToInt())
+    drawImage(bitmap, dstOffset = dstOffset, dstSize = dstSize)
 }
 
 /** A fresh map starts fully enclosed — a `WallEdge` running the whole way around the outside, so the
@@ -494,6 +581,14 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
         // docs/36-map-triggers.md: which trigger's inline effect editor is open, if any — keyed on
         // map.id so switching maps doesn't leave a stale popup pointing at another map's trigger.
         var editingTriggerId by remember(map.id) { mutableStateOf<TriggerId?>(null) }
+        // docs/48-gates-and-wander-ai.md: same shape, for the Gate tool's inline editor.
+        var editingGateId by remember(map.id) { mutableStateOf<GateId?>(null) }
+        // docs/51-props-catalog-and-placement.md: same shape, keyed on a placement's anchor `at`
+        // (stable for the life of one placement, unlike an index into `map.props`).
+        var editingPropAt by remember(map.id) { mutableStateOf<GridPos?>(null) }
+        // docs/52-organic-decoration-placement.md: which decoration is selected, if any — set by
+        // MapCanvas's own gesture block (tap-to-select, or right after placing a fresh one).
+        var selectedDecorationId by remember(map.id) { mutableStateOf<DecorationId?>(null) }
 
         Box(modifier = Modifier.fillMaxSize().padding(16.dp)) {
             // docs: MapCanvas fills this whole pane (not just the space left over below the
@@ -517,24 +612,99 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                             updateMap { it.copy(triggers = it.triggers + fresh) }
                             editingTriggerId = fresh.id
                         }
+                    } else if (tool.let { it is PaintTool.Prop }) {
+                        // docs/51-props-catalog-and-placement.md: Erase mode always removes whatever
+                        // covers this cell; otherwise an already-placed footprint opens its editor,
+                        // an empty cell places a fresh instance of the tool's selected PropDef.
+                        val propTool = tool as PaintTool.Prop
+                        val existing = propAt(map.props, catalog, pos)
+                        val def = propTool.propDef
+                        if (def == null) {
+                            if (existing != null) updateMap { it.copy(props = it.props.filterNot { p -> p.at == existing.at }) }
+                        } else if (existing != null) {
+                            editingPropAt = existing.at
+                        } else {
+                            updateMap { it.copy(props = it.props + PropPlacement(def.id, pos, PropLayer.Object)) }
+                        }
                     } else {
                         updateMap { paintCell(it, pos, tool) }
                     }
                 },
-                onToggleWall = { pos, side -> updateMap { it.copy(wallEdges = toggleWallEdge(it.wallEdges, pos, side)) } },
+                onToggleWall = { pos, side ->
+                    if (tool == PaintTool.Gate) {
+                        // docs/48-gates-and-wander-ai.md: an edge already owned by a gate opens
+                        // that gate's editor; an unclaimed edge extends an adjacent gate or starts
+                        // a fresh one — mirrors PaintTool.Trigger's "click existing = edit" pattern.
+                        val existing = gateAt(map.gates, pos, side)
+                        if (existing != null) {
+                            editingGateId = existing.id
+                        } else {
+                            updateMap { it.copy(gates = addGateEdge(it.gates, pos, side)) }
+                        }
+                    } else {
+                        updateMap { it.copy(wallEdges = toggleWallEdge(it.wallEdges, pos, side)) }
+                    }
+                },
                 editingTriggerId = editingTriggerId,
+                editingGateId = editingGateId,
+                selectedDecorationId = selectedDecorationId,
+                onSelectDecoration = { selectedDecorationId = it },
+                onDecorationsChange = { updated -> updateMap { it.copy(decorations = updated) } },
             )
             val editing = map.triggers.firstOrNull { it.id == editingTriggerId }
             if (editing != null) {
                 TriggerEditorPanel(
                     trigger = editing,
                     catalog = catalog,
+                    gateIds = map.gates.map { it.id },
                     onChange = { updated -> updateMap { m -> m.copy(triggers = m.triggers.map { if (it.id == updated.id) updated else it }) } },
                     onDelete = {
                         updateMap { m -> m.copy(triggers = m.triggers.filterNot { it.id == editing.id }) }
                         editingTriggerId = null
                     },
                     onClose = { editingTriggerId = null },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
+            }
+            val editingGate = map.gates.firstOrNull { it.id == editingGateId }
+            if (editingGate != null) {
+                GateEditorPanel(
+                    gate = editingGate,
+                    triggerIds = map.triggers.map { it.id },
+                    onChange = { updated -> updateMap { m -> m.copy(gates = m.gates.map { if (it.id == updated.id) updated else it }) } },
+                    onDelete = {
+                        updateMap { m -> m.copy(gates = m.gates.filterNot { it.id == editingGate.id }) }
+                        editingGateId = null
+                    },
+                    onClose = { editingGateId = null },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
+            }
+            val editingProp = editingPropAt?.let { at -> map.props.firstOrNull { it.at == at } }
+            if (editingProp != null) {
+                PropInstanceEditorPanel(
+                    placement = editingProp,
+                    propDef = catalog.props[editingProp.prop],
+                    onChange = { updated -> updateMap { m -> m.copy(props = m.props.map { if (it.at == editingProp.at) updated else it }) } },
+                    onDelete = {
+                        updateMap { m -> m.copy(props = m.props.filterNot { it.at == editingProp.at }) }
+                        editingPropAt = null
+                    },
+                    onClose = { editingPropAt = null },
+                    modifier = Modifier.align(Alignment.CenterEnd),
+                )
+            }
+            val selectedDecoration = map.decorations.firstOrNull { it.id == selectedDecorationId }
+            if (selectedDecoration != null) {
+                DecorationEditorPanel(
+                    placement = selectedDecoration,
+                    propDef = catalog.props[selectedDecoration.prop],
+                    onChange = { updated -> updateMap { m -> m.copy(decorations = m.decorations.map { if (it.id == updated.id) updated else it }) } },
+                    onDelete = {
+                        updateMap { m -> m.copy(decorations = m.decorations.filterNot { it.id == selectedDecoration.id }) }
+                        selectedDecorationId = null
+                    },
+                    onClose = { selectedDecorationId = null },
                     modifier = Modifier.align(Alignment.CenterEnd),
                 )
             }
@@ -621,10 +791,11 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                 }
                 InkLabel("TERRAIN", modifier = Modifier.padding(top = 8.dp))
                 Row {
-                    listOf(TileType.Floor, TileType.Wall, TileType.Difficult, TileType.Hazard).forEach { t ->
+                    listOf(TileType.Floor, TileType.Wall, TileType.Difficult, TileType.Hazard, TileType.Chasm, TileType.InvisibleWall).forEach { t ->
                         TerrainToolSwatch(t, selected = (tool as? PaintTool.Terrain)?.tile == t, onClick = { tool = PaintTool.Terrain(t) })
                     }
                     WallToolSwatch(selected = tool == PaintTool.Wall, onClick = { tool = PaintTool.Wall })
+                    GateToolSwatch(selected = tool == PaintTool.Gate, onClick = { tool = PaintTool.Gate })
                 }
                 InkLabel("SPAWN ZONE", modifier = Modifier.padding(top = 8.dp))
                 Row {
@@ -637,30 +808,81 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
                 Row {
                     TriggerToolSwatch(selected = tool == PaintTool.Trigger, onClick = { tool = PaintTool.Trigger })
                 }
+                // docs/51-props-catalog-and-placement.md: picks from Catalog.props (real content,
+                // editable in the Props tab) instead of the raw manifest list directly — the sprite
+                // thumbnail still resolves through AssetManifest.prop(propDef.id.raw), unchanged.
                 InkLabel("PROPS", modifier = Modifier.padding(top = 8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val currentAsset = (tool as? PaintTool.Prop)?.asset
+                    val currentDef = (tool as? PaintTool.Prop)?.propDef
+                    val propOptions = remember(catalog.props) { catalog.props.values.sortedBy { it.id.raw } }
+                    fun spriteOf(def: PropDef): ManifestAsset? = AssetManifest.prop(def.id.raw)
                     InkSelect(
-                        selected = currentAsset,
-                        options = listOf<ManifestAsset?>(null) + AssetManifest.placeableProps,
-                        label = { it?.let { a -> "${a.id} (${a.tilesW}x${a.tilesH})" } ?: "Erase" },
-                        onSelect = { asset -> tool = PaintTool.Prop(asset) },
+                        selected = currentDef,
+                        options = listOf<PropDef?>(null) + propOptions,
+                        label = { it?.let { d -> d.name.ifBlank { d.id.raw } } ?: "Erase" },
+                        onSelect = { def -> tool = PaintTool.Prop(def) },
                         modifier = Modifier.width(200.dp),
-                        itemContent = { asset ->
+                        itemContent = { def ->
                             Row(verticalAlignment = Alignment.CenterVertically) {
+                                val asset = def?.let { spriteOf(it) }
                                 val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
                                 if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
                                 BasicText(
-                                    asset?.let { "${it.id} (${it.tilesW}x${it.tilesH})" } ?: "Erase",
+                                    def?.let { d -> d.name.ifBlank { d.id.raw } } ?: "Erase",
                                     style = TextStyle(color = INK, fontSize = 13.sp),
                                 )
                             }
                         },
                     )
-                    if (currentAsset != null) {
-                        val bmp = remember(currentAsset.file) { SpriteLoader.load(PROPS_DIR + currentAsset.file) }
+                    if (currentDef != null) {
+                        val asset = spriteOf(currentDef)
+                        val bmp = asset?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
                         if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(start = 8.dp))
                     }
+                }
+                // docs/52-organic-decoration-placement.md: same PropDef pool as PROPS above, but
+                // placed free-floating (no grid snap) via MapCanvas's own dedicated gesture block —
+                // tap empty space to place, tap/drag an existing one to select/move/rotate.
+                InkLabel("DECORATIONS (free placement, no grid snap)", modifier = Modifier.padding(top = 8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    val decoOptions = remember(catalog.props) { catalog.props.values.sortedBy { it.id.raw } }
+                    val currentDecoDef = (tool as? PaintTool.Decoration)?.propDef ?: decoOptions.firstOrNull()
+                    fun spriteOfDeco(def: PropDef): ManifestAsset? = AssetManifest.prop(def.id.raw)
+                    InkSelect(
+                        selected = currentDecoDef ?: return@Row,
+                        options = decoOptions,
+                        label = { it.name.ifBlank { it.id.raw } },
+                        onSelect = { def -> tool = PaintTool.Decoration(def) },
+                        modifier = Modifier.width(200.dp),
+                        itemContent = { def ->
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                val bmp = spriteOfDeco(def)?.let { remember(it.file) { SpriteLoader.load(PROPS_DIR + it.file) } }
+                                if (bmp != null) PropThumbnail(bmp, modifier = Modifier.padding(end = 6.dp))
+                                BasicText(def.name.ifBlank { def.id.raw }, style = TextStyle(color = INK, fontSize = 13.sp))
+                            }
+                        },
+                    )
+                    InkButton(
+                        "Decoration tool",
+                        modifier = Modifier.padding(start = 8.dp),
+                        emphasized = tool is PaintTool.Decoration,
+                        onClick = { tool = PaintTool.Decoration((tool as? PaintTool.Decoration)?.propDef ?: decoOptions.firstOrNull()) },
+                    )
+                    // A click on the canvas only ever selects/edits an existing decoration now
+                    // (see MapCanvas's own gesture block) — this is the one place a NEW one gets
+                    // created, dropped at the map's center already selected, ready to drag wherever
+                    // it actually belongs.
+                    InkButton(
+                        "+ Add",
+                        modifier = Modifier.padding(start = 8.dp),
+                        onClick = {
+                            val def = currentDecoDef ?: return@InkButton
+                            val fresh = DecorationPlacement(id = DecorationId(java.util.UUID.randomUUID().toString()), prop = def.id, x = map.width / 2f, y = map.height / 2f)
+                            updateMap { it.copy(decorations = it.decorations + fresh) }
+                            selectedDecorationId = fresh.id
+                            tool = PaintTool.Decoration(def)
+                        },
+                    )
                 }
             }
         }
@@ -678,6 +900,7 @@ fun MapEditorPanel(catalog: Catalog, onCatalogChange: (Catalog) -> Unit, modifie
 private fun TriggerEditorPanel(
     trigger: TriggerPlacement,
     catalog: Catalog,
+    gateIds: List<GateId>,
     onChange: (TriggerPlacement) -> Unit,
     onDelete: () -> Unit,
     onClose: () -> Unit,
@@ -696,7 +919,169 @@ private fun TriggerEditorPanel(
             catalog,
             onChange = { effects -> onChange(trigger.copy(effects = effects)) },
             modifier = Modifier.padding(top = 8.dp),
+            gateIds = gateIds,
         )
+    }
+}
+
+/**
+ * docs/48-gates-and-wander-ai.md: sprite pickers (leaving [GatePlacement.closedSprite] unset is the
+ * secret-door amendment — renders as plain wall instead of visible bars) plus a [requiredTriggers]
+ * multi-select (the multi-trigger unlock amendment) — no other author-typed fields, a gate's
+ * geometry is painted on the canvas, not edited here.
+ */
+@Composable
+private fun GateEditorPanel(
+    gate: GatePlacement,
+    triggerIds: List<TriggerId>,
+    onChange: (GatePlacement) -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.widthIn(min = 280.dp, max = 340.dp).background(PAPER_SHEET).padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InkLabel("GATE (${gate.edges.size} edge${if (gate.edges.size == 1) "" else "s"})", modifier = Modifier.weight(1f))
+            InkButton("Delete", onClick = onDelete)
+            InkButton("Close", modifier = Modifier.padding(start = 4.dp), onClick = onClose)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            InkLabel("CLOSED", modifier = Modifier.padding(end = 4.dp))
+            SpritePicker(gate.closedSprite, onSelect = { onChange(gate.copy(closedSprite = it)) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 4.dp)) {
+            InkLabel("OPEN", modifier = Modifier.padding(end = 4.dp))
+            SpritePicker(gate.openSprite, onSelect = { onChange(gate.copy(openSprite = it)) })
+        }
+        InkLabel("REQUIRED TRIGGERS (opens once ALL fire, alongside any authored OpenGate effect)", modifier = Modifier.padding(top = 8.dp))
+        if (triggerIds.isEmpty()) {
+            InkLabel("no triggers on this map yet")
+        } else {
+            Row {
+                triggerIds.forEachIndexed { i, id ->
+                    val selected = id in gate.requiredTriggers
+                    InkButton(
+                        "Trigger ${i + 1}",
+                        modifier = Modifier.padding(end = 4.dp),
+                        emphasized = selected,
+                        onClick = {
+                            val updated = if (selected) gate.requiredTriggers - id else gate.requiredTriggers + id
+                            onChange(gate.copy(requiredTriggers = updated))
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** Same [AssetManifest.placeableProps] picker [PaintTool.Prop] uses — `null` means "no sprite" (plain wall texture, the secret-door look). */
+@Composable
+private fun SpritePicker(selected: String?, onSelect: (String?) -> Unit) {
+    InkSelect(
+        selected = selected,
+        options = listOf<String?>(null) + AssetManifest.placeableProps.map { it.id },
+        label = { it ?: "(none — renders as plain wall)" },
+        onSelect = onSelect,
+    )
+}
+
+private val TINT_SWATCHES: List<Pair<String, Int?>> = listOf(
+    "None" to null,
+    "Red" to 0xFFE57373.toInt(),
+    "Green" to 0xFF81C784.toInt(),
+    "Blue" to 0xFF64B5F6.toInt(),
+    "Yellow" to 0xFFFFF176.toInt(),
+)
+
+/**
+ * docs/51-props-catalog-and-placement.md: the click-existing-to-edit surface for one already-placed
+ * [PropPlacement] — rotate (90° at a time, the only granularity the model supports), flip, layer,
+ * and a small tint swatch set (not a full color picker — five named presets is enough authoring
+ * control for "give this copy a different hue" without building a color-wheel widget). [propDef] is
+ * display-only here (name/footprint) — its own fields are edited in the Props tab, not here.
+ */
+@Composable
+private fun PropInstanceEditorPanel(
+    placement: PropPlacement,
+    propDef: PropDef?,
+    onChange: (PropPlacement) -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.widthIn(min = 280.dp, max = 340.dp).background(PAPER_SHEET).padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InkLabel("PROP: ${propDef?.name?.ifBlank { placement.prop.raw } ?: placement.prop.raw}", modifier = Modifier.weight(1f))
+            InkButton("Delete", onClick = onDelete)
+            InkButton("Close", modifier = Modifier.padding(start = 4.dp), onClick = onClose)
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            InkLabel("ROTATE", modifier = Modifier.padding(end = 8.dp))
+            InkButton("${placement.rotationQuarters * 90}°", onClick = { onChange(placement.copy(rotationQuarters = (placement.rotationQuarters + 1) % 4)) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            InkLabel("FLIP", modifier = Modifier.padding(end = 8.dp))
+            InkButton(if (placement.flipX) "Flipped" else "Not flipped", emphasized = placement.flipX, onClick = { onChange(placement.copy(flipX = !placement.flipX)) })
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            InkLabel("LAYER", modifier = Modifier.padding(end = 8.dp))
+            InkSelect(placement.layer, PropLayer.entries, { it.name }, { onChange(placement.copy(layer = it)) })
+        }
+        InkLabel("TINT", modifier = Modifier.padding(top = 8.dp))
+        Row {
+            TINT_SWATCHES.forEach { (label, value) ->
+                InkButton(label, modifier = Modifier.padding(end = 4.dp), emphasized = placement.tint == value, onClick = { onChange(placement.copy(tint = value)) })
+            }
+        }
+    }
+}
+
+/**
+ * docs/52-organic-decoration-placement.md: everything EXCEPT position/rotation, which are set by
+ * dragging the decoration itself / its rotate handle on the canvas, not fields here. Same
+ * scale/tint/flip/delete shape [PropInstanceEditorPanel] has, minus layer (kept default) and
+ * rotate-by-90 (this one rotates freely, by drag, not a button).
+ */
+@Composable
+private fun DecorationEditorPanel(
+    placement: DecorationPlacement,
+    propDef: PropDef?,
+    onChange: (DecorationPlacement) -> Unit,
+    onDelete: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier.widthIn(min = 280.dp, max = 340.dp).background(PAPER_SHEET).padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            InkLabel("DECORATION: ${propDef?.name?.ifBlank { placement.prop.raw } ?: placement.prop.raw}", modifier = Modifier.weight(1f))
+            InkButton("Delete", onClick = onDelete)
+            InkButton("Close", modifier = Modifier.padding(start = 4.dp), onClick = onClose)
+        }
+        InkLabel("Drag it to move, drag the small handle to rotate.", modifier = Modifier.padding(top = 4.dp))
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            InkLabel("SCALE", modifier = Modifier.padding(end = 8.dp))
+            InkStepper((placement.scale * 100).roundToInt(), min = 25, onValueChange = { onChange(placement.copy(scale = it.coerceAtLeast(25) / 100f)) })
+            InkLabel("or type", modifier = Modifier.padding(start = 8.dp, end = 4.dp))
+            FloatField(placement.scale) { onChange(placement.copy(scale = it.coerceAtLeast(0.05f))) }
+            InkLabel("x", modifier = Modifier.padding(start = 2.dp))
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
+            InkLabel("FLIP", modifier = Modifier.padding(end = 8.dp))
+            InkButton(if (placement.flipX) "Flipped" else "Not flipped", emphasized = placement.flipX, onClick = { onChange(placement.copy(flipX = !placement.flipX)) })
+        }
+        InkLabel("TINT", modifier = Modifier.padding(top = 8.dp))
+        Row {
+            TINT_SWATCHES.forEach { (label, value) ->
+                InkButton(label, modifier = Modifier.padding(end = 4.dp), emphasized = placement.tint == value, onClick = { onChange(placement.copy(tint = value)) })
+            }
+        }
     }
 }
 
@@ -737,6 +1122,33 @@ private fun WallToolSwatch(selected: Boolean, onClick: () -> Unit) {
         ) {
             Canvas(modifier = Modifier.fillMaxSize()) {
                 drawLine(INK, Offset(size.width * 0.2f, 0f), Offset(size.width * 0.2f, size.height), strokeWidth = 3f)
+                drawRect(INK, Offset.Zero, size, style = Stroke(if (selected) 2.5f else 1f))
+            }
+        }
+    }
+}
+
+private const val GATE_DESCRIPTION =
+    "Gate — click near a tile's border to place/extend a portcullis edge (blocks movement, never blocks line of sight — bars, not a solid door). Click an already-placed gate edge to open its editor (sprites, required triggers, delete)."
+
+@Composable
+private fun GateToolSwatch(selected: Boolean, onClick: () -> Unit) {
+    InkTooltip(GATE_DESCRIPTION) {
+        Box(
+            modifier = Modifier
+                .padding(end = 4.dp)
+                .size(28.dp)
+                .background(PAPER)
+                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawLine(
+                    INK,
+                    Offset(size.width * 0.2f, 0f),
+                    Offset(size.width * 0.2f, size.height),
+                    strokeWidth = 3f,
+                    pathEffect = GATE_DASH,
+                )
                 drawRect(INK, Offset.Zero, size, style = Stroke(if (selected) 2.5f else 1f))
             }
         }
@@ -794,6 +1206,21 @@ private fun TriggerToolSwatch(selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** docs/52-organic-decoration-placement.md: screen-pixel hit radius for tapping/dragging an already-placed decoration — independent of zoom, so it stays easy to grab whether zoomed in or out. */
+/** Bumped from 20 to 40 alongside removing click-to-place — the whole point of a click now is "find and edit the decoration I meant," so being generous here matters more than it did when a near-miss just fell back to placing a new one harmlessly. */
+private const val DECORATION_HIT_RADIUS_PX = 40f
+private const val ROTATE_HANDLE_DISTANCE_PX = 48f
+private const val ROTATE_HANDLE_HIT_RADIUS_PX = 22f
+private const val ROTATE_HANDLE_DRAWN_RADIUS_PX = 11f
+
+private fun decorationCenterScreen(d: DecorationPlacement, camera: Offset, zoom: Float): Offset =
+    worldToScreen(Offset(d.x * TILE_PX, d.y * TILE_PX), camera, zoom)
+
+private fun rotateHandleScreen(d: DecorationPlacement, center: Offset): Offset {
+    val rad = d.rotationDegrees * PI.toFloat() / 180f
+    return Offset(center.x + ROTATE_HANDLE_DISTANCE_PX * cos(rad), center.y + ROTATE_HANDLE_DISTANCE_PX * sin(rad))
+}
+
 private const val MIN_ZOOM = 0.4f
 private const val MAX_ZOOM = 4f
 
@@ -815,7 +1242,24 @@ private fun MapCanvas(
     onPaintCell: (GridPos) -> Unit,
     onToggleWall: (GridPos, Side) -> Unit,
     editingTriggerId: TriggerId? = null,
+    editingGateId: GateId? = null,
+    selectedDecorationId: DecorationId? = null,
+    onSelectDecoration: (DecorationId?) -> Unit = {},
+    onDecorationsChange: (List<DecorationPlacement>) -> Unit = {},
 ) {
+    // docs/52-organic-decoration-placement.md: the decoration drag/rotate pointerInput block below
+    // is keyed on (map.id, tool) only (see its own comment for why) — it can stay running across
+    // many separate gestures without ever restarting. A plain closure over `map`/the callback
+    // params would freeze them at whatever recomposition the block last (re)launched from, so an
+    // edit made through DecorationEditorPanel's side panel BETWEEN two drags (e.g. a scale change)
+    // would get silently reverted the next time this block reads its stale `map` and calls its
+    // stale `onDecorationsChange` — found live ("don't reset scale when positioning again").
+    // rememberUpdatedState is the standard fix: always read/call the LATEST value without
+    // restarting (and so aborting) an in-flight gesture.
+    val currentMap = rememberUpdatedState(map)
+    val currentSelectedDecorationId = rememberUpdatedState(selectedDecorationId)
+    val currentOnDecorationsChange = rememberUpdatedState(onDecorationsChange)
+    val currentOnSelectDecoration = rememberUpdatedState(onSelectDecoration)
     val tiles = remember(map.terrain) { expandTerrainRuns(map.terrain) }
     val spawns = remember(map.spawns) { map.spawns.flatMap { zone -> zone.tiles.map { it to zone.role } }.toMap() }
     val partySprite = remember { SpriteLoader.load(PARTY_SPRITE_PATH) }
@@ -880,9 +1324,69 @@ private fun MapCanvas(
                     val factor = if (scrollY < 0f) 1.1f else 1f / 1.1f
                     zoom = (zoom * factor).coerceIn(MIN_ZOOM, MAX_ZOOM)
                 }
+                // docs/52-organic-decoration-placement.md: entirely gated on the Decoration tool
+                // being active — every other tool's gesture behavior above is completely
+                // unaffected. Keyed on (map.id, tool) only, deliberately NOT on `map.decorations` —
+                // keying on the list this block itself mutates every drag-frame would restart (and
+                // so abort) the gesture on its own first move.
+                .pointerInput(map.id, tool) {
+                    if (tool !is PaintTool.Decoration) return@pointerInput
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        val startScreen = down.position
+                        val decorations = currentMap.value.decorations
+
+                        val selected = decorations.firstOrNull { it.id == currentSelectedDecorationId.value }
+                        val handleScreen = selected?.let { rotateHandleScreen(it, decorationCenterScreen(it, camera, zoom)) }
+                        val hitHandle = handleScreen != null && (handleScreen - startScreen).getDistance() <= ROTATE_HANDLE_HIT_RADIUS_PX
+                        val hitDecoration = if (hitHandle) {
+                            null
+                        } else {
+                            decorations
+                                .map { it to (decorationCenterScreen(it, camera, zoom) - startScreen).getDistance() }
+                                .filter { (_, dist) -> dist <= DECORATION_HIT_RADIUS_PX }
+                                .minByOrNull { (_, dist) -> dist }
+                                ?.first
+                        }
+
+                        // docs/52-organic-decoration-placement.md amendment: a plain click never
+                        // places a new decoration anymore — found live ("hard to edit again"), a
+                        // near-miss click on an existing one silently stacked a fresh one on top
+                        // instead of opening its editor. Placement moved to an explicit "+ Add"
+                        // button (MapEditorPanel's DECORATIONS row) instead. Empty space is left
+                        // completely unconsumed here, so panning is unaffected.
+                        if (!hitHandle && hitDecoration == null) return@awaitEachGesture
+
+                        down.consume()
+                        val targetId = if (hitHandle) selected!!.id else hitDecoration!!.id
+                        // Read fresh at the START of every gesture (not cached across gestures) so a
+                        // panel edit (scale, tint, flip) made since the last drag is never clobbered
+                        // by this one — only x/y (or rotationDegrees) ever get overwritten below,
+                        // every other field rides along from this fresh snapshot untouched.
+                        val startPlacement = currentMap.value.decorations.first { it.id == targetId }
+                        var moved = false
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                            change.consume()
+                            if (!change.pressed) break
+                            moved = true
+                            val updated = if (hitHandle) {
+                                val center = decorationCenterScreen(startPlacement, camera, zoom)
+                                val angle = atan2(change.position.y - center.y, change.position.x - center.x) * 180f / PI.toFloat()
+                                startPlacement.copy(rotationDegrees = angle)
+                            } else {
+                                val world = screenToWorld(change.position, camera, zoom)
+                                startPlacement.copy(x = world.x / TILE_PX, y = world.y / TILE_PX)
+                            }
+                            currentOnDecorationsChange.value(currentMap.value.decorations.map { if (it.id == targetId) updated else it })
+                        }
+                        if (!moved) currentOnSelectDecoration.value(targetId)
+                    }
+                }
                 .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
                     val (pos, rel) = hoveredCell(lastPressPos) ?: return@clickable
-                    if (tool == PaintTool.Wall) {
+                    if (tool == PaintTool.Wall || tool == PaintTool.Gate) {
                         onToggleWall(pos, nearestSide(rel.x, rel.y))
                     } else {
                         onPaintCell(pos)
@@ -1001,13 +1505,72 @@ private fun MapCanvas(
                 val (a, b) = wallSegment(edge)
                 drawLine(INK, toScreen(a), toScreen(b), strokeWidth = 4f * zoom)
             }
+            // docs/48-gates-and-wander-ai.md: dashed, distinct from a solid WallEdge — fainter still
+            // (INK_FAINT) for a secret door (no closedSprite), the one authoring-only affordance that
+            // deliberately does NOT match what a player sees (that's the whole point of "secret").
+            // docs/48-gates-and-wander-ai.md: the actual closedSprite bitmap, same as :ui's Board
+            // draws it — this used to only ever draw a dashed line regardless of which sprite (or
+            // none) was picked, so choosing between two real sprites looked identical (found live:
+            // "I can see no difference" between Chair1x1 and arrow1x1). Falls back to the dashed
+            // glyph only when no closedSprite is chosen at all (the secret-door look).
+            for (gate in map.gates) {
+                val meta = gate.closedSprite?.let { AssetManifest.prop(it) }
+                val sprite = meta?.let { SpriteLoader.load(PROPS_DIR + it.file) }
+                for (edge in gate.edges) {
+                    val (a, b) = wallSegment(edge)
+                    val screenA = toScreen(a)
+                    val screenB = toScreen(b)
+                    if (sprite != null) {
+                        drawGateEdgeSprite(sprite, screenA, screenB, edge.side, zoom)
+                    } else {
+                        drawLine(INK_FAINT, screenA, screenB, strokeWidth = 4f * zoom, pathEffect = GATE_DASH)
+                    }
+                    if (gate.id == editingGateId) {
+                        drawLine(DANGER, screenA, screenB, strokeWidth = 2f * zoom, pathEffect = GATE_DASH)
+                    }
+                }
+            }
+            // docs/51-props-catalog-and-placement.md: rotation/flip/tint applied here too — "author
+            // sees what the player sees" (docs/36/docs/48's own precedent), same flip-then-rotate
+            // composition order :ui's Board uses.
             for (placement in map.props) {
                 val meta = AssetManifest.prop(placement.prop.raw) ?: continue
                 val bmp = SpriteLoader.load(PROPS_DIR + meta.file) ?: continue
                 val w = (meta.tilesW ?: 1) * screenTile
                 val h = (meta.tilesH ?: 1) * screenTile
                 val topLeft = toScreen(Offset(placement.at.col * TILE_PX, placement.at.row * TILE_PX))
-                drawImage(bmp, dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt()), dstSize = IntSize(w.roundToInt(), h.roundToInt()))
+                val dstOffset = IntOffset(topLeft.x.roundToInt(), topLeft.y.roundToInt())
+                val dstSize = IntSize(w.roundToInt(), h.roundToInt())
+                val center = Offset(dstOffset.x + dstSize.width / 2f, dstOffset.y + dstSize.height / 2f)
+                val colorFilter = placement.tint?.let { ColorFilter.tint(Color(it)) }
+                rotate(degrees = 90f * placement.rotationQuarters, pivot = center) {
+                    scale(scaleX = if (placement.flipX) -1f else 1f, scaleY = 1f, pivot = center) {
+                        drawImage(bmp, dstOffset = dstOffset, dstSize = dstSize, colorFilter = colorFilter)
+                    }
+                }
+            }
+            // docs/52-organic-decoration-placement.md: free position/rotation, centered (not
+            // top-left) anchor — see DecorationPlacement's own doc comment for why. The selected
+            // one gets a dashed selection ring plus its rotate handle (a line to a small circle at
+            // the angle it currently points), drawn last so both sit on top of the sprite.
+            for (placement in map.decorations) {
+                val meta = AssetManifest.prop(placement.prop.raw) ?: continue
+                val bmp = SpriteLoader.load(PROPS_DIR + meta.file) ?: continue
+                val center = toScreen(Offset(placement.x * TILE_PX, placement.y * TILE_PX))
+                val dstSize = IntSize(((meta.tilesW ?: 1) * screenTile * placement.scale).roundToInt(), ((meta.tilesH ?: 1) * screenTile * placement.scale).roundToInt())
+                val dstOffset = IntOffset((center.x - dstSize.width / 2f).roundToInt(), (center.y - dstSize.height / 2f).roundToInt())
+                val colorFilter = placement.tint?.let { ColorFilter.tint(Color(it)) }
+                rotate(degrees = placement.rotationDegrees, pivot = center) {
+                    scale(scaleX = if (placement.flipX) -1f else 1f, scaleY = 1f, pivot = center) {
+                        drawImage(bmp, dstOffset = dstOffset, dstSize = dstSize, colorFilter = colorFilter)
+                    }
+                }
+                if (placement.id == selectedDecorationId) {
+                    drawCircle(DANGER, radius = maxOf(dstSize.width, dstSize.height) / 2f + 4f, center = center, style = Stroke(width = 2f, pathEffect = GATE_DASH))
+                    val handle = rotateHandleScreen(placement, center)
+                    drawLine(DANGER, center, handle, strokeWidth = 2f)
+                    drawCircle(DANGER, radius = ROTATE_HANDLE_DRAWN_RADIUS_PX, center = handle)
+                }
             }
             for (col in 0 until map.width) {
                 for (row in 0 until map.height) {
@@ -1023,11 +1586,11 @@ private fun MapCanvas(
                 val center = toScreen(Offset(trigger.at.col * TILE_PX + TILE_PX / 2f, trigger.at.row * TILE_PX + TILE_PX / 2f))
                 drawTriggerGlyph(center, TILE_PX * 0.3f * zoom, if (trigger.id == editingTriggerId) DANGER else INK)
             }
-            if (tool == PaintTool.Wall) {
+            if (tool == PaintTool.Wall || tool == PaintTool.Gate) {
                 hoverPos?.let { hp ->
                     val (pos, rel) = hoveredCell(hp) ?: return@let
                     val (a, b) = wallSegment(WallEdge(pos, nearestSide(rel.x, rel.y)))
-                    drawLine(DANGER, toScreen(a), toScreen(b), strokeWidth = 4f * zoom)
+                    drawLine(DANGER, toScreen(a), toScreen(b), strokeWidth = 4f * zoom, pathEffect = if (tool == PaintTool.Gate) GATE_DASH else null)
                 }
             }
         }
@@ -1050,6 +1613,8 @@ private fun MapCanvas(
                     Column {
                         if (tool == PaintTool.Wall) {
                             BasicText(WALL_DESCRIPTION, style = TextStyle(color = PAPER, fontSize = 11.sp))
+                        } else if (tool == PaintTool.Gate) {
+                            BasicText(GATE_DESCRIPTION, style = TextStyle(color = PAPER, fontSize = 11.sp))
                         } else {
                             BasicText(descriptionFor(tile), style = TextStyle(color = PAPER, fontSize = 11.sp))
                             if (role != null) BasicText(descriptionFor(role), style = TextStyle(color = PAPER, fontSize = 11.sp))

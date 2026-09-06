@@ -79,6 +79,8 @@ fun GameEvent.kind(): ReactionTriggerKind = when (this) {
     is GameEvent.DamageRolled -> ReactionTriggerKind.DamageRolled
     is GameEvent.MessageShown -> ReactionTriggerKind.MessageShown
     is GameEvent.LootOpened -> ReactionTriggerKind.LootOpened
+    is GameEvent.GateOpened -> ReactionTriggerKind.GateOpened
+    is GameEvent.TerrainChanged -> ReactionTriggerKind.TerrainChanged
 }
 
 /** Which entities this event's reaction naturally concerns — feeds the reaction's ActionCtx.targets. */
@@ -113,6 +115,9 @@ internal fun targetsFor(event: GameEvent): List<EntityId> = when (event) {
     is GameEvent.MessageShown -> emptyList()
     // Same reasoning — a loot container isn't an Entity, nothing to name here.
     is GameEvent.LootOpened -> emptyList()
+    // Same reasoning — a gate/tile isn't an Entity either.
+    is GameEvent.GateOpened -> emptyList()
+    is GameEvent.TerrainChanged -> emptyList()
 }
 
 /**

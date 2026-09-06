@@ -78,4 +78,10 @@ sealed interface GameEvent {
 
     /** docs/37-lootable-containers.md: a lootable container opened — drives a log line and a sprite swap; the actual item grant is deferred to `finishEncounter`. */
     @Serializable @SerialName("lootOpened") data class LootOpened(val at: GridPos, val loot: LootId) : GameEvent
+
+    /** docs/48-gates-and-wander-ai.md: [Effect.OpenGate]'s event — Director.kt swaps that gate's rendered sprite from closedSprite to openSprite, instant (no travel-time hold). */
+    @Serializable @SerialName("gateOpened") data class GateOpened(val gate: GateId) : GameEvent
+
+    /** docs/50-terrain-mutation.md: [Effect.SetTerrain]'s event — Director.kt re-renders the affected tile with its new appearance, instant. */
+    @Serializable @SerialName("terrainChanged") data class TerrainChanged(val at: GridPos, val tile: TileType) : GameEvent
 }

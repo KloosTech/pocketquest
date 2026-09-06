@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.core.rules.content
 
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.BattleMapDef
+import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.TerrainRun
 import de.jackbeback.pocketquest.core.model.TileType
@@ -57,8 +58,37 @@ fun compressTerrainToRuns(tiles: Map<GridPos, TileType>, width: Int, height: Int
  * straight across unchanged — pure rendering data `:ui`'s Board reads off `state.map`, never
  * touched by the resolver. `wallHatchOsrSeed` does NOT carry across — it's `:designer`-only
  * bookkeeping for regenerating the bake later, meaningless once the bake result itself has already
- * been copied over. `fogOfWar`/`triggers` also carry straight across, but unlike the rendering-only
- * fields ARE read by the resolver/AI layer (visibility, hidden-enemy skip-turn, docs/36 trigger firing).
+ * been copied over. `fogOfWar`/`triggers`/`gates` also carry straight across, but unlike the
+ * rendering-only fields ARE read by the resolver/AI layer (visibility, hidden-enemy skip-turn,
+ * docs/36 trigger firing, docs/48 gate movement).
+ *
+ * docs/51-props-catalog-and-placement.md: [cat] resolves each [BattleMapDef.props] placement's
+ * `PropDef` — any whose `blocksMovement`/`blocksLoS` is true gets folded into [BattleMap.terrain]
+ * (AND for walkable, OR for blocksLoS — a blocking prop always wins over the floor underneath, either
+ * source blocking sight is enough), sized by the `PropDef`'s own authored footprint with W/H swapped
+ * on a 90°/270° [de.jackbeback.pocketquest.core.model.PropPlacement.rotationQuarters]. A placement
+ * whose id has no matching `PropDef` yet (`cat.propDefOrNull` returns null) folds nothing — same
+ * "purely decorative" behavior every prop had before this pass.
  */
-fun BattleMapDef.toBattleMap(): BattleMap =
-    BattleMap(width, height, expandTerrainRuns(terrain), wallEdges.toSet(), props, floorTexture, wallStyle, fogOfWar, wallHatchOsr, backgroundMarginTiles, triggers)
+fun BattleMapDef.toBattleMap(cat: Catalog): BattleMap {
+    val terrainWithProps = props.fold(expandTerrainRuns(terrain)) { acc, placement ->
+        val def = cat.propDefOrNull(placement.prop) ?: return@fold acc
+        if (!def.blocksMovement && !def.blocksLoS) return@fold acc
+        val rotated = placement.rotationQuarters % 2 != 0
+        val footprintW = if (rotated) def.footprintTilesH else def.footprintTilesW
+        val footprintH = if (rotated) def.footprintTilesW else def.footprintTilesH
+        acc.toMutableMap().apply {
+            for (dc in 0 until footprintW) {
+                for (dr in 0 until footprintH) {
+                    val cell = GridPos(placement.at.col + dc, placement.at.row + dr)
+                    val existing = this[cell] ?: TileType.Floor
+                    this[cell] = existing.copy(
+                        walkable = existing.walkable && !def.blocksMovement,
+                        blocksLoS = existing.blocksLoS || def.blocksLoS,
+                    )
+                }
+            }
+        }
+    }
+    return BattleMap(width, height, terrainWithProps, wallEdges.toSet(), props, floorTexture, wallStyle, fogOfWar, wallHatchOsr, backgroundMarginTiles, triggers, gates, decorations)
+}

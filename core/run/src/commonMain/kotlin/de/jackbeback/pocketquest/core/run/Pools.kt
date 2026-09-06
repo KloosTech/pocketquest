@@ -1,5 +1,9 @@
 package de.jackbeback.pocketquest.core.run
 
+import de.jackbeback.pocketquest.core.model.GraphNode
+import de.jackbeback.pocketquest.core.model.NodeGraph
+import de.jackbeback.pocketquest.core.model.NodeId
+
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.EncounterId
 import de.jackbeback.pocketquest.core.model.EncounterPool
@@ -7,6 +11,7 @@ import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EventDef
 import de.jackbeback.pocketquest.core.model.EventId
 import de.jackbeback.pocketquest.core.model.EventPool
+import de.jackbeback.pocketquest.core.model.PinnedContent
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.ShopId
 import de.jackbeback.pocketquest.core.model.ShopPool
@@ -29,8 +34,15 @@ fun pickContent(pool: EncounterPool, rng: RngState): Pair<RngState, EncounterId>
 fun pickEvent(pool: EventPool, rng: RngState): Pair<RngState, EventId> =
     pickUniform(pool.entries, rng, "event pool for act ${pool.act}")
 
-/** The "enter an Event node" step, mirroring [resolveEncounterNode] — pool pick happens here, right before the event's choices are shown, not at graph-generation time. */
+/**
+ * The "enter an Event node" step, mirroring [resolveEncounterNode] — pool pick happens here, right
+ * before the event's choices are shown, not at graph-generation time.
+ *
+ * docs/49-campaign-authoring.md: a [GraphNode.pinned] `Event` short-circuits the pool lookup
+ * entirely, consuming zero `RngState` — see [PinnedContent]'s own doc comment.
+ */
 fun resolveEventNode(run: RunState, node: GraphNode, pools: List<EventPool>, cat: Catalog): Pair<EventDef, RngState> {
+    (node.pinned as? PinnedContent.Event)?.let { return cat.eventDef(it.id) to run.rng }
     val pool = pools.firstOrNull { it.act == node.act } ?: error("no EventPool for act ${node.act}")
     val (advanced, id) = pickEvent(pool, run.rng)
     return cat.eventDef(id) to advanced
@@ -59,8 +71,15 @@ fun applyScaling(spec: EncounterSpec, act: Int, partySize: Int): EncounterSpec {
 /**
  * The "enter a Combat/Elite/Boss node" step — pool pick + scaling happen here, right before
  * `startEncounter`, not at graph-generation time (docs/13's graph-shape-vs-content split).
+ *
+ * docs/49-campaign-authoring.md: a [GraphNode.pinned] `Encounter` short-circuits the pool lookup —
+ * scaling still applies (an authored campaign node can still want act/party-size scaling; pinning
+ * WHICH encounter and scaling ITS enemy count are independent concerns).
  */
 fun resolveEncounterNode(run: RunState, node: GraphNode, pools: List<EncounterPool>, cat: Catalog): Pair<EncounterSpec, RngState> {
+    (node.pinned as? PinnedContent.Encounter)?.let {
+        return applyScaling(cat.encounterSpec(it.id), run.act, run.party.size) to run.rng
+    }
     val pool = pools.firstOrNull { it.act == node.act && it.kind == node.type }
         ?: error("no EncounterPool for act ${node.act}/${node.type}")
     val (advanced, id) = pickContent(pool, run.rng)

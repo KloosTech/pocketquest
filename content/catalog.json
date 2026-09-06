@@ -1130,34 +1130,10 @@
             ],
             "props": [
                 {
-                    "prop": "bedtwodouble2x2",
-                    "at": {
-                        "col": 1,
-                        "row": 1
-                    },
-                    "layer": "Object"
-                },
-                {
-                    "prop": "dresser1x1",
-                    "at": {
-                        "col": 4,
-                        "row": 1
-                    },
-                    "layer": "Object"
-                },
-                {
                     "prop": "rug4-2x2",
                     "at": {
                         "col": 6,
                         "row": 2
-                    },
-                    "layer": "Object"
-                },
-                {
-                    "prop": "treasurepile2x2",
-                    "at": {
-                        "col": 1,
-                        "row": 7
                     },
                     "layer": "Object"
                 }
@@ -1231,6 +1207,41 @@
                             "text": "hello"
                         }
                     ]
+                }
+            ],
+            "decorations": [
+                {
+                    "id": "708f45ce-a4ce-48b5-b79c-dd11904f2b00",
+                    "prop": "beddouble2x2",
+                    "x": 1.9375,
+                    "y": 2.1484375,
+                    "rotationDegrees": -11.415839
+                },
+                {
+                    "id": "783f5323-1331-4b4c-8a1d-3bff18ec95f1",
+                    "prop": "barrel1x1",
+                    "x": 1.5964184,
+                    "y": 8.427202
+                },
+                {
+                    "id": "648bfd98-415d-43c1-a5f0-62a7440b1105",
+                    "prop": "barrel1x1",
+                    "x": 2.2827148,
+                    "y": 8.610215
+                },
+                {
+                    "id": "589dd497-9f80-40bd-a37e-98d8425314d9",
+                    "prop": "barrel1x1",
+                    "x": 3.540926,
+                    "y": 8.587338
+                },
+                {
+                    "id": "15183507-2d95-4386-a64b-5ded3e315aaa",
+                    "prop": "hay2x2",
+                    "x": 7.9561043,
+                    "y": 7.9467945,
+                    "rotationDegrees": -32.005383,
+                    "scale": 0.87
                 }
             ]
         },
@@ -3381,16 +3392,6 @@
                     }
                 }
             ],
-            "props": [
-                {
-                    "prop": "WellSquare1x1",
-                    "at": {
-                        "col": 3,
-                        "row": 15
-                    },
-                    "layer": "Object"
-                }
-            ],
             "spawns": [
                 {
                     "role": "LootCommon",
@@ -3920,6 +3921,862 @@
                 }
             ],
             "wallStyle": "Background"
+        },
+        "map5": {
+            "id": "map5",
+            "name": "C01_01_The_Mud_Pit",
+            "width": 36,
+            "height": 22,
+            "terrain": [
+                {
+                    "start": {
+                        "col": 4,
+                        "row": 13
+                    },
+                    "length": 2,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                },
+                {
+                    "start": {
+                        "col": 6,
+                        "row": 14
+                    },
+                    "length": 1,
+                    "horizontal": true,
+                    "tile": {
+                        "walkable": false,
+                        "blocksLoS": true
+                    }
+                }
+            ],
+            "wallEdges": [
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 1,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 2,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 2,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 3,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 4,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 5,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 6,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 7,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 7,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 8,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 9,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 10,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 10,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 11,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 11,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 12,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 13,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 14,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 15,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 16,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 17,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 18,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 19,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 20,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 21,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 22,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 22,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 23,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 23,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 24,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 24,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 25,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 25,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 26,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 26,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 27,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 27,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 28,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 28,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 29,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 29,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 30,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 30,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 31,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 31,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 32,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 32,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 33,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 33,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 34,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 34,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 0
+                    },
+                    "side": "North"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 21
+                    },
+                    "side": "South"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 0
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 0
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 1
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 1
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 2
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 2
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 3
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 3
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 4
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 4
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 5
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 5
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 6
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 6
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 7
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 7
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 8
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 8
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 9
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 9
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 10
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 10
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 11
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 11
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 12
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 12
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 13
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 13
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 14
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 14
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 15
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 15
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 16
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 16
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 17
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 17
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 18
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 18
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 19
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 19
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 20
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 20
+                    },
+                    "side": "East"
+                },
+                {
+                    "pos": {
+                        "col": 0,
+                        "row": 21
+                    },
+                    "side": "West"
+                },
+                {
+                    "pos": {
+                        "col": 35,
+                        "row": 21
+                    },
+                    "side": "East"
+                }
+            ],
+            "decorations": [
+                {
+                    "id": "9d458f32-e30d-4941-91e7-51e229268771",
+                    "prop": "pit",
+                    "x": 10.063009,
+                    "y": 10.89876,
+                    "rotationDegrees": 2.202598,
+                    "scale": 2.0
+                }
+            ]
         }
     },
     "encounters": {
@@ -4168,6 +5025,350 @@
                     "item": "item3"
                 }
             ]
+        }
+    },
+    "props": {
+        "Chair1x1": {
+            "id": "Chair1x1",
+            "name": "Chair1x1"
+        },
+        "Pit1x1": {
+            "id": "Pit1x1",
+            "name": "Pit1x1"
+        },
+        "Pitcircle1x1": {
+            "id": "Pitcircle1x1",
+            "name": "Pitcircle1x1"
+        },
+        "TableCircle1x1": {
+            "id": "TableCircle1x1",
+            "name": "TableCircle1x1"
+        },
+        "arrow1x1": {
+            "id": "arrow1x1",
+            "name": "arrow1x1"
+        },
+        "barrel1x1": {
+            "id": "barrel1x1",
+            "name": "barrel1x1"
+        },
+        "barreltwo1x1": {
+            "id": "barreltwo1x1",
+            "name": "barreltwo1x1"
+        },
+        "bath1x2": {
+            "id": "bath1x2",
+            "name": "bath1x2",
+            "footprintTilesH": 2
+        },
+        "bed1x2": {
+            "id": "bed1x2",
+            "name": "bed1x2",
+            "footprintTilesH": 2
+        },
+        "beddouble2x2": {
+            "id": "beddouble2x2",
+            "name": "beddouble2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "bedtwo1x2": {
+            "id": "bedtwo1x2",
+            "name": "bedtwo1x2",
+            "footprintTilesH": 2
+        },
+        "bedtwodouble2x2": {
+            "id": "bedtwodouble2x2",
+            "name": "bedtwodouble2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "blackdot-1x1": {
+            "id": "blackdot-1x1",
+            "name": "blackdot-1x1"
+        },
+        "book1x1": {
+            "id": "book1x1",
+            "name": "book1x1"
+        },
+        "bookcase1x1": {
+            "id": "bookcase1x1",
+            "name": "bookcase1x1"
+        },
+        "booktwo1x1": {
+            "id": "booktwo1x1",
+            "name": "booktwo1x1"
+        },
+        "bow-1x1": {
+            "id": "bow-1x1",
+            "name": "bow-1x1"
+        },
+        "campfire1x1": {
+            "id": "campfire1x1",
+            "name": "campfire1x1"
+        },
+        "campfiretwo1x1": {
+            "id": "campfiretwo1x1",
+            "name": "campfiretwo1x1"
+        },
+        "chest1x1": {
+            "id": "chest1x1",
+            "name": "chest1x1"
+        },
+        "chesttwo1x1": {
+            "id": "chesttwo1x1",
+            "name": "chesttwo1x1"
+        },
+        "crack-1x1": {
+            "id": "crack-1x1",
+            "name": "crack-1x1"
+        },
+        "crack-2x2": {
+            "id": "crack-2x2",
+            "name": "crack-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "crate1x1": {
+            "id": "crate1x1",
+            "name": "crate1x1"
+        },
+        "cratetwo1x1": {
+            "id": "cratetwo1x1",
+            "name": "cratetwo1x1"
+        },
+        "door1x1": {
+            "id": "door1x1",
+            "name": "door1x1"
+        },
+        "doorflip1x1": {
+            "id": "doorflip1x1",
+            "name": "doorflip1x1"
+        },
+        "doortransparent1x1": {
+            "id": "doortransparent1x1",
+            "name": "doortransparent1x1"
+        },
+        "doortransparentflip.1x1": {
+            "id": "doortransparentflip.1x1",
+            "name": "doortransparentflip.1x1"
+        },
+        "dresser1x1": {
+            "id": "dresser1x1",
+            "name": "dresser1x1"
+        },
+        "effectsBlacksquare1x1": {
+            "id": "effectsBlacksquare1x1",
+            "name": "effectsBlacksquare1x1"
+        },
+        "effectswhitesquare1x1": {
+            "id": "effectswhitesquare1x1",
+            "name": "effectswhitesquare1x1"
+        },
+        "goopblood-2x2": {
+            "id": "goopblood-2x2",
+            "name": "goopblood-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "hay1x1": {
+            "id": "hay1x1",
+            "name": "hay1x1"
+        },
+        "hay2x2": {
+            "id": "hay2x2",
+            "name": "hay2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "opencrate1x1": {
+            "id": "opencrate1x1",
+            "name": "opencrate1x1"
+        },
+        "paper-pile1x1": {
+            "id": "paper-pile1x1",
+            "name": "paper-pile1x1"
+        },
+        "paper1x1": {
+            "id": "paper1x1",
+            "name": "paper1x1"
+        },
+        "porticullis-1x1": {
+            "id": "porticullis-1x1",
+            "name": "porticullis-1x1"
+        },
+        "pot1x1": {
+            "id": "pot1x1",
+            "name": "pot1x1"
+        },
+        "potplant1x1": {
+            "id": "potplant1x1",
+            "name": "potplant1x1"
+        },
+        "potplanttwo1x1": {
+            "id": "potplanttwo1x1",
+            "name": "potplanttwo1x1"
+        },
+        "rug-1x1": {
+            "id": "rug-1x1",
+            "name": "rug-1x1"
+        },
+        "rug-2x2": {
+            "id": "rug-2x2",
+            "name": "rug-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "rug2-1x1": {
+            "id": "rug2-1x1",
+            "name": "rug2-1x1"
+        },
+        "rug2-2x2": {
+            "id": "rug2-2x2",
+            "name": "rug2-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "rug3-1x1": {
+            "id": "rug3-1x1",
+            "name": "rug3-1x1"
+        },
+        "rug3-2x2": {
+            "id": "rug3-2x2",
+            "name": "rug3-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "rug4-1x1": {
+            "id": "rug4-1x1",
+            "name": "rug4-1x1"
+        },
+        "rug4-2x2": {
+            "id": "rug4-2x2",
+            "name": "rug4-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "sack1x1": {
+            "id": "sack1x1",
+            "name": "sack1x1"
+        },
+        "sacktwo1x1": {
+            "id": "sacktwo1x1",
+            "name": "sacktwo1x1"
+        },
+        "shelf1x1": {
+            "id": "shelf1x1",
+            "name": "shelf1x1"
+        },
+        "shield-1x1": {
+            "id": "shield-1x1",
+            "name": "shield-1x1"
+        },
+        "shield2-1x1": {
+            "id": "shield2-1x1",
+            "name": "shield2-1x1"
+        },
+        "silohoutte-1x1": {
+            "id": "silohoutte-1x1",
+            "name": "silohoutte-1x1"
+        },
+        "silohoutte2-1x1": {
+            "id": "silohoutte2-1x1",
+            "name": "silohoutte2-1x1"
+        },
+        "staff-1x1": {
+            "id": "staff-1x1",
+            "name": "staff-1x1"
+        },
+        "stairs1x1": {
+            "id": "stairs1x1",
+            "name": "stairs1x1"
+        },
+        "stairspiral-1x1": {
+            "id": "stairspiral-1x1",
+            "name": "stairspiral-1x1"
+        },
+        "stairspiral2-1x1": {
+            "id": "stairspiral2-1x1",
+            "name": "stairspiral2-1x1"
+        },
+        "star-2x2": {
+            "id": "star-2x2",
+            "name": "star-2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "sword-1x1": {
+            "id": "sword-1x1",
+            "name": "sword-1x1"
+        },
+        "table1x1": {
+            "id": "table1x1",
+            "name": "table1x1"
+        },
+        "table1x2-rough": {
+            "id": "table1x2-rough",
+            "name": "table1x2-rough",
+            "footprintTilesH": 2
+        },
+        "table1x2": {
+            "id": "table1x2",
+            "name": "table1x2",
+            "footprintTilesH": 2
+        },
+        "tableCircleRough1x1": {
+            "id": "tableCircleRough1x1",
+            "name": "tableCircleRough1x1"
+        },
+        "tableCircleRough2x2": {
+            "id": "tableCircleRough2x2",
+            "name": "tableCircleRough2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "tableRough1x1": {
+            "id": "tableRough1x1",
+            "name": "tableRough1x1"
+        },
+        "toilet1x1": {
+            "id": "toilet1x1",
+            "name": "toilet1x1"
+        },
+        "treasurepile1x1": {
+            "id": "treasurepile1x1",
+            "name": "treasurepile1x1"
+        },
+        "treasurepile2x2": {
+            "id": "treasurepile2x2",
+            "name": "treasurepile2x2",
+            "footprintTilesW": 2,
+            "footprintTilesH": 2
+        },
+        "window1x1": {
+            "id": "window1x1",
+            "name": "window1x1"
+        },
+        "windowtwo1x1": {
+            "id": "windowtwo1x1",
+            "name": "windowtwo1x1"
+        },
+        "chest_closed": {
+            "id": "chest_closed",
+            "name": "chest_closed"
+        },
+        "chest_open": {
+            "id": "chest_open",
+            "name": "chest_open"
+        },
+        "pit": {
+            "id": "pit",
+            "name": "pit",
+            "tags": [
+                "Scene"
+            ],
+            "footprintTilesW": 9,
+            "footprintTilesH": 5
         }
     }
 }

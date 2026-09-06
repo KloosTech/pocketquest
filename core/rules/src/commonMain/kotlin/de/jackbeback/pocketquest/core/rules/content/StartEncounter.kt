@@ -67,7 +67,7 @@ private fun buildEncounterState(
     partyEntities: List<Entity>,
 ): Pair<GameState, List<EntityId?>> {
     val mapDef = catalog.mapDef(encounter.mapId)
-    val battleMap = mapDef.toBattleMap()
+    val battleMap = mapDef.toBattleMap(catalog)
     val tilesByRole: Map<SpawnRole, MutableList<GridPos>> =
         mapDef.spawns.groupBy({ it.role }, { it.tiles }).mapValues { (_, lists) -> lists.flatten().toMutableList() }
 

@@ -104,6 +104,10 @@ data class Catalog(
     val shopPools: List<ShopPool> = emptyList(),
     /** docs/37-lootable-containers.md's Loot editor output — reusable lootable-container definitions, placed via rarity-tier `SpawnZone`s and referenced by `EncounterSpec.lootSpawns`. */
     val loot: Map<LootId, LootDef> = emptyMap(),
+    /** docs/51-props-catalog-and-placement.md's Props tab output — see [PropDef]'s own doc comment. */
+    val props: Map<PropId, PropDef> = emptyMap(),
+    /** docs/49-campaign-authoring.md's Campaigns tab output — see [CampaignDef]'s own doc comment. */
+    val campaigns: Map<CampaignId, CampaignDef> = emptyMap(),
 ) {
     fun archetype(id: ArchetypeId): Archetype =
         archetypes[id] ?: error("Unknown archetype: ${id.raw}")
@@ -134,6 +138,19 @@ data class Catalog(
 
     fun lootDef(id: LootId): LootDef =
         loot[id] ?: error("Unknown loot: ${id.raw}")
+
+    /**
+     * Deliberately non-throwing, unlike every catalog-content accessor above — docs/51's migration
+     * only ever ADDS a [PropDef] for a manifest asset id, never for one that's never been placed.
+     * `toBattleMap()`'s obstruction fold treats a missing entry as "purely decorative, no
+     * obstruction flags" (the pre-docs/51 behavior for every prop) rather than throwing, so a
+     * placement whose id predates the migration running (or a hand-edited catalog file) degrades
+     * gracefully instead of crashing map expansion.
+     */
+    fun propDefOrNull(id: PropId): PropDef? = props[id]
+
+    fun campaignDef(id: CampaignId): CampaignDef =
+        campaigns[id] ?: error("Unknown campaign: ${id.raw}")
 
     /**
      * Deliberately non-throwing, unlike every accessor above — [Archetype.aiProfile] defaults to

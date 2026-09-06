@@ -65,7 +65,7 @@ import de.jackbeback.pocketquest.ui.nav.rememberNavController
 import kotlinx.coroutines.launch
 
 /**
- * Every content pool a generated [de.jackbeback.pocketquest.core.run.NodeGraph] can draw from —
+ * Every content pool a generated [de.jackbeback.pocketquest.core.model.NodeGraph] can draw from —
  * docs/13-encounters-and-events.md's "content pools" bundled together for convenience. `:designer`
  * authoring tools for these (Pass 9) don't exist yet; until then a caller (`:app`'s composition
  * root) builds placeholder pools from whatever a catalog happens to have.
@@ -335,7 +335,7 @@ private fun RunScreen(run: RunState, catalog: Catalog, pools: ContentPools, onRu
 }
 
 @Composable
-private fun NodeChoiceScreen(node: de.jackbeback.pocketquest.core.run.GraphNode, onPick: (de.jackbeback.pocketquest.core.run.NodeId) -> Unit) {
+private fun NodeChoiceScreen(node: de.jackbeback.pocketquest.core.model.GraphNode, onPick: (de.jackbeback.pocketquest.core.model.NodeId) -> Unit) {
     Column(modifier = Modifier.fillMaxSize().background(PAPER).padding(24.dp)) {
         BasicText("Where to next?", style = TextStyle(color = INK, fontSize = 20.sp))
         Spacer(modifier = Modifier.size(16.dp))

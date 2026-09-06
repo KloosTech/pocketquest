@@ -180,6 +180,7 @@ private fun resolveGoal(goal: AiGoal, state: GameState, entityId: EntityId, cat:
     is AiGoal.UseAction -> resolveUseAction(goal, state, entityId, cat)
     AiGoal.Retreat -> resolveMoveRelativeToNearestEnemy(state, entityId, cat, toward = false)
     AiGoal.Approach -> resolveMoveRelativeToNearestEnemy(state, entityId, cat, toward = true)
+    AiGoal.Wander -> resolveWander(state, entityId, cat)
 }
 
 /**
@@ -267,7 +268,7 @@ private fun resolveMoveRelativeToNearestEnemy(state: GameState, entityId: Entity
     val destination = if (toward) {
         approachDestination(pos, nearestEnemy, budget, state)
     } else {
-        val reachable = reachableTiles(pos, budget, state.map, state.blockingOccupancy)
+        val reachable = reachableTiles(pos, budget, state.map, state.blockingOccupancy, state.openGates)
         (reachable + pos).maxByOrNull { it.chebyshevDistanceTo(nearestEnemy) }
     } ?: return null
     if (destination == pos) return null
@@ -294,8 +295,8 @@ private val ADJACENT_OFFSETS = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0, -1 to -1
 private fun approachDestination(pos: GridPos, target: GridPos, budget: Int, state: GameState): GridPos? {
     val route = ADJACENT_OFFSETS
         .map { (dc, dr) -> GridPos(target.col + dc, target.row + dr) }
-        .filter { state.map.inBounds(it) && state.map.canCross(it, target) }
-        .mapNotNull { findPath(pos, it, state.map, state.blockingOccupancy) }
+        .filter { state.map.inBounds(it) && state.map.canCross(it, target, state.openGates) }
+        .mapNotNull { findPath(pos, it, state.map, state.blockingOccupancy, openGates = state.openGates) }
         .minByOrNull { it.pathCost(state.map) } ?: return null
 
     var spent = 0
@@ -307,4 +308,51 @@ private fun approachDestination(pos: GridPos, target: GridPos, budget: Int, stat
         reached = step
     }
     return reached
+}
+
+/**
+ * docs/48-gates-and-wander-ai.md: [AiGoal.Wander] — pick a random reachable tile within this
+ * turn's move budget, same budget formula [resolveMoveRelativeToNearestEnemy] uses. Returns null
+ * (falls through to [defaultScoredChoice], "nothing legal, pass the turn") when fully boxed in —
+ * `reachableTiles` empty — or when no Path-mode move action exists at all.
+ */
+private fun resolveWander(state: GameState, entityId: EntityId, cat: Catalog): AiDecision? {
+    val entity = state.byId[entityId] ?: return null
+    val pos = entity.pos ?: return null
+
+    val moveActionId = entity.allActions(cat).firstOrNull { cat.actionDef(it).targeting.mode == TargetMode.Path } ?: return null
+    val moveDef = cat.actionDef(moveActionId)
+    val budget = minOf(rangeInTiles(moveDef.targeting.range), entity.resources?.ap ?: 0)
+
+    val candidates = reachableTiles(pos, budget, state.map, state.blockingOccupancy, state.openGates).toList()
+    if (candidates.isEmpty()) return null
+    val destination = candidates[wanderIndex(state.version, entityId, candidates.size)]
+
+    val ctx = ActionCtx(entityId, targets = emptyList(), point = destination)
+    if (canPerform(state, entityId, moveDef, ctx, cat).isNotEmpty()) return null
+    return AiDecision(moveActionId, ctx, score = 0)
+}
+
+private const val WANDER_SPLITMIX64_GAMMA = 0x9E3779B97F4A7C15UL
+private const val WANDER_SPLITMIX64_MIX1 = 0xBF58476D1CE4E5B9UL
+private const val WANDER_SPLITMIX64_MIX2 = 0x94D049BB133111EBUL
+
+/**
+ * A deterministic pseudo-random index in `0 until bound`, seeded from ([version], [entityId]) —
+ * deliberately NOT [de.jackbeback.pocketquest.core.model.GameState.rng]: `chooseAction` is a pure
+ * `GameState -> AiDecision?` function with no way to persist an advanced `RngState.calls` counter
+ * back onto the caller's state, so reusing `rng` here would pick the same tile every call until
+ * some unrelated dice roll happened to advance it — reading as a beast frozen in place, not
+ * wandering. `GameState.version` already changes on every applied effect (each hop of movement
+ * included), so successive turns naturally see a different seed with zero plumbing changes to
+ * `chooseAction`/`resolveGoal`/any call site. Same splitmix64-style bit-mixing technique
+ * `core/rules/Dice.kt`'s private `rngFor` uses (reimplemented here, not shared — that one is
+ * private to its own file) — avoids a biased low-bit modulo pick off a raw XOR.
+ */
+private fun wanderIndex(version: Long, entityId: EntityId, bound: Int): Int {
+    var z = (version.toULong() xor entityId.raw.toULong()) + WANDER_SPLITMIX64_GAMMA
+    z = (z xor (z shr 30)) * WANDER_SPLITMIX64_MIX1
+    z = (z xor (z shr 27)) * WANDER_SPLITMIX64_MIX2
+    z = z xor (z shr 31)
+    return (z % bound.toULong()).toInt()
 }

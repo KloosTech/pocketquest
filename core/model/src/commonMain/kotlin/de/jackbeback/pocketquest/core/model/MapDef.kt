@@ -65,6 +65,10 @@ data class BattleMapDef(
      * the combat `MoveAlong` handler, same category as [fogOfWar].
      */
     val triggers: List<TriggerPlacement> = emptyList(),
+    /** docs/48-gates-and-wander-ai.md: authored, same sibling shape as [triggers]/[props]. IS a rules-engine consumer ([canCross]), never [hasLineOfSight] — see [GatePlacement]'s own doc comment. */
+    val gates: List<GatePlacement> = emptyList(),
+    /** docs/52-organic-decoration-placement.md: authored, same sibling shape as [props] — purely rendering data, never a rules-engine consumer (see [DecorationPlacement]'s own doc comment). */
+    val decorations: List<DecorationPlacement> = emptyList(),
 )
 
 /**
@@ -90,6 +94,58 @@ data class PropPlacement(
 /** Rugs / furniture / arches — doc16's own examples for each layer. */
 @Serializable
 enum class PropLayer { Floor, Object, Overhead }
+
+/**
+ * docs/52-organic-decoration-placement.md: a free-floating, purely decorative sibling of
+ * [PropPlacement] — [x]/[y] are continuous tile-unit coordinates (same "3.25 = 3.25 tiles from
+ * origin" convention [HatchLine] already uses), not a [GridPos]. Anchored at its own CENTER, not
+ * top-left like [PropPlacement.at] — there's no footprint-of-cells concept to anchor a single
+ * free-floating object from. [rotationDegrees] is a free angle, unlike [PropPlacement]'s
+ * quarter-turn-only [PropPlacement.rotationQuarters]. References the same [PropId] catalog every
+ * grid-snapped prop does — deliberately NOT a separate decoration-only asset pool. Never read by
+ * `toBattleMap()`'s obstruction fold (docs/51) — this IS the mechanism that makes a decoration
+ * decorative-only, not a flag anywhere.
+ */
+@Serializable
+data class DecorationPlacement(
+    val id: DecorationId,
+    val prop: PropId,
+    val x: Float,
+    val y: Float,
+    val rotationDegrees: Float = 0f,
+    val flipX: Boolean = false,
+    val tint: Int? = null,
+    val scale: Float = 1f,
+    val layer: PropLayer = PropLayer.Object,
+)
+
+/**
+ * docs/51-props-catalog-and-placement.md: props become real `Catalog` content — [id] stays
+ * permanently paired to one underlying manifest sprite asset (never independently re-pointed at a
+ * different one; [id]`.raw` == that asset's own id, set once at creation/migration), so
+ * [PropPlacement.prop] keeps resolving to a sprite exactly the way it always has. [name]/[tags] are
+ * freely editable authoring metadata with no mechanics attached. [footprintTilesW]/[footprintTilesH]
+ * default to a copy of the manifest asset's own declared size at creation time — `:core:model`/
+ * `:core:rules` have no access to `:designer`'s `AssetManifest` at all, so the footprint has to be
+ * duplicated here for [blocksMovement]/[blocksLoS] obstruction-folding (`toBattleMap()`) to size
+ * correctly — but docs/53 made it freely author-editable afterward too (the Props tab's own
+ * footprint steppers), independent of whatever the underlying sprite image's actual pixel
+ * dimensions are. Only ever consulted for a GRID-snapped [PropPlacement]'s obstruction size — a
+ * free-floating `DecorationPlacement` referencing the same `PropDef` ignores this entirely and
+ * scales the sprite via its own `scale` field instead. Defaulting
+ * both flags to `false` means every prop placed before this pass existed stays purely decorative
+ * until an author opts a `PropDef` into blocking, matching the pre-docs/51 behavior exactly.
+ */
+@Serializable
+data class PropDef(
+    val id: PropId,
+    val name: String = "",
+    val tags: Set<String> = emptySet(),
+    val footprintTilesW: Int = 1,
+    val footprintTilesH: Int = 1,
+    val blocksMovement: Boolean = false,
+    val blocksLoS: Boolean = false,
+)
 
 /** doc16's ink-parchment visual family for a map — a single default for now, no customization surface yet (that's art-direction work, not this pass's). */
 @Serializable

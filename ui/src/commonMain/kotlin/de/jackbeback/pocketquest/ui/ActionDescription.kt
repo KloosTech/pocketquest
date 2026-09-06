@@ -72,6 +72,8 @@ private fun describeEffect(effect: EffectTemplate, catalog: Catalog): String = w
     is EffectTemplate.DestroyEntity -> "Destroys the target."
     is EffectTemplate.ShowMessage -> "Shows a message."
     is EffectTemplate.RemoveStatus -> "Removes ${catalog.statusDef(effect.status).name}."
+    is EffectTemplate.OpenGate -> "Opens a gate."
+    is EffectTemplate.SetTerrain -> "Changes the terrain of one tile."
 }
 
 private fun diceText(spec: DiceSpec): String {

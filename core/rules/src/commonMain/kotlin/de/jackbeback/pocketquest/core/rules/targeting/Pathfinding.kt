@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.core.rules.targeting
 
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.EntityId
+import de.jackbeback.pocketquest.core.model.GateId
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.chebyshevDistanceTo
 
@@ -21,6 +22,7 @@ fun findPath(
     occupancy: Map<GridPos, EntityId>,
     maxCost: Int = Int.MAX_VALUE,
     moveCost: (GridPos) -> Int = { map.moveCost(it) },
+    openGates: Set<GateId> = emptySet(),
 ): List<GridPos>? {
     fun blocked(pos: GridPos) = !map.isWalkable(pos) || occupancy.containsKey(pos)
     if (blocked(to)) return null
@@ -39,7 +41,7 @@ fun findPath(
 
         for ((dc, dr) in EIGHT_DIRECTIONS) {
             val next = GridPos(current.pos.col + dc, current.pos.row + dr)
-            if (!map.inBounds(next) || blocked(next) || !map.canCross(current.pos, next)) continue
+            if (!map.inBounds(next) || blocked(next) || !map.canCross(current.pos, next, openGates)) continue
             val tentativeG = current.g + moveCost(next)
             if (tentativeG > maxCost) continue
             if (tentativeG < (gCost[next] ?: Int.MAX_VALUE)) {

@@ -2,6 +2,7 @@ package de.jackbeback.pocketquest.core.rules.targeting
 
 import de.jackbeback.pocketquest.core.model.BattleMap
 import de.jackbeback.pocketquest.core.model.EntityId
+import de.jackbeback.pocketquest.core.model.GateId
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Range
 import de.jackbeback.pocketquest.core.model.chebyshevDistanceTo
@@ -40,7 +41,7 @@ internal val EIGHT_DIRECTIONS = listOf(0 to -1, 0 to 1, -1 to 0, 1 to 0, -1 to -
  * tracks the cheapest cost to reach each tile rather than just its step count). Linear min-scan
  * over the frontier, same style as [findPath] — commonMain has no `java.util.PriorityQueue`.
  */
-fun reachableTiles(origin: GridPos, maxCost: Int, map: BattleMap, occupancy: Map<GridPos, EntityId>): Set<GridPos> {
+fun reachableTiles(origin: GridPos, maxCost: Int, map: BattleMap, occupancy: Map<GridPos, EntityId>, openGates: Set<GateId> = emptySet()): Set<GridPos> {
     val bestCost = mutableMapOf(origin to 0)
     val frontier = mutableListOf(origin)
     while (frontier.isNotEmpty()) {
@@ -51,7 +52,7 @@ fun reachableTiles(origin: GridPos, maxCost: Int, map: BattleMap, occupancy: Map
             val next = GridPos(current.col + dc, current.row + dr)
             if (!map.isWalkable(next)) continue
             if (occupancy.containsKey(next)) continue
-            if (!map.canCross(current, next)) continue
+            if (!map.canCross(current, next, openGates)) continue
             val tentative = costSoFar + map.moveCost(next)
             if (tentative > maxCost) continue
             if (tentative < (bestCost[next] ?: Int.MAX_VALUE)) {

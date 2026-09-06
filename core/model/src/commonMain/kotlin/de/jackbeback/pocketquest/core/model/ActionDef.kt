@@ -122,6 +122,14 @@ sealed interface EffectTemplate {
     /** docs/41-status-duration-and-ability-mods.md: [Effect.RemoveStatus]'s template — [Effect.RemoveStatus] itself existed since the resolver's earliest pass, but had no content-authoring template until now, the same "primitive without the authoring layer" gap [Heal] had above. Lets a healer/cleanse action actually be authored. */
     @Serializable @SerialName("removeStatus")
     data class RemoveStatus(val target: Ref, val status: StatusId) : EffectTemplate
+
+    /** docs/48-gates-and-wander-ai.md: [Effect.OpenGate]'s template — no [Ref], [gate] is static authored content like [ShowMessage.text]. One-way (no `CloseGate` exists — see the doc's "decided with the user" section). */
+    @Serializable @SerialName("openGate")
+    data class OpenGate(val gate: GateId) : EffectTemplate
+
+    /** docs/50-terrain-mutation.md: [Effect.SetTerrain]'s template — [at] is a literal authored position, NOT resolved from `ActionCtx.point` (unlike [SpawnEntity]/[Teleport]), so one trigger's effect list can reshape several different cells in one placement. */
+    @Serializable @SerialName("setTerrain")
+    data class SetTerrain(val at: GridPos, val tile: TileType) : EffectTemplate
 }
 
 /** A pure declaration — no logic. Performing it pushes SpendCost then its instantiated effects onto the resolver stack. */

@@ -58,6 +58,8 @@ data class GameState(
     val lootPlacements: List<LootPlacement> = emptyList(),
     /** docs/37-lootable-containers.md: which [lootPlacements] positions have been opened — monotonic, only ever grows, same shape as [firedTriggers]/[revealedTiles]. */
     val openedLoot: Set<GridPos> = emptySet(),
+    /** docs/48-gates-and-wander-ai.md: [GateId]s currently open — monotonic, one-way (no `CloseGate` effect exists), same shape as [firedTriggers]. Read by [BattleMap.canCross] via `findPath`/`reachableTiles`. */
+    val openGates: Set<GateId> = emptySet(),
 ) {
     @Transient
     val byId: Map<EntityId, Entity> = entities.associateBy { it.id }

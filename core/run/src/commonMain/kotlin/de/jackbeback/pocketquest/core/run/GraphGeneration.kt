@@ -1,5 +1,10 @@
 package de.jackbeback.pocketquest.core.run
 
+import de.jackbeback.pocketquest.core.model.CampaignDef
+import de.jackbeback.pocketquest.core.model.GraphNode
+import de.jackbeback.pocketquest.core.model.NodeGraph
+import de.jackbeback.pocketquest.core.model.NodeId
+
 import de.jackbeback.pocketquest.core.model.NodeType
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.rules.rollRange
@@ -95,4 +100,16 @@ fun createRun(
 ): RunState {
     val (graph, rng) = generateGraph(RngState(seed = seed), acts, lanes, nodeTypeWeights)
     return RunState(runId = runId, seed = seed, rng = rng, act = 1, graph = graph, position = graph.start, party = party)
+}
+
+/**
+ * docs/49-campaign-authoring.md: the hand-authored sibling of [createRun] — no graph generation
+ * step at all, so [RunState.rng] starts fresh at [seed] (unadvanced) rather than post-generation
+ * like [createRun]'s does; there was no shape roll to advance past. It still gets consumed normally
+ * by anything inside an encounter (dice rolls, `:core:ai`'s Wander goal's version-seeded pick,
+ * etc.) — only the graph-shape roll is absent, matching "pinned content consumes no randomness."
+ */
+fun createCampaignRun(runId: RunId, seed: Long, party: List<PartyMember>, campaign: CampaignDef): RunState {
+    val graph = NodeGraph(nodes = campaign.nodes.associateBy { it.id }, start = campaign.start)
+    return RunState(runId = runId, seed = seed, rng = RngState(seed = seed), act = graph.nodes.getValue(graph.start).act, graph = graph, position = graph.start, party = party)
 }

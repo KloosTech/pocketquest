@@ -41,7 +41,7 @@ fun threatenedTiles(state: GameState, threat: EntityId, cat: Catalog): Set<GridP
     if (offensiveActions.isEmpty()) return emptySet()
 
     val speed = entity.stats(cat).speedTiles
-    val reachable = reachableTiles(origin, speed, state.map, state.blockingOccupancy) + origin
+    val reachable = reachableTiles(origin, speed, state.map, state.blockingOccupancy, state.openGates) + origin
 
     val threatened = mutableSetOf<GridPos>()
     for (standingAt in reachable) {

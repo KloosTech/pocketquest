@@ -50,7 +50,7 @@ fun legalTargets(state: GameState, caster: EntityId, def: ActionDef, cat: Catalo
         // cap by, so it falls back to the range-only budget rather than being clamped to zero.
         TargetMode.Path -> {
             val budget = casterEntity.resources?.let { minOf(maxRange, it.ap) } ?: maxRange
-            reachableTiles(origin, budget, state.map, state.blockingOccupancy)
+            reachableTiles(origin, budget, state.map, state.blockingOccupancy, state.openGates)
         }
         TargetMode.SelfOnly -> setOf(origin) // unreachable — handled above
     }

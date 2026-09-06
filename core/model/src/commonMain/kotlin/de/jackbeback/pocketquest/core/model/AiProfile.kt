@@ -51,6 +51,14 @@ sealed interface AiGoal {
     @Serializable @SerialName("useAction") data class UseAction(val category: AiActionCategory? = null, val targetPreference: AiTargetPreference) : AiGoal
     @Serializable @SerialName("retreat") data object Retreat : AiGoal
     @Serializable @SerialName("approach") data object Approach : AiGoal
+
+    /**
+     * docs/48-gates-and-wander-ai.md: "no legal way to reach my target, so just move somewhere" —
+     * a trailing fallback tier, not a replacement for [Approach]. An author places `{ Always,
+     * Approach }` then `{ Always, Wander }`: `Approach` returning null (no path — e.g. a closed
+     * gate) falls through to this tier, which picks a random reachable tile every turn it's needed.
+     */
+    @Serializable @SerialName("wander") data object Wander : AiGoal
 }
 
 /** Derived from an action's effects at evaluation time — not authored on the action itself. Buff/Debuff need [StatusDef.beneficial] to disambiguate; Damage/Heal are derivable straight from the effect template kinds already present. */

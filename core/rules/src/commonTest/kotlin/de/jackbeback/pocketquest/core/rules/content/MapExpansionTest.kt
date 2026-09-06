@@ -1,9 +1,11 @@
 package de.jackbeback.pocketquest.core.rules.content
 
 import de.jackbeback.pocketquest.core.model.BattleMapDef
+import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.HatchLine
 import de.jackbeback.pocketquest.core.model.MapId
+import de.jackbeback.pocketquest.core.model.PropDef
 import de.jackbeback.pocketquest.core.model.PropId
 import de.jackbeback.pocketquest.core.model.PropLayer
 import de.jackbeback.pocketquest.core.model.PropPlacement
@@ -14,6 +16,7 @@ import de.jackbeback.pocketquest.core.model.WallEdge
 import de.jackbeback.pocketquest.core.model.WallStyle
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class MapExpansionTest {
@@ -76,7 +79,7 @@ class MapExpansionTest {
             id = MapId("room"), width = 4, height = 4,
             terrain = listOf(TerrainRun(GridPos(0, 0), 4, horizontal = true, TileType.Wall)),
         )
-        val map = def.toBattleMap()
+        val map = def.toBattleMap(Catalog())
         assertEquals(4, map.width)
         assertEquals(4, map.height)
         assertEquals(TileType.Wall, map.tileAt(GridPos(0, 0)))
@@ -87,7 +90,7 @@ class MapExpansionTest {
     fun battleMapDefToBattleMapCarriesWallEdgesThrough() {
         val edge = WallEdge(GridPos(1, 1), Side.East)
         val def = BattleMapDef(id = MapId("room"), width = 4, height = 4, wallEdges = listOf(edge))
-        val map = def.toBattleMap()
+        val map = def.toBattleMap(Catalog())
         assertEquals(setOf(edge), map.wallEdges)
         assertTrue(map.hasWallEdge(GridPos(2, 1), Side.West), "mirrored lookup still resolves after the authored->runtime round trip")
     }
@@ -99,7 +102,7 @@ class MapExpansionTest {
             id = MapId("room"), width = 4, height = 4,
             props = listOf(placement), floorTexture = "stonytile5x5", wallStyle = WallStyle.Flat,
         )
-        val map = def.toBattleMap()
+        val map = def.toBattleMap(Catalog())
         assertEquals(listOf(placement), map.props)
         assertEquals("stonytile5x5", map.floorTexture)
         assertEquals(WallStyle.Flat, map.wallStyle)
@@ -112,7 +115,7 @@ class MapExpansionTest {
         // once the bake itself has already been copied over.
         val line = HatchLine(1f, 1f, 2f, 1f, 0.03f)
         val def = BattleMapDef(id = MapId("room"), width = 4, height = 4, wallStyle = WallStyle.Osr, wallHatchOsr = listOf(line), wallHatchOsrSeed = 99L)
-        assertEquals(listOf(line), def.toBattleMap().wallHatchOsr)
+        assertEquals(listOf(line), def.toBattleMap(Catalog()).wallHatchOsr)
     }
 
     @Test
@@ -121,15 +124,57 @@ class MapExpansionTest {
         // decodes with this default — "on by default, overridable" only works if the fallback here
         // matches BattleMapDef's own.
         val def = BattleMapDef(id = MapId("room"), width = 4, height = 4)
-        assertEquals(WallStyle.Hatch, def.toBattleMap().wallStyle)
+        assertEquals(WallStyle.Hatch, def.toBattleMap(Catalog()).wallStyle)
     }
 
     @Test
     fun battleMapDefToBattleMapCarriesFogOfWarThroughAndDefaultsOn() {
         val default = BattleMapDef(id = MapId("room"), width = 4, height = 4)
-        assertEquals(true, default.toBattleMap().fogOfWar, "every map saved before fogOfWar existed decodes with this default")
+        assertEquals(true, default.toBattleMap(Catalog()).fogOfWar, "every map saved before fogOfWar existed decodes with this default")
 
         val fogOff = BattleMapDef(id = MapId("room"), width = 4, height = 4, fogOfWar = false)
-        assertEquals(false, fogOff.toBattleMap().fogOfWar)
+        assertEquals(false, fogOff.toBattleMap(Catalog()).fogOfWar)
+    }
+
+    @Test
+    fun aPropWithNoMatchingPropDefStaysPurelyDecorative() {
+        // docs/51-props-catalog-and-placement.md: the pre-existing behavior for every prop, unless
+        // an author explicitly opts a PropDef into blocksMovement/blocksLoS.
+        val placement = PropPlacement(PropId("chest1x1"), GridPos(1, 1), PropLayer.Object)
+        val def = BattleMapDef(id = MapId("room"), width = 4, height = 4, props = listOf(placement))
+        val map = def.toBattleMap(Catalog())
+        assertTrue(map.isWalkable(GridPos(1, 1)))
+        assertFalse(map.blocksLoS(GridPos(1, 1)))
+    }
+
+    @Test
+    fun aPropWithBlocksMovementFoldsIntoTerrainAsUnwalkable() {
+        val placement = PropPlacement(PropId("statue"), GridPos(1, 1), PropLayer.Object)
+        val def = BattleMapDef(id = MapId("room"), width = 4, height = 4, props = listOf(placement))
+        val cat = Catalog(props = mapOf(PropId("statue") to PropDef(id = PropId("statue"), blocksMovement = true)))
+        val map = def.toBattleMap(cat)
+        assertFalse(map.isWalkable(GridPos(1, 1)))
+    }
+
+    @Test
+    fun aPropWithBlocksLoSFoldsIntoTerrainWithoutAffectingWalkability() {
+        val placement = PropPlacement(PropId("brazier"), GridPos(1, 1), PropLayer.Object)
+        val def = BattleMapDef(id = MapId("room"), width = 4, height = 4, props = listOf(placement))
+        val cat = Catalog(props = mapOf(PropId("brazier") to PropDef(id = PropId("brazier"), blocksLoS = true)))
+        val map = def.toBattleMap(cat)
+        assertTrue(map.blocksLoS(GridPos(1, 1)))
+        assertTrue(map.isWalkable(GridPos(1, 1)), "blocksLoS alone must not also block movement")
+    }
+
+    @Test
+    fun aBlockingPropsFootprintSwapsWidthAndHeightWhenRotated90Degrees() {
+        // An unrotated 2x1 (wide) prop covers (1,1) and (2,1); rotated 90/270 it covers (1,1) and (1,2) instead.
+        val placement = PropPlacement(PropId("bench"), GridPos(1, 1), PropLayer.Object, rotationQuarters = 1)
+        val def = BattleMapDef(id = MapId("room"), width = 5, height = 5, props = listOf(placement))
+        val cat = Catalog(props = mapOf(PropId("bench") to PropDef(id = PropId("bench"), footprintTilesW = 2, footprintTilesH = 1, blocksMovement = true)))
+        val map = def.toBattleMap(cat)
+        assertFalse(map.isWalkable(GridPos(1, 1)))
+        assertFalse(map.isWalkable(GridPos(1, 2)), "rotated 90 degrees, the footprint now extends downward, not rightward")
+        assertTrue(map.isWalkable(GridPos(2, 1)), "the unrotated footprint's second cell must NOT be blocked once rotated")
     }
 }

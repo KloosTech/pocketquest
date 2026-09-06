@@ -106,4 +106,8 @@ fun EffectTemplate.instantiate(state: GameState, ctx: ActionCtx, cat: Catalog): 
 
     is EffectTemplate.RemoveStatus ->
         resolveRef(target, ctx).map { Effect.RemoveStatus(it, status) }
+
+    is EffectTemplate.OpenGate -> listOf(Effect.OpenGate(gate))
+
+    is EffectTemplate.SetTerrain -> listOf(Effect.SetTerrain(at, tile))
 }

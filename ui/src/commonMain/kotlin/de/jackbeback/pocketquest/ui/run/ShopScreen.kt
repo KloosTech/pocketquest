@@ -21,7 +21,7 @@ import androidx.compose.ui.unit.sp
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.ShopPool
 import de.jackbeback.pocketquest.core.run.BuyResult
-import de.jackbeback.pocketquest.core.run.GraphNode
+import de.jackbeback.pocketquest.core.model.GraphNode
 import de.jackbeback.pocketquest.core.run.RunState
 import de.jackbeback.pocketquest.core.run.SellResult
 import de.jackbeback.pocketquest.core.run.buy

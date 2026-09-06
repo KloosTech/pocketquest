@@ -5,6 +5,8 @@ import de.jackbeback.pocketquest.core.model.ActionDef
 import de.jackbeback.pocketquest.core.model.ActionId
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.Cost
+import de.jackbeback.pocketquest.core.model.PropDef
+import de.jackbeback.pocketquest.core.model.PropId
 import de.jackbeback.pocketquest.core.model.Range
 import de.jackbeback.pocketquest.core.model.Shape
 import de.jackbeback.pocketquest.core.model.TargetFilter
@@ -38,3 +40,18 @@ val MOVE_ACTION_DEF = ActionDef(
  */
 fun Catalog.ensureMoveAction(): Catalog =
     if (MOVE_ACTION_ID in actions) this else copy(actions = actions + (MOVE_ACTION_ID to MOVE_ACTION_DEF))
+
+/**
+ * docs/51-props-catalog-and-placement.md: auto-generates one [PropDef] per [AssetManifest]
+ * placeable asset not yet in [Catalog.props] — purely additive, never overwrites an already-authored
+ * `PropDef`, safe to run unconditionally on every load (same "healing normalization" shape
+ * [ensureMoveAction] already established). [PropDef.id] is set to the manifest asset's own id
+ * (never author-typed) so every existing [de.jackbeback.pocketquest.core.model.PropPlacement.prop]
+ * value keeps resolving with zero data loss — the whole point of the migration.
+ */
+fun Catalog.ensurePropDefs(): Catalog {
+    val missing = AssetManifest.placeableProps
+        .filter { PropId(it.id) !in props }
+        .associate { asset -> PropId(asset.id) to PropDef(id = PropId(asset.id), name = asset.id, footprintTilesW = asset.tilesW ?: 1, footprintTilesH = asset.tilesH ?: 1) }
+    return if (missing.isEmpty()) this else copy(props = props + missing)
+}

@@ -184,6 +184,12 @@ fun choreograph(event: GameEvent, state: GameState, cat: Catalog): List<Beat> = 
     // suspend fun (VisualWorld.showMessage) is what actually pauses playback, by awaiting the
     // dismiss tap, same as every other Blocking beat pauses on its own animation/hold finishing.
     is GameEvent.MessageShown -> listOf(Beat(Timing.Blocking) { world -> world.showMessage(event.text) })
+    // docs/48/docs/50: Board draws gate sprites/terrain straight from live GameState every
+    // recomposition (`state.openGates`/`state.map.terrain`), same as every other map-geometry
+    // draw (walls, props) — unlike an entity's Animatable pos/hp, there's nothing to tween, so
+    // the redraw is free the instant GameState updates. No Beat needed.
+    is GameEvent.GateOpened -> emptyList()
+    is GameEvent.TerrainChanged -> emptyList()
     else -> emptyList()
 }
 

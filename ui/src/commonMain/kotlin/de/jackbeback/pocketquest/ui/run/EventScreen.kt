@@ -26,7 +26,7 @@ import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.TurnPhase
 import de.jackbeback.pocketquest.core.model.TurnState
 import de.jackbeback.pocketquest.core.run.EventChoiceResolution
-import de.jackbeback.pocketquest.core.run.GraphNode
+import de.jackbeback.pocketquest.core.model.GraphNode
 import de.jackbeback.pocketquest.core.run.MemberId
 import de.jackbeback.pocketquest.core.run.RunState
 import de.jackbeback.pocketquest.core.run.previewEventCheck

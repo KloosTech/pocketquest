@@ -227,18 +227,22 @@ private fun ConditionEditor(condition: AiCondition, catalog: Catalog, onChange: 
     }
 }
 
-private enum class GoalKind { UseAction, Retreat, Approach }
+private enum class GoalKind { UseAction, Retreat, Approach, Wander }
 
 private fun AiGoal.kind(): GoalKind = when (this) {
     is AiGoal.UseAction -> GoalKind.UseAction
     AiGoal.Retreat -> GoalKind.Retreat
     AiGoal.Approach -> GoalKind.Approach
+    AiGoal.Wander -> GoalKind.Wander
 }
 
 private fun defaultGoal(kind: GoalKind): AiGoal = when (kind) {
     GoalKind.UseAction -> AiGoal.UseAction(targetPreference = AiTargetPreference.LowestHpPercent)
     GoalKind.Retreat -> AiGoal.Retreat
     GoalKind.Approach -> AiGoal.Approach
+    // docs/48-gates-and-wander-ai.md: a bare fallback goal — pair with a trailing { Always, Wander }
+    // tier after { Always, Approach } so a blocked-path entity moves around instead of passing.
+    GoalKind.Wander -> AiGoal.Wander
 }
 
 @Composable

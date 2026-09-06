@@ -196,4 +196,12 @@ sealed interface Effect {
      */
     @Serializable @SerialName("showMessage")
     data class ShowMessage(val text: String) : Effect
+
+    /** docs/48-gates-and-wander-ai.md: adds [gate] to [GameState.openGates] and drives [GameEvent.GateOpened] — the only thing that ever flips a gate open, whether authored directly or synthesized by `Triggers.kt` for a multi-trigger unlock. */
+    @Serializable @SerialName("openGate")
+    data class OpenGate(val gate: GateId) : Effect
+
+    /** docs/50-terrain-mutation.md: overwrites `BattleMap.terrain[at]` with [tile] and drives [GameEvent.TerrainChanged] — no consequence for whoever's standing there, see the doc's "behavior notes." */
+    @Serializable @SerialName("setTerrain")
+    data class SetTerrain(val at: GridPos, val tile: TileType) : Effect
 }

@@ -1,5 +1,9 @@
 package de.jackbeback.pocketquest.core.run
 
+import de.jackbeback.pocketquest.core.model.GraphNode
+import de.jackbeback.pocketquest.core.model.NodeGraph
+import de.jackbeback.pocketquest.core.model.NodeId
+
 import de.jackbeback.pocketquest.core.model.AbilityScores
 import de.jackbeback.pocketquest.core.model.Archetype
 import de.jackbeback.pocketquest.core.model.ArchetypeId
@@ -15,6 +19,7 @@ import de.jackbeback.pocketquest.core.model.EventId
 import de.jackbeback.pocketquest.core.model.EventPool
 import de.jackbeback.pocketquest.core.model.MapId
 import de.jackbeback.pocketquest.core.model.NodeType
+import de.jackbeback.pocketquest.core.model.PinnedContent
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.ShopPool
 import kotlin.test.Test
@@ -125,6 +130,33 @@ class PoolsTest {
         val cat = catalog(encounter)
         val node = GraphNode(NodeId("n1"), act = 1, type = NodeType.Shop)
         assertFailsWith<IllegalStateException> { resolveEncounterNode(run(), node, emptyList(), cat) }
+    }
+
+    @Test
+    fun resolveEncounterNodePinnedContentSkipsThePoolAndConsumesNoRng() {
+        // docs/49-campaign-authoring.md: a hand-authored node names its EncounterId directly — no
+        // pool lookup at all (an empty `pools` list here would otherwise `error()`), no RngState
+        // rolled, but scaling still applies (pinning content and scaling it are independent).
+        val encounter = spec(EncounterScaling(extraEnemiesPerPartySize = 1))
+        val cat = catalog(encounter)
+        val node = GraphNode(NodeId("n1"), act = 1, type = NodeType.Combat, pinned = PinnedContent.Encounter(encounter.id))
+
+        val (resolved, advancedRng) = resolveEncounterNode(run(), node, pools = emptyList(), cat)
+
+        assertEquals(encounter.enemies.sumOf { it.count } + 1, resolved.enemies.sumOf { it.count }, "scaling still applies to pinned content")
+        assertEquals(run().rng, advancedRng, "pinned content consumes zero randomness")
+    }
+
+    @Test
+    fun resolveEventNodePinnedContentSkipsThePoolAndConsumesNoRng() {
+        val event = EventDef(id = EventId("e1"), title = "T", body = "B", choices = emptyList())
+        val cat = Catalog(archetypes = mapOf(hero().id to hero()), events = mapOf(event.id to event))
+        val node = GraphNode(NodeId("n1"), act = 1, type = NodeType.Event, pinned = PinnedContent.Event(event.id))
+
+        val (resolved, advancedRng) = resolveEventNode(run(), node, pools = emptyList(), cat)
+
+        assertEquals(event, resolved)
+        assertEquals(run().rng, advancedRng)
     }
 
     @Test

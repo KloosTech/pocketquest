@@ -6,12 +6,14 @@ import de.jackbeback.pocketquest.core.model.Controller
 import de.jackbeback.pocketquest.core.model.EncounterSpec
 import de.jackbeback.pocketquest.core.model.EntityId
 import de.jackbeback.pocketquest.core.model.Equipment
+import de.jackbeback.pocketquest.core.model.GraphNode
 import de.jackbeback.pocketquest.core.model.ItemId
-import de.jackbeback.pocketquest.core.model.NodeType
+import de.jackbeback.pocketquest.core.model.NodeGraph
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.GridPos
 import de.jackbeback.pocketquest.core.model.Inventory
 import de.jackbeback.pocketquest.core.model.LootId
+import de.jackbeback.pocketquest.core.model.NodeId
 import de.jackbeback.pocketquest.core.rules.resolver.Resolver
 import kotlinx.serialization.Serializable
 import kotlin.jvm.JvmInline
@@ -29,8 +31,6 @@ const val CURRENT_RUN_SCHEMA = 1
  * `PartyMember` from a `ChampionRecord` — the two types are never unified into one.
  */
 @JvmInline @Serializable value class MemberId(val raw: String)
-
-@JvmInline @Serializable value class NodeId(val raw: String)
 
 /**
  * docs/11-run-state.md — the layer between Meta and an encounter. Everything here outlives a
@@ -112,23 +112,4 @@ data class EncounterHandle(
     val spec: EncounterSpec,
 )
 
-/**
- * docs/13-encounters-and-events.md: graph *shape* is generated per run from [RunState.rng]; graph
- * *content* (which `EncounterSpec`/`EventDef`/`ShopDef` a node resolves to) is picked from a
- * hand-authored pool, not generated — kept as a separate concern, not modeled by this shape.
- */
-@Serializable
-data class NodeGraph(
-    val nodes: Map<NodeId, GraphNode>,
-    val start: NodeId,
-)
-
-@Serializable
-data class GraphNode(
-    val id: NodeId,
-    val act: Int,
-    val type: NodeType,
-    /** Empty only for the Act 3 Boss node — the run's one and only success condition. */
-    val next: List<NodeId> = emptyList(),
-)
 

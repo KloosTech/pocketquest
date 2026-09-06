@@ -31,5 +31,19 @@ fun fireTriggerIfAny(state: GameState, entityId: EntityId, at: GridPos, cat: Cat
         .map { it.id }
     val ctx = ActionCtx(caster = entityId, targets = party, point = at)
     val effects = trigger.effects.flatMap { it.instantiate(fired, ctx, cat) }
-    return fired to effects
+    return fired to (effects + newlySatisfiedGateOpens(fired))
 }
+
+/**
+ * docs/48-gates-and-wander-ai.md's multi-trigger unlock amendment: any gate whose
+ * [de.jackbeback.pocketquest.core.model.GatePlacement.requiredTriggers] is non-empty and now fully
+ * covered by [state]'s [GameState.firedTriggers] gets a synthesized [Effect.OpenGate] — reusing the
+ * effect's own handler to actually flip [GameState.openGates] rather than mutating it here directly,
+ * so this stays a plain, ordinary effect from the resolver's point of view (animates, dedupes,
+ * round-trips through save exactly like an authored `OpenGate` would). Only ever ADDS effects for
+ * gates not already open — an already-open gate never re-fires.
+ */
+private fun newlySatisfiedGateOpens(state: GameState): List<Effect> =
+    state.map.gates
+        .filter { it.id !in state.openGates && it.requiredTriggers.isNotEmpty() && it.requiredTriggers.all { req -> req in state.firedTriggers } }
+        .map { Effect.OpenGate(it.id) }

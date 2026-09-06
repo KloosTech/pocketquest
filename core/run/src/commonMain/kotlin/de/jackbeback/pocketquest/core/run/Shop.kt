@@ -1,8 +1,13 @@
 package de.jackbeback.pocketquest.core.run
 
+import de.jackbeback.pocketquest.core.model.GraphNode
+import de.jackbeback.pocketquest.core.model.NodeGraph
+import de.jackbeback.pocketquest.core.model.NodeId
+
 import de.jackbeback.pocketquest.core.model.Catalog
 import de.jackbeback.pocketquest.core.model.ItemDef
 import de.jackbeback.pocketquest.core.model.ItemId
+import de.jackbeback.pocketquest.core.model.PinnedContent
 import de.jackbeback.pocketquest.core.model.RngState
 import de.jackbeback.pocketquest.core.model.ShopDef
 import de.jackbeback.pocketquest.core.model.ShopEntry
@@ -81,8 +86,14 @@ fun offerShopVisit(shop: ShopDef, n: Int, rng: RngState): Pair<RngState, List<Sh
     return current to offered
 }
 
-/** The "enter a Shop node" step, mirroring `resolveEncounterNode`/`resolveEventNode`. */
+/**
+ * The "enter a Shop node" step, mirroring `resolveEncounterNode`/`resolveEventNode`.
+ *
+ * docs/49-campaign-authoring.md: a [GraphNode.pinned] `Shop` short-circuits the pool lookup —
+ * see [PinnedContent]'s own doc comment.
+ */
 fun resolveShopNode(run: RunState, node: GraphNode, pools: List<ShopPool>, cat: Catalog): Pair<ShopDef, RngState> {
+    (node.pinned as? PinnedContent.Shop)?.let { return cat.shopDef(it.id) to run.rng }
     val pool = pools.firstOrNull { it.act == node.act } ?: error("no ShopPool for act ${node.act}")
     val (advanced, id) = pickShop(pool, run.rng)
     return cat.shopDef(id) to advanced

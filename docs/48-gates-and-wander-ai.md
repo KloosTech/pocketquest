@@ -206,6 +206,63 @@ resting/closed state.
 `Wander` as a selectable goal alongside `UseAction`/`Retreat`/`Approach` —
 no new fields, it's a bare `data object`.
 
+## Amendment: secret doors are a Gate, not a new primitive
+
+docs/Campain_1's Broken Gate Pass labels two rooms "Secret Passage Hidden" —
+a wall that looks solid until something else reveals it, distinct from a
+portcullis' visibly-barred "closed" state. Discussed with the user and
+decided: this is a rendering choice on `GatePlacement`, not a new engine
+concept. A gate whose `closedSprite` is left `null` renders as plain
+matching wall texture (indistinguishable from `hasWallEdge`'s ordinary
+wall rendering) instead of a bars/door sprite — everything else (blocks
+`canCross` while closed, never blocks `hasLineOfSight`, opened by an
+`OpenGate` effect from a trigger placed elsewhere — a lever, a bookshelf,
+a floor plate across the room) is identical to a normal gate. No new
+model field, no new effect.
+
+The one addition: `:designer`'s Map editor renders every `GatePlacement`
+with `closedSprite == null` as a distinct dashed/tinted outline (author-only,
+never shown in `:ui`'s Board) so the author can still find and edit a secret
+door they placed — the "author sees what the player sees" rule from docs/36
+deliberately does NOT apply to this one authoring-time affordance, since the
+whole point of a secret door is that the player does *not* see what the
+author sees.
+
+## Amendment: multi-trigger unlock
+
+Some puzzles ("light all three braziers") need a gate that opens only once
+several independent triggers have all fired, not any single one. Adding a
+condition to `GatePlacement` rather than teaching `TriggerPlacement.effects`
+any N-of-M boolean logic — docs/36 already declared conditional/branching
+triggers a non-goal, and this doesn't need to reopen that.
+
+```kotlin
+// MapDef.kt
+data class GatePlacement(
+    val id: GateId,
+    val edges: List<WallEdge>,
+    val closedSprite: String? = null,
+    val openSprite: String? = null,
+    val requiredTriggers: Set<TriggerId> = emptySet(), // NEW
+)
+```
+
+Empty (default) changes nothing — a gate opens only via an explicit
+`OpenGate` effect targeting it, exactly as specced above. Non-empty adds a
+second, independent way to open the *same* gate: after `fireTriggerIfAny`
+(docs/36) updates `state.firedTriggers`, a derived check runs for every gate
+with a non-empty `requiredTriggers` — if every id in that set is now present
+in `firedTriggers`, the gate's id is added to `openGates` too. The two
+mechanisms union, they don't replace each other: an author can wire braziers
+to `requiredTriggers` AND also drop an `OpenGate` effect on a master lever
+targeting the same gate, either path opens it. Once open, stays open
+(one-way, same as every gate) — a brazier being "un-lit" is not a thing v1
+models.
+
+No `:designer` UI beyond a multi-select of `TriggerId`s (same "Gate
+1"/"Gate 2" index-label precedent, applied to `TriggerPlacement` this time)
+in the gate's existing inline editor, alongside its sprite pickers.
+
 ## Non-goals (v1)
 
 - No `CloseGate` effect — see "Decided with the user" above.

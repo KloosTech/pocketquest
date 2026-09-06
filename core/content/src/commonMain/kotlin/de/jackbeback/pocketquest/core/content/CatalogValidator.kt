@@ -210,6 +210,9 @@ object CatalogValidator {
 
             is EffectTemplate.DealDamage, is EffectTemplate.RollAttack, is EffectTemplate.Push, is EffectTemplate.Teleport,
             is EffectTemplate.DestroyEntity, is EffectTemplate.Heal, is EffectTemplate.ShowMessage,
+            // OpenGate/SetTerrain reference map-local ids (GateId) or literal data (GridPos/TileType) —
+            // nothing catalog-wide to check, same bucket as every other no-reference template above.
+            is EffectTemplate.OpenGate, is EffectTemplate.SetTerrain,
             -> Unit
         }
     }
